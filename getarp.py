@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
-import socket
 import argparse
-from os import makedirs, getcwd, register_at_fork
-from ruamel.yaml import YAML
-from pyopnsense import diagnostics
+import socket
 import ssl
-import certifi
+from os import getcwd, makedirs, register_at_fork
 
 import requests
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from pyopnsense import diagnostics
+#from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from urllib3.exceptions import InsecureRequestWarning
+from ruamel.yaml import YAML
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -32,7 +32,6 @@ def main(args):
     key_yaml = openVars(args.key)
     api_key = key_yaml['key'][0]
     api_secret = key_yaml['key'][1]
-    certBundle = certifi.where()
     opnsense_url = (f'https://{args.fw}/api')
 
     _create_unverified_https_context = ssl._create_unverified_context
