@@ -7,7 +7,6 @@ from os import getcwd, makedirs, register_at_fork
 
 import requests
 from pyopnsense import diagnostics
-#from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from urllib3.exceptions import InsecureRequestWarning
 from ruamel.yaml import YAML
 
