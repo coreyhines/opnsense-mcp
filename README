@@ -1,3 +1,5 @@
+Simple pyopnsense script to get the current ARP table
+
 Create ./vars/key.yaml
 
 example: 
