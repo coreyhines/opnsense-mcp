@@ -39,9 +39,15 @@ def main(args):
     netinsight_client = diagnostics.InterfaceClient(
         api_key, api_secret, opnsense_url, verify_cert=False)
     arpTable = netinsight_client.get_arp()
+    ndpTable = netinsight_client.get_ndp()
 
+    print("\n#### IPv4 ARP Table ###\n")
     for arp in arpTable:
         print(f"{arp['hostname']:20}IP: {arp['ip']:20}MAC: {arp['mac']}")
+
+    print("\n\n### IPv6 Neighbor Database ###\n")
+    for neigh in ndpTable:
+        print(f"{neigh['intf']:6}IP: {neigh['ip']:40}MAC: {neigh['mac']}")
 
 
 if __name__ == '__main__':
