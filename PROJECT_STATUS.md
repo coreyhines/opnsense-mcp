@@ -40,7 +40,7 @@
 
 ## Next Steps
 
-1. **Verify API Credentials**: Ensure the API key and secret in vars/key.yaml are correct and have the necessary permissions.
+1. **Verify API Credentials**: Ensure the API key and secret are set in your `.env` file or `~/.opnsense-env` and have the necessary permissions.
 
 2. **Check OPNsense API Version**: Verify the version of OPNsense and ensure the API endpoints match those used in the implementation.
 
@@ -74,7 +74,7 @@ To run integration tests:
 
 If you encounter API access issues:
 
-1. Verify that the API credentials in vars/key.yaml are correct
+1. Verify that the API credentials in your `.env` file or `~/.opnsense-env` are correct
 2. Check that the API access is enabled in OPNsense (System → Settings → Administration)
 3. Ensure that the API user has the necessary permissions
 4. Check firewall rules that might block API access

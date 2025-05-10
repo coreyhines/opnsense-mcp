@@ -9,12 +9,16 @@ This server provides OPNsense API functionality through a Model Context Protocol
 pip install -r requirements.txt
 ```
 
-2. Configure your OPNsense credentials in `vars/key.yaml`:
-```yaml
-api_key: "your_api_key"
-api_secret: "your_api_secret"
-firewall_host: "your.opnsense.host"
+2. Configure your OPNsense credentials in a `.env` file (in the project root) or in `~/.opnsense-env`:
+
+```env
+OPNSENSE_API_KEY=your_api_key
+OPNSENSE_API_SECRET=your_api_secret
+OPNSENSE_API_HOST=your.opnsense.host
+MCP_SECRET_KEY=your_jwt_secret_key
 ```
+
+You can use a `.env` file in the project root, or set these in your shell environment. The server will automatically load from `~/.opnsense-env` if present.
 
 ## Project Structure
 
