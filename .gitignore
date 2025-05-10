@@ -1,5 +1,5 @@
 vars/
-.opnsense-env 
-.github/
+.opnsense-env
 .venv/
 tmp_
+.github/copilot*
