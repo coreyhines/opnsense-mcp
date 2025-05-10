@@ -1,0 +1,31 @@
+[project]
+name = "opnsense-mcp"
+version = "1.0.0"
+description = "OPNsense MCP Server"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=2.3.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "ruff",
+    "mypy",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["opnsense_mcp"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"] 

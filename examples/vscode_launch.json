@@ -1,0 +1,80 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run MCP Server",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": [
+        "--config",
+        "${workspaceFolder}/examples/mcp.json"
+      ],
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "Debug MCP Server",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": [
+        "--config",
+        "${workspaceFolder}/examples/mcp.json",
+        "--log-level",
+        "DEBUG"
+      ],
+      "justMyCode": false,
+      "stopOnEntry": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "DEBUG": "true"
+      }
+    },
+    {
+      "name": "API Explorer",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/api_explorer.py",
+      "args": [
+        "--config",
+        "${workspaceFolder}/examples/mcp.json"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "Run ARP Test",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/test_standalone.py",
+      "args": [
+        "arp"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "Run System Test",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/test_standalone.py",
+      "args": [
+        "system"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    }
+  ]
+}

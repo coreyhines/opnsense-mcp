@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Quick start script for OPNsense MCP Server
+# Run this file directly to start the MCP server
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Check for UV
+if ! command -v uv &> /dev/null; then
+    echo -e "${RED}UV not found. Please install UV first:${NC}"
+    echo "pip install uv"
+    exit 1
+fi
+
+# Set environment variables from ~/.opnsense-env if it exists
+ENV_FILE="$HOME/.opnsense-env"
+if [ -f "$ENV_FILE" ]; then
+    echo -e "${GREEN}Loading environment from $ENV_FILE${NC}"
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+else
+    echo -e "${YELLOW}Warning: $ENV_FILE not found. Using default settings.${NC}"
+    # Set default environment variables
+    export FIREWALL_HOST="fw.example.com"
+    export API_KEY="your_api_key_here"
+    export API_SECRET="your_api_secret_here"
+    export DEBUG="true"
+    export LOG_LEVEL="DEBUG"
+    export PORT="8080"
+    export HOST="127.0.0.1"
+    export TEST_MODE="true"
+    export MOCK_API="true"
+    export MOCK_DATA_PATH="./examples/mock_data"
+fi
+
+# Check if running from the project root
+if [ ! -d "mcp_server" ]; then
+    echo -e "${YELLOW}Warning: This script should be run from the project root. Attempting to adjust paths.${NC}"
+    if [ -d "../mcp_server" ]; then
+        cd ..
+    fi
+fi
+
+# Create mock data directory if it doesn't exist and mock API is enabled
+if [ "$MOCK_API" = "true" ]; then
+    MOCK_DATA_DIR="${MOCK_DATA_PATH:-./examples/mock_data}"
+    mkdir -p "$MOCK_DATA_DIR"
+    
+    # Create mock data if the directory is empty
+    if [ -z "$(ls -A "$MOCK_DATA_DIR")" ]; then
+        if [ -f "./examples/create_mock_data.py" ]; then
+            echo -e "${GREEN}Creating mock data...${NC}"
+            python "./examples/create_mock_data.py"
+        fi
+    fi
+fi
+
+# Start the server
+echo -e "${GREEN}Starting OPNsense MCP Server...${NC}"
+echo -e "${YELLOW}Press Ctrl+C to stop the server${NC}"
+
+# Command to run
+uv run python -m mcp_server.server_new

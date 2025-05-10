@@ -1,1 +1,4 @@
-vars/key.yaml
+vars/
+.opnsense-env 
+.github/
+.venv/
