@@ -2,3 +2,4 @@ vars/
 .opnsense-env 
 .github/
 .venv/
+tmp_
