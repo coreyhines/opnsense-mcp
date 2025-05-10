@@ -2,6 +2,7 @@
 Simplified authentication module that works without passlib
 This is a fallback for environments where passlib isn't available
 """
+
 import os
 import hmac
 import hashlib
@@ -43,7 +44,12 @@ class User:
 
 
 class UserInDB(User):
-    def __init__(self, username: str, hashed_password: str, disabled: Optional[bool] = None):
+    def __init__(
+        self,
+        username: str,
+        hashed_password: str,
+        disabled: Optional[bool] = None,
+    ):
         super().__init__(username, disabled)
         self.hashed_password = hashed_password
 
@@ -70,12 +76,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def verify_bcrypt_compat(plain_password: str, hashed_password: str) -> bool:
     """
     Compatibility method to verify bcrypt passwords
-    
+
     This is a simplified implementation that will work with the test admin password
     from the server.py file, but isn't a full bcrypt implementation.
     """
     # The test password is known to be "password" with the hash below
-    if hashed_password == "$2b$12$TwvROpyZ6TyWFFBuwKk.re.4p8FK.Ft4YCd/U3ANdvPA1vUCbelt.":
+    if (
+        hashed_password
+        == "$2b$12$TwvROpyZ6TyWFFBuwKk.re.4p8FK.Ft4YCd/U3ANdvPA1vUCbelt."
+    ):
         return plain_password == "password"
     return False
 
@@ -88,7 +97,9 @@ def get_user(users_db: Dict, username: str) -> Optional[UserInDB]:
     return None
 
 
-def authenticate_user(users_db: Dict, username: str, password: str) -> Optional[User]:
+def authenticate_user(
+    users_db: Dict, username: str, password: str
+) -> Optional[User]:
     """Authenticate a user against the user database"""
     user = get_user(users_db, username)
     if not user:
@@ -98,19 +109,26 @@ def authenticate_user(users_db: Dict, username: str, password: str) -> Optional[
     return user
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: dict, expires_delta: Optional[timedelta] = None
+) -> str:
     """Create a JWT access token"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
-    
+
     # Convert datetime to integer timestamp for our custom JWT implementation
     expire_minutes = int((expire - datetime.utcnow()).total_seconds() / 60)
-    
+
     # Use our custom create_jwt function
-    encoded_jwt = create_jwt(to_encode, SECRET_KEY, algorithm=ALGORITHM, expire_minutes=expire_minutes)
+    encoded_jwt = create_jwt(
+        to_encode,
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+        expire_minutes=expire_minutes,
+    )
     return encoded_jwt
 
 

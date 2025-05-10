@@ -33,7 +33,10 @@ class ARPTool:
         self.client = client
 
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute ARP/NDP table lookup with optional filtering by MAC, IPv4, or IPv6 address"""
+        """
+        Execute ARP/NDP table lookup with optional filtering by MAC,
+        IPv4, or IPv6 address
+        """
         try:
             if self.client is None:
                 logger.warning("No OPNsense client available, returning dummy data")
@@ -77,7 +80,11 @@ class ARPTool:
                     entry for entry in ndp_entries if entry.get("ip", "") == ipv6_filter
                 ]
 
-            return {"arp": arp_entries, "ndp": ndp_entries, "status": "success"}
+            return {
+                "arp": arp_entries,
+                "ndp": ndp_entries,
+                "status": "success",
+            }
 
         except Exception as e:
             logger.error(f"Failed to get ARP/NDP tables: {str(e)}")

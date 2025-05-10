@@ -68,7 +68,9 @@ class OPNsenseClient:
     async def get_arp_table(self) -> List[Dict[str, Any]]:
         """Get ARP table from OPNsense"""
         if not self.is_configured:
-            logger.warning("OPNsense API not configured, returning dummy ARP data")
+            logger.warning(
+                "OPNsense API not configured, " "returning dummy ARP " "data"
+            )
             return [
                 {
                     "ip": "192.168.1.1",
@@ -184,7 +186,7 @@ class OPNsenseClient:
     async def get_lldp_table(self) -> List[Dict[str, Any]]:
         """Get LLDP neighbor table from OPNsense (lldpd plugin)"""
         if not self.is_configured:
-            logger.warning("OPNsense API not configured, returning dummy LLDP data")
+            logger.warning("OPNsense API not configured, " "returning dummy LLDP data")
             return [
                 {
                     "intf": "em0",
@@ -317,7 +319,9 @@ class OPNsenseClient:
     async def get_dhcpv6_leases(self) -> list[dict]:
         """Get DHCPv6 lease table from OPNsense"""
         if not self.is_configured:
-            logger.warning("OPNsense API not configured, returning dummy DHCPv6 data")
+            logger.warning(
+                "OPNsense API not configured, " "returning dummy DHCPv6 data"
+            )
             return [
                 {
                     "ip": "2001:db8::100",
@@ -405,7 +409,11 @@ class ARPTool:
                         if filter_value in entry.get("ip", "")
                     ]
 
-            return {"arp": arp_entries, "ndp": ndp_entries, "status": "success"}
+            return {
+                "arp": arp_entries,
+                "ndp": ndp_entries,
+                "status": "success",
+            }
         except Exception as e:
             logger.error(f"Failed to get ARP/NDP tables: {str(e)}")
             # Fallback to dummy data on error
@@ -467,8 +475,14 @@ async def main():
         "inputSchema": {
             "type": "object",
             "properties": {
-                "ip": {"type": "string", "description": "Filter by IP address"},
-                "mac": {"type": "string", "description": "Filter by MAC address"},
+                "ip": {
+                    "type": "string",
+                    "description": "Filter by IP address",
+                },
+                "mac": {
+                    "type": "string",
+                    "description": "Filter by MAC address",
+                },
             },
             "required": [],
         },
@@ -574,13 +588,19 @@ async def main():
                         "name": "OPNsense MCP",
                         "version": "1.0.0",
                         "protocolVersion": "2024-11-05",
-                        "serverInfo": {"name": "OPNsense MCP", "version": "1.0.0"},
+                        "serverInfo": {
+                            "name": "OPNsense MCP",
+                            "version": "1.0.0",
+                        },
                         "capabilities": {
                             "tools": {"enabled": True, "version": "1.0.0"},
                             "prompts": {"enabled": False, "version": "1.0.0"},
                             "resources": {"enabled": True, "version": "1.0.0"},
                             "logging": {"enabled": False, "version": "1.0.0"},
-                            "roots": {"listChanged": False, "version": "1.0.0"},
+                            "roots": {
+                                "listChanged": False,
+                                "version": "1.0.0",
+                            },
                         },
                     },
                 }
@@ -627,7 +647,10 @@ async def main():
                     # Add filter info if provided
                     if filter_value:
                         content.append(
-                            {"text": f"Filtering by: {filter_value}", "type": "text"}
+                            {
+                                "text": f"Filtering by: {filter_value}",
+                                "type": "text",
+                            }
                         )
                         content.append({"text": "", "type": "text"})
 
@@ -638,7 +661,10 @@ async def main():
 
                         # Add ARP entries
                         for entry in result.get("arp", []):
-                            line = f"- {entry.get('ip')} at {entry.get('mac')} on {entry.get('intf')}"
+                            line = (
+                                f"- {entry.get('ip')} at {entry.get('mac')} "
+                                f"on {entry.get('intf')}"
+                            )
                             if entry.get("manufacturer"):
                                 line += f" ({entry.get('manufacturer')})"
                             content.append({"text": line, "type": "text"})
@@ -658,7 +684,10 @@ async def main():
                         content.append({"text": "", "type": "text"})
 
                         for entry in result.get("ndp", []):
-                            line = f"- {entry.get('ip')} at {entry.get('mac')} on {entry.get('intf')}"
+                            line = (
+                                f"- {entry.get('ip')} at {entry.get('mac')} "
+                                f"on {entry.get('intf')}"
+                            )
                             if entry.get("manufacturer"):
                                 line += f" ({entry.get('manufacturer')})"
                             content.append({"text": line, "type": "text"})
@@ -689,8 +718,10 @@ async def main():
                         content.append({"text": "", "type": "text"})
                         for entry in result["lldp"]:
                             line = (
-                                f"- {entry.get('intf')} neighbor {entry.get('system_name')} "
-                                f"(chassis {entry.get('chassis_id')}, port {entry.get('port_id')})"
+                                f"- {entry.get('intf')} neighbor "
+                                f"{entry.get('system_name')} "
+                                f"(chassis {entry.get('chassis_id')}, "
+                                f"port {entry.get('port_id')})"
                             )
                             if entry.get("system_description"):
                                 line += f" - {entry.get('system_description')}"
@@ -703,7 +734,10 @@ async def main():
                             content.append({"text": line, "type": "text"})
                     else:
                         content.append(
-                            {"text": "## No LLDP entries found", "type": "text"}
+                            {
+                                "text": "## No LLDP entries found",
+                                "type": "text",
+                            }
                         )
                     response = {
                         "jsonrpc": "2.0",

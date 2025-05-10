@@ -7,11 +7,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+
 def setup_logging(log_file: Optional[str] = None, level: str = "INFO"):
     """Configure logging for the MCP server"""
     # Create formatter
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
     # Configure root logger
@@ -27,7 +28,7 @@ def setup_logging(log_file: Optional[str] = None, level: str = "INFO"):
     if log_file:
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
