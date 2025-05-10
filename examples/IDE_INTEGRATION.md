@@ -1,4 +1,5 @@
-# OPNsense MCP Server - IDE In1. Create your environment file:
+# OPNsense MCP Server - IDE In1. Create your environment file
+
    ```bash
    cp examples/.opnsense-env ~/.opnsense-env
    # Edit with vi
@@ -27,6 +28,7 @@ vi ~/.opnsense-env
 Visual Studio Code offers excellent Python debugging capabilities. To set up:
 
 1. Copy the VS Code configuration files:
+
    ```bash
    mkdir -p .vscode
    cp examples/vscode_launch.json .vscode/launch.json
@@ -34,6 +36,7 @@ Visual Studio Code offers excellent Python debugging capabilities. To set up:
    ```
 
 2. Create your environment file:
+
    ```bash
    cp examples/.opnsense-env ~/.opnsense-env
    # Edit with vi
@@ -51,6 +54,7 @@ Visual Studio Code offers excellent Python debugging capabilities. To set up:
 For PyCharm users:
 
 1. Create your environment file:
+
    ```bash
    cp examples/.opnsense-env ~/.opnsense-env
    # Edit with vi
@@ -67,11 +71,13 @@ For PyCharm users:
      - Parameters: Leave empty
      - Python interpreter: Select your project venv
      - Environment variables: Click "..." and add the following:
+
        ```
        PYTHONPATH=<project-root>
        DEBUG=true
        LOG_LEVEL=DEBUG
        ```
+
      - Check "EnvFile" and add `~/.opnsense-env`
    - Click "OK" to save
 

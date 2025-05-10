@@ -41,14 +41,14 @@ uv pip install -r requirements.txt
 
 These configuration files are designed to work well with IDEs like VS Code, PyCharm, or other development environments.
 
-#### Using JSON Configuration:
+#### Using JSON Configuration
 
 ```bash
 # From project root directory
 uv run python -m mcp_server.server_new --config ./examples/mcp.json
 ```
 
-#### Using YAML Configuration:
+#### Using YAML Configuration
 
 ```bash
 # From project root directory
@@ -182,6 +182,7 @@ The development configuration includes:
 2. Start the server in debug mode
 3. Make API requests using the Swagger UI at `http://localhost:8080/docs`
 4. Step through the code to understand the execution flow
+
 ```
 
 ### Configuration Options
