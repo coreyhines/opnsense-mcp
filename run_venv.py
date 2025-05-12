@@ -2,6 +2,7 @@
 """
 Launcher script for OPNsense MCP Server using the virtual environment
 """
+
 import os
 import sys
 import subprocess

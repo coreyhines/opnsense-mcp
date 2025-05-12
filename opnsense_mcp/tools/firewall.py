@@ -32,9 +32,7 @@ class FirewallTool:
     def __init__(self, client):
         self.client = client
 
-    async def execute(
-        self, params: Dict[str, Any]
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    async def execute(self, params: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
         """Execute firewall rules lookup"""
         try:
             # Get rules from OPNsense
