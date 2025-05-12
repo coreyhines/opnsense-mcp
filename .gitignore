@@ -3,3 +3,10 @@ vars/
 .venv/
 tmp_
 .github/copilot*
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz

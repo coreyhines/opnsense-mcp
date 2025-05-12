@@ -17,25 +17,25 @@ UV is a fast Python package installer and resolver that can significantly speed 
 
 1. Create a new virtual environment:
 
-```bash
-uv venv
-```
+    ```bash
+    uv venv
+    ```
 
 2. Activate the virtual environment:
 
-```bash
-# On macOS/Linux
-source .venv/bin/activate
+    ```bash
+    # On macOS/Linux
+    source .venv/bin/activate
 
-# On Windows
-.venv\Scripts\activate
-```
+    # On Windows
+    .venv\Scripts\activate
+    ```
 
 3. Install dependencies:
 
-```bash
-uv pip install -r requirements.txt
-```
+    ```bash
+    uv pip install -r requirements.txt
+    ```
 
 ### Running the MCP Server with UV in an IDE
 
@@ -61,37 +61,37 @@ uv run python -m mcp_server.server_new --config ./examples/mcp.yaml
 
 1. Create a launch configuration in `.vscode/launch.json`:
 
-```json
-{
-  "version": "0.2.0",
-  "configurations": [
+    ```json
     {
-      "name": "Run MCP Server",
-      "type": "python",
-      "request": "launch",
-      "module": "mcp_server.server_new",
-      "args": ["--config", "${workspaceFolder}/examples/mcp.json"],
-      "justMyCode": false,
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}"
-      }
-    },
-    {
-      "name": "Debug MCP Server",
-      "type": "python",
-      "request": "launch",
-      "module": "mcp_server.server_new",
-      "args": ["--config", "${workspaceFolder}/examples/mcp.json"],
-      "justMyCode": false,
-      "stopOnEntry": true,
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}",
-        "DEBUG": "true"
-      }
+      "version": "0.2.0",
+      "configurations": [
+        {
+          "name": "Run MCP Server",
+          "type": "python",
+          "request": "launch",
+          "module": "mcp_server.server_new",
+          "args": ["--config", "${workspaceFolder}/examples/mcp.json"],
+          "justMyCode": false,
+          "env": {
+            "PYTHONPATH": "${workspaceFolder}"
+          }
+        },
+        {
+          "name": "Debug MCP Server",
+          "type": "python",
+          "request": "launch",
+          "module": "mcp_server.server_new",
+          "args": ["--config", "${workspaceFolder}/examples/mcp.json"],
+          "justMyCode": false,
+          "stopOnEntry": true,
+          "env": {
+            "PYTHONPATH": "${workspaceFolder}",
+            "DEBUG": "true"
+          }
+        }
+      ]
     }
-  ]
-}
-```
+    ```
 
 2. Press F5 to start debugging.
 
@@ -112,31 +112,31 @@ For development with an IDE (VS Code, PyCharm, etc.), follow these steps:
 
 1. Create and activate a virtual environment:
 
-```bash
-# Create environment with UV
-uv venv
+    ```bash
+    # Create environment with UV
+    uv venv
 
-# Or alternatively with standard venv
-python -m venv .venv
+    # Or alternatively with standard venv
+    python -m venv .venv
 
-# Activate (macOS/Linux)
-source .venv/bin/activate
+    # Activate (macOS/Linux)
+    source .venv/bin/activate
 
-# Activate (Windows)
-.venv\Scripts\activate
-```
+    # Activate (Windows)
+    .venv\Scripts\activate
+    ```
 
 2. Install development dependencies:
 
-```bash
-uv pip install -r examples/requirements-dev.txt
-```
+    ```bash
+    uv pip install -r examples/requirements-dev.txt
+    ```
 
 3. Generate mock data for testing:
 
-```bash
-./examples/create_mock_data.py
-```
+    ```bash
+    ./examples/create_mock_data.py
+    ```
 
 4. Customize the configuration:
    - Edit `examples/mcp.json` or `examples/mcp.yaml` with vi as needed
@@ -145,12 +145,12 @@ uv pip install -r examples/requirements-dev.txt
 
 5. Run the server using your preferred method:
 
-```bash
-# Direct command
-uv run python -m mcp_server.server_new --config ./examples/mcp.json
+    ```bash
+    # Direct command
+    uv run python -m mcp_server.server_new --config ./examples/mcp.json
 
-# Or via your IDE's run/debug configuration
-```
+    # Or via your IDE's run/debug configuration
+    ```
 
 ## Development Features in the Configuration
 
@@ -183,11 +183,10 @@ The development configuration includes:
 3. Make API requests using the Swagger UI at `http://localhost:8080/docs`
 4. Step through the code to understand the execution flow
 
-```
-
 ### Configuration Options
 
 #### Server Section
+
 - `host`: Interface to bind the server to (default: 0.0.0.0)
 - `port`: Port to listen on (default: 8080)
 - `debug`: Enable debug mode (default: false)
@@ -198,6 +197,7 @@ The development configuration includes:
   - `key`: Path to SSL key
 
 #### OPNsense Section
+
 - `firewall_host`: Hostname or IP address of the OPNsense firewall
 - `api_key`: OPNsense API key
 - `api_secret`: OPNsense API secret
@@ -206,6 +206,7 @@ The development configuration includes:
 - `verify_ssl`: Verify SSL certificates (default: false)
 
 #### Auth Section
+
 - `enabled`: Enable authentication (default: true)
 - `token_expire_minutes`: JWT token expiration time in minutes (default: 60)
 - `secret_key`: Secret key for JWT token signing
@@ -215,13 +216,16 @@ The development configuration includes:
     - `disabled`: Whether the user is disabled
 
 #### Tools Section
+
 - `enabled`: List of enabled tool modules
 
 #### Integration Section
+
 - `prometheus`: Prometheus metrics configuration
 - `webhook`: Webhook notification configuration
 
 #### Runtime Section
+
 - `environment`: Deployment environment (development, testing, production)
 - `package_manager`: Package manager to use (uv, pip)
 - `command`: Command to start the server

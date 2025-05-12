@@ -3,7 +3,7 @@
     "configurations": [
         {
             "name": "Run MCP Server",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "args": [
@@ -17,7 +17,7 @@
         },
         {
             "name": "Debug MCP Server",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "args": [
@@ -35,7 +35,7 @@
         },
         {
             "name": "API Explorer",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/api_explorer.py",
             "args": [
@@ -50,7 +50,7 @@
         },
         {
             "name": "Run ARP Test",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/test_standalone.py",
             "args": [
@@ -64,7 +64,7 @@
         },
         {
             "name": "Run System Test",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/test_standalone.py",
             "args": [

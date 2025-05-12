@@ -14,6 +14,7 @@ from typing import Dict, Any, List
 from dotenv import load_dotenv
 from urllib3.exceptions import InsecureRequestWarning
 from opnsense_mcp.tools.lldp import LLDPTool
+from opnsense_mcp.tools.dhcp import DHCPTol
 
 # Configure logging
 logging.basicConfig(
@@ -463,9 +464,10 @@ async def main():
     # Initialize OPNsense client
     client = OPNsenseClient()
 
-    # Initialize ARPTool with client
+    # Initialize ARPTool, LLDPTool, and DHCPTol with client
     arp_tool = ARPTool(client)
     lldp_tool = LLDPTool(client)
+    dhcp_tool = DHCPTol(client)
 
     # ARP tool definition with complete schema
     arp_tool_schema = {
@@ -547,6 +549,27 @@ async def main():
         },
     }
 
+    dhcp_tool_schema = {
+        "id": "dhcp",
+        "name": "dhcp",
+        "description": "Show DHCPv4 and DHCPv6 lease tables",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "dhcpv4": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                },
+                "dhcpv6": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                },
+                "status": {"type": "string"},
+            },
+        },
+    }
+
     # Send ready message
     ready = {
         "jsonrpc": "2.0",
@@ -619,7 +642,9 @@ async def main():
                 response = {
                     "jsonrpc": "2.0",
                     "id": msg_id,
-                    "result": {"tools": [arp_tool_schema, lldp_tool_schema]},
+                    "result": {
+                        "tools": [arp_tool_schema, lldp_tool_schema, dhcp_tool_schema]
+                    },
                 }
                 print(json.dumps(response), flush=True)
                 logger.info(f"SENT: {json.dumps(response, indent=2)}")
@@ -738,6 +763,50 @@ async def main():
                                 "text": "## No LLDP entries found",
                                 "type": "text",
                             }
+                        )
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": {"content": content},
+                    }
+                    print(json.dumps(response), flush=True)
+                    logger.info(f"SENT: {json.dumps(response, indent=2)}")
+                elif tool_name == "dhcp":
+                    result = await dhcp_tool.execute(arguments)
+                    content = [
+                        {"text": "# DHCP Lease Tables", "type": "text"},
+                        {"text": "", "type": "text"},
+                    ]
+                    if result.get("dhcpv4"):
+                        content.append({"text": "## DHCPv4 Leases", "type": "text"})
+                        content.append({"text": "", "type": "text"})
+                        for entry in result["dhcpv4"]:
+                            line = (
+                                f"- {entry.get('ip')} ({entry.get('mac')}) "
+                                f"{entry.get('hostname', '')} "
+                                f"{entry.get('lease_type', '')} "
+                                f"{entry.get('description', '')}"
+                            )
+                            content.append({"text": line, "type": "text"})
+                    else:
+                        content.append(
+                            {"text": "No DHCPv4 leases found", "type": "text"}
+                        )
+                    content.append({"text": "", "type": "text"})
+                    if result.get("dhcpv6"):
+                        content.append({"text": "## DHCPv6 Leases", "type": "text"})
+                        content.append({"text": "", "type": "text"})
+                        for entry in result["dhcpv6"]:
+                            line = (
+                                f"- {entry.get('ip')} ({entry.get('mac')}) "
+                                f"{entry.get('hostname', '')} "
+                                f"{entry.get('lease_type', '')} "
+                                f"{entry.get('description', '')}"
+                            )
+                            content.append({"text": line, "type": "text"})
+                    else:
+                        content.append(
+                            {"text": "No DHCPv6 leases found", "type": "text"}
                         )
                     response = {
                         "jsonrpc": "2.0",

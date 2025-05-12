@@ -72,7 +72,7 @@ For PyCharm users:
      - Python interpreter: Select your project venv
      - Environment variables: Click "..." and add the following:
 
-       ```
+       ```markdown
        PYTHONPATH=<project-root>
        DEBUG=true
        LOG_LEVEL=DEBUG
