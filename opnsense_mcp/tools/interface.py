@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-from typing import Dict, Any, List, Optional
-from pydantic import BaseModel
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
