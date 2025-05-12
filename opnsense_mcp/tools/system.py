@@ -24,15 +24,8 @@ class SystemTool:
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute system status check"""
         try:
-            # Get status data by querying various OPNsense endpoints
-            status_data = await self._get_system_health()
-            return SystemStatus(
-                cpu_usage=status_data.get("cpu_usage", 0.0),
-                memory_usage=status_data.get("memory_usage", 0.0),
-                filesystem_usage=status_data.get("filesystem_usage", {}),
-                uptime=status_data.get("uptime", ""),
-                versions=status_data.get("versions", {}),
-            ).dict()
+            status_data = await self.client.get_system_status()
+            return status_data
         except Exception as e:
             logger.error(f"Failed to get system status: {str(e)}")
             raise RuntimeError(f"Failed to get system status: {str(e)}")

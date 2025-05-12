@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 from urllib3.exceptions import InsecureRequestWarning
 from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.dhcp import DHCPTol
+from opnsense_mcp.tools.system import SystemTool
+from opnsense_mcp.tools.firewall import FirewallTool
 
 # Configure logging
 logging.basicConfig(
@@ -464,10 +466,12 @@ async def main():
     # Initialize OPNsense client
     client = OPNsenseClient()
 
-    # Initialize ARPTool, LLDPTool, and DHCPTol with client
+    # Initialize ARPTool, LLDPTool, DHCPTol, SystemTool, and FirewallTool with client
     arp_tool = ARPTool(client)
     lldp_tool = LLDPTool(client)
     dhcp_tool = DHCPTol(client)
+    system_tool = SystemTool(client)
+    firewall_tool = FirewallTool(client)
 
     # ARP tool definition with complete schema
     arp_tool_schema = {
@@ -570,6 +574,37 @@ async def main():
         },
     }
 
+    system_tool_schema = {
+        "id": "system",
+        "name": "system",
+        "description": "Show OPNsense system status",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "cpu_usage": {"type": "number"},
+                "memory_usage": {"type": "number"},
+                "filesystem_usage": {"type": "object"},
+                "uptime": {"type": "string"},
+                "versions": {"type": "object"},
+            },
+        },
+    }
+
+    firewall_tool_schema = {
+        "id": "firewall",
+        "name": "firewall",
+        "description": "Show OPNsense firewall rules",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "rules": {"type": "array", "items": {"type": "object"}},
+                "status": {"type": "string"},
+            },
+        },
+    }
+
     # Send ready message
     ready = {
         "jsonrpc": "2.0",
@@ -643,7 +678,13 @@ async def main():
                     "jsonrpc": "2.0",
                     "id": msg_id,
                     "result": {
-                        "tools": [arp_tool_schema, lldp_tool_schema, dhcp_tool_schema]
+                        "tools": [
+                            arp_tool_schema,
+                            lldp_tool_schema,
+                            dhcp_tool_schema,
+                            system_tool_schema,
+                            firewall_tool_schema,
+                        ]
                     },
                 }
                 print(json.dumps(response), flush=True)
@@ -808,6 +849,52 @@ async def main():
                         content.append(
                             {"text": "No DHCPv6 leases found", "type": "text"}
                         )
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": {"content": content},
+                    }
+                    print(json.dumps(response), flush=True)
+                    logger.info(f"SENT: {json.dumps(response, indent=2)}")
+                elif tool_name == "system":
+                    result = await system_tool.execute(arguments)
+                    content = [
+                        {"text": "# OPNsense System Status", "type": "text"},
+                        {"text": f"CPU Usage: {result.get('cpu_usage', 0.0)}%", "type": "text"},
+                        {"text": f"Memory Usage: {result.get('memory_usage', 0.0)}%", "type": "text"},
+                        {"text": f"Uptime: {result.get('uptime', '')}", "type": "text"},
+                        {"text": "", "type": "text"},
+                        {"text": "## Filesystem Usage", "type": "text"},
+                    ]
+                    for mount, usage in result.get("filesystem_usage", {}).items():
+                        content.append({"text": f"- {mount}: {usage}% used", "type": "text"})
+                    content.append({"text": "", "type": "text"})
+                    content.append({"text": "## Versions", "type": "text"})
+                    for k, v in result.get("versions", {}).items():
+                        content.append({"text": f"- {k}: {v}", "type": "text"})
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": {"content": content},
+                    }
+                    print(json.dumps(response), flush=True)
+                    logger.info(f"SENT: {json.dumps(response, indent=2)}")
+                elif tool_name == "firewall":
+                    result = await firewall_tool.execute(arguments)
+                    content = [
+                        {"text": "# OPNsense Firewall Rules", "type": "text"},
+                        {"text": "", "type": "text"},
+                    ]
+                    for rule in result.get("rules", []):
+                        line = (
+                            f"- Rule {rule.get('id')}: {rule.get('description', '')} | "
+                            f"Interface: {rule.get('interface', '')} | "
+                            f"Action: {rule.get('action', '')} | "
+                            f"Enabled: {rule.get('enabled', False)}"
+                        )
+                        content.append({"text": line, "type": "text"})
+                    if not result.get("rules"):
+                        content.append({"text": "No firewall rules found.", "type": "text"})
                     response = {
                         "jsonrpc": "2.0",
                         "id": msg_id,
