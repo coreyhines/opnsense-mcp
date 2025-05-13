@@ -19,7 +19,7 @@ before_script:
 ruff:
   stage: lint
   script:
-    - ruff check .
+    - ruff check --fix .
     - ruff format --check .
   tags:
     - linux
