@@ -45,8 +45,14 @@ class ARPTool:
             # Targeted search if 'search' parameter is provided
             search_query = params.get("search")
             if search_query:
-                arp_entries = [self._fill_manufacturer(entry) for entry in await self.client.search_arp_table(search_query)]
-                ndp_entries = [self._fill_manufacturer(entry) for entry in await self.client.search_ndp_table(search_query)]
+                arp_entries = [
+                    self._fill_manufacturer(entry)
+                    for entry in await self.client.search_arp_table(search_query)
+                ]
+                ndp_entries = [
+                    self._fill_manufacturer(entry)
+                    for entry in await self.client.search_ndp_table(search_query)
+                ]
                 return {
                     "arp": arp_entries,
                     "ndp": ndp_entries,

@@ -3,6 +3,7 @@
 Final MCP server that handles tools/list method specifically
 with real OPNsense API integration for ARP data
 """
+
 import json
 import sys
 import logging
@@ -71,9 +72,7 @@ class OPNsenseClient:
     async def get_arp_table(self) -> List[Dict[str, Any]]:
         """Get ARP table from OPNsense"""
         if not self.is_configured:
-            logger.warning(
-                "OPNsense API not configured, " "returning dummy ARP " "data"
-            )
+            logger.warning("OPNsense API not configured, returning dummy ARP data")
             return [
                 {
                     "ip": "192.168.1.1",
@@ -189,7 +188,7 @@ class OPNsenseClient:
     async def get_lldp_table(self) -> List[Dict[str, Any]]:
         """Get LLDP neighbor table from OPNsense (lldpd plugin)"""
         if not self.is_configured:
-            logger.warning("OPNsense API not configured, " "returning dummy LLDP data")
+            logger.warning("OPNsense API not configured, returning dummy LLDP data")
             return [
                 {
                     "intf": "em0",
@@ -322,9 +321,7 @@ class OPNsenseClient:
     async def get_dhcpv6_leases(self) -> list[dict]:
         """Get DHCPv6 lease table from OPNsense"""
         if not self.is_configured:
-            logger.warning(
-                "OPNsense API not configured, " "returning dummy DHCPv6 data"
-            )
+            logger.warning("OPNsense API not configured, returning dummy DHCPv6 data")
             return [
                 {
                     "ip": "2001:db8::100",
@@ -869,14 +866,22 @@ async def main():
                     result = await system_tool.execute(arguments)
                     content = [
                         {"text": "# OPNsense System Status", "type": "text"},
-                        {"text": f"CPU Usage: {result.get('cpu_usage', 0.0)}%", "type": "text"},
-                        {"text": f"Memory Usage: {result.get('memory_usage', 0.0)}%", "type": "text"},
+                        {
+                            "text": f"CPU Usage: {result.get('cpu_usage', 0.0)}%",
+                            "type": "text",
+                        },
+                        {
+                            "text": f"Memory Usage: {result.get('memory_usage', 0.0)}%",
+                            "type": "text",
+                        },
                         {"text": f"Uptime: {result.get('uptime', '')}", "type": "text"},
                         {"text": "", "type": "text"},
                         {"text": "## Filesystem Usage", "type": "text"},
                     ]
                     for mount, usage in result.get("filesystem_usage", {}).items():
-                        content.append({"text": f"- {mount}: {usage}% used", "type": "text"})
+                        content.append(
+                            {"text": f"- {mount}: {usage}% used", "type": "text"}
+                        )
                     content.append({"text": "", "type": "text"})
                     content.append({"text": "## Versions", "type": "text"})
                     for k, v in result.get("versions", {}).items():
@@ -903,7 +908,9 @@ async def main():
                         )
                         content.append({"text": line, "type": "text"})
                     if not result.get("rules"):
-                        content.append({"text": "No firewall rules found.", "type": "text"})
+                        content.append(
+                            {"text": "No firewall rules found.", "type": "text"}
+                        )
                     response = {
                         "jsonrpc": "2.0",
                         "id": msg_id,

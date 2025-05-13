@@ -43,9 +43,7 @@ class SystemTool:
 
             # Get data from core/system endpoints
             try:
-                response = await self.client._make_request(
-                    "GET", "/core/system/status"
-                )
+                response = await self.client._make_request("GET", "/core/system/status")
                 health_data = response.get("data", {})
 
                 if "cpu" in health_data:
@@ -67,15 +65,11 @@ class SystemTool:
                         if isinstance(fs, dict):
                             mount = fs.get("mountpoint", "")
                             used = fs.get("used_percent", "0").rstrip("%")
-                            status_data["filesystem_usage"][mount] = float(
-                                used
-                            )
+                            status_data["filesystem_usage"][mount] = float(used)
 
                 status_data["uptime"] = health_data.get("uptime", "")
                 if "version" in health_data:
-                    status_data["versions"]["opnsense"] = health_data[
-                        "version"
-                    ]
+                    status_data["versions"]["opnsense"] = health_data["version"]
                 if "kernel" in health_data:
                     status_data["versions"]["kernel"] = health_data["kernel"]
 

@@ -24,9 +24,7 @@ def main():
         default="vars/key.yaml",
         help="Path to configuration file",
     )
-    parser.add_argument(
-        "--log-file", type=str, help="Path to log file (optional)"
-    )
+    parser.add_argument("--log-file", type=str, help="Path to log file (optional)")
     parser.add_argument(
         "--log-level",
         type=str,
@@ -42,9 +40,7 @@ def main():
 
     # Set environment variable for JWT secret key if not set
     if not os.environ.get("MCP_SECRET_KEY"):
-        os.environ["MCP_SECRET_KEY"] = (
-            "development-secret-key"  # Change in production
-        )
+        os.environ["MCP_SECRET_KEY"] = "development-secret-key"  # Change in production
 
     # Initialize the MCP server
     server = MCPServer(args.config)

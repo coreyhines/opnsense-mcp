@@ -94,9 +94,7 @@ def get_user(users_db: Dict, username: str) -> Optional[UserInDB]:
     return None
 
 
-def authenticate_user(
-    users_db: Dict, username: str, password: str
-) -> Optional[User]:
+def authenticate_user(users_db: Dict, username: str, password: str) -> Optional[User]:
     """Authenticate a user against the user database"""
     user = get_user(users_db, username)
     if not user:
@@ -106,9 +104,7 @@ def authenticate_user(
     return user
 
 
-def create_access_token(
-    data: dict, expires_delta: Optional[timedelta] = None
-) -> str:
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token"""
     to_encode = data.copy()
     if expires_delta:

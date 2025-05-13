@@ -3,6 +3,7 @@
 Compatibility module with helpers for dealing with different Python versions
 and environments like IDEs where imports might be restricted
 """
+
 import sys
 import os
 import types

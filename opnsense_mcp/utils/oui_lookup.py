@@ -15,9 +15,7 @@ class OUILookup:
         with open(csv_path, newline="", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                assignment = (
-                    row.get("Assignment", "").replace("-", ":").lower()
-                )
+                assignment = row.get("Assignment", "").replace("-", ":").lower()
                 org_name = row.get("Organization Name", "").strip()
                 if assignment and org_name:
                     self.oui_map[assignment] = org_name
