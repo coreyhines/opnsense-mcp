@@ -4,7 +4,6 @@ Test script for JWT helper implementation
 """
 import sys
 import os
-import time
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +26,7 @@ try:
     print("\nDecoding and verifying token...")
     try:
         payload = decode_jwt(token, SECRET_KEY, algorithms=["HS256"])
-        print(f"Token verified successfully!")
+        print("Token verified successfully!")
         print(f"Payload: {payload}")
         
         if payload.get("sub") == TEST_USERNAME:

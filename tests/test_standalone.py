@@ -13,10 +13,7 @@ import ssl
 import requests
 import json
 import base64
-from typing import Dict, Any
 import yaml
-from datetime import datetime
-from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
@@ -199,7 +196,7 @@ async def test_system_status(client):
     result = await client.get_system_status()
     
     # Format and display the results
-    print(f"\n=== SYSTEM STATUS ===\n")
+    print("\n=== SYSTEM STATUS ===\n")
     print(f"CPU Usage:      {result['cpu_usage']}%")
     print(f"Memory Usage:   {result['memory_usage']}%")
     print(f"OPNsense Version: {result['versions']['opnsense']}")

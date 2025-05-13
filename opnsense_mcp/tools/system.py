@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from pydantic import BaseModel
 import logging
 

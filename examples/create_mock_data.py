@@ -4,9 +4,7 @@ Mock data script for MCP server development testing.
 Creates example data files for development mode.
 """
 
-import os
 import json
-import shutil
 from pathlib import Path
 
 # Current directory

@@ -3,7 +3,6 @@ Simple form handling for environments where python-multipart isn't available
 """
 
 from fastapi import Request
-from typing import Optional
 
 
 class SimpleFormData:

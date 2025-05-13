@@ -3,7 +3,7 @@
 import ssl
 import requests
 import time
-from typing import Dict, Any, List, Optional, Union, Callable
+from typing import Dict, Any
 from pyopnsense import diagnostics
 from urllib3.exceptions import InsecureRequestWarning
 import logging

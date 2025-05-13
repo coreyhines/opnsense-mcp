@@ -4,11 +4,8 @@ This is a fallback for environments where passlib isn't available
 """
 
 import os
-import hmac
 import hashlib
 import base64
-import json
-import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 
@@ -19,10 +16,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Import JWT helper
 try:
-    from .jwt_helper import JWTError, decode_jwt, create_jwt
+    from .jwt_helper import JWTError, decode_jwt, create_jwt  # noqa: F401
 except ImportError:
     # Try absolute import
-    from mcp_server.utils.jwt_helper import JWTError, decode_jwt, create_jwt
+    from mcp_server.utils.jwt_helper import create_jwt  # noqa: F401
 
 
 # Simple models (normally would be Pydantic models)

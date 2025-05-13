@@ -10,10 +10,7 @@ import sys
 import asyncio
 import argparse
 import logging
-from pathlib import Path
-import time
 import yaml
-import json
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -37,7 +34,6 @@ def load_config(config_path):
 
 async def run_tool_tests(client, tool_name=None):
     """Run tests for all tools or a specific tool"""
-    from mcp_server.utils.api_new import OPNsenseClient
     
     tools = {
         # Network tools

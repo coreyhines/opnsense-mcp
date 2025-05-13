@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from mcp_server.utils.jwt_helper import JWTError, create_jwt, decode_jwt as jwt
+from mcp_server.utils.jwt_helper import create_jwt
 import os
 
 # Security configurations

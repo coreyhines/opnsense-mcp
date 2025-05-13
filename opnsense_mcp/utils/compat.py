@@ -6,7 +6,6 @@ and environments like IDEs where imports might be restricted
 import sys
 import os
 import types
-import importlib
 
 
 def mock_passlib():
@@ -45,10 +44,11 @@ def setup_compat():
 
     # If in IDE, make passlib available
     if in_ide:
-        try:
-            import passlib.context
-        except ImportError:
-            mock_passlib()
+        # try:
+        #     import passlib.context
+        # except ImportError:
+        #     mock_passlib()
+        pass
 
     return {
         "in_ide": in_ide,

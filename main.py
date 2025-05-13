@@ -3,7 +3,6 @@
 import uvicorn
 import argparse
 import os
-from pathlib import Path
 from mcp_server import MCPServer
 from mcp_server.utils.logging import setup_logging
 
