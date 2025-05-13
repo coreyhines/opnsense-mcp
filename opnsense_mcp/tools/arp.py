@@ -35,14 +35,25 @@ class ARPTool:
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute ARP/NDP table lookup with optional filtering by MAC,
-        IPv4, or IPv6 address
+        IPv4, or IPv6 address, or using targeted search if 'search' is provided.
         """
         try:
             if self.client is None:
                 logger.warning("No OPNsense client available, returning dummy data")
                 return self._get_dummy_data()
 
-            # Get both ARP and NDP tables
+            # Targeted search if 'search' parameter is provided
+            search_query = params.get("search")
+            if search_query:
+                arp_entries = [self._fill_manufacturer(entry) for entry in await self.client.search_arp_table(search_query)]
+                ndp_entries = [self._fill_manufacturer(entry) for entry in await self.client.search_ndp_table(search_query)]
+                return {
+                    "arp": arp_entries,
+                    "ndp": ndp_entries,
+                    "status": "success",
+                }
+
+            # Get both ARP and NDP tables (full-table fallback)
             arp_data = await self.client.get_arp_table()
             ndp_data = await self.client.get_ndp_table()
 

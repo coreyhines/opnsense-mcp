@@ -539,3 +539,18 @@ class OPNsenseClient:
         except Exception as e:
             logger.error(f"Failed to cancel rollback: {str(e)}")
             raise RequestError(f"Failed to cancel rollback: {str(e)}")
+
+    async def search_arp_table(self, query: str) -> list[dict]:
+        """Search ARP table for a specific IP, MAC, or hostname using the OPNsense API endpoint."""
+        endpoint = "/api/diagnostics/interface/search_arp"
+        params = {"search": query}
+        response = await self._make_request("GET", endpoint, params=params)
+        # The response format may vary; adapt as needed
+        return response.get("data", []) if isinstance(response, dict) else []
+
+    async def search_ndp_table(self, query: str) -> list[dict]:
+        """Search NDP table for a specific IPv6, MAC, or hostname using the OPNsense API endpoint."""
+        endpoint = "/api/diagnostics/interface/search_ndp"
+        params = {"search": query}
+        response = await self._make_request("GET", endpoint, params=params)
+        return response.get("data", []) if isinstance(response, dict) else []

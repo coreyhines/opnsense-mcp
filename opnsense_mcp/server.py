@@ -489,6 +489,10 @@ async def main():
                     "type": "string",
                     "description": "Filter by MAC address",
                 },
+                "search": {
+                    "type": "string",
+                    "description": "Targeted search for ARP/NDP by IP, MAC, or hostname (uses efficient API endpoint)",
+                },
             },
             "required": [],
         },
@@ -698,11 +702,16 @@ async def main():
                 logger.info(f"Execute tool: {tool_name} with arguments: {arguments}")
 
                 if tool_name == "arp":
-                    # Accept both 'ip' and 'mac' as arguments
+                    # Accept 'search', 'ip', and 'mac' as arguments
                     filter_value = arguments.get("mac") or arguments.get("ip")
-
-                    # Get real ARP data with optional filter
-                    result = await arp_tool.execute(filter_value)
+                    search_value = arguments.get("search")
+                    # If search is provided, use it; else fallback to filter_value
+                    if search_value:
+                        result = await arp_tool.execute({"search": search_value})
+                    elif filter_value:
+                        result = await arp_tool.execute(filter_value)
+                    else:
+                        result = await arp_tool.execute()
 
                     # Format the response with content objects as expected by Cursor
                     content = [
