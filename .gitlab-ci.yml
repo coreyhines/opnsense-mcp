@@ -11,8 +11,9 @@ before_script:
   - python --version
   - curl -LsSf https://astral.sh/uv/install.sh | sh
   - export PATH="$HOME/.local/bin:$PATH"
-  - uv --system pip install --upgrade pip
-  - uv --system pip install ruff bandit detect-secrets
+  - uv venv
+  - uv pip install --upgrade pip
+  - uv pip install ruff bandit detect-secrets
 
 ruff:
   stage: lint
