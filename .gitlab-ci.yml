@@ -1,0 +1,37 @@
+stages:
+  - lint
+  - security
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+before_script:
+  - python --version
+  - curl -LsSf https://astral.sh/uv/install.sh | sh
+  - export PATH="$HOME/.local/bin:$PATH"
+  - uv pip install --upgrade pip
+  - uv pip install ruff bandit detect-secrets
+
+ruff:
+  stage: lint
+  script:
+    - ruff check .
+    - ruff format --check .
+  tags:
+    - linux
+
+bandit:
+  stage: security
+  script:
+    - bandit -r . -x tests
+  tags:
+    - linux
+
+detect_secrets:
+  stage: security
+  script:
+    - detect-secrets scan --all-files > .secrets.baseline
+    - detect-secrets audit .secrets.baseline --fail-on-unaudited
+  tags:
+    - linux 
