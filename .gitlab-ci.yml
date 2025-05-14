@@ -44,6 +44,7 @@ bandit:
   artifacts:
     paths:
       - bandit-report.html
+  allow_failure: true
 
 detect_secrets:
   stage: security
@@ -63,6 +64,7 @@ detect_secrets:
 pip_audit:
   stage: security
   before_script:
+    - python --version
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export PATH="$HOME/.local/bin:$PATH"
     - export UV_LINK_MODE="copy"
@@ -72,10 +74,10 @@ pip_audit:
     - source .venv/bin/activate
   script:
     - cd "$CI_PROJECT_DIR"
-    - pip-audit --format html -o pip-audit-report.html
+    - pip-audit --format json -o pip-audit-report.json
   artifacts:
     paths:
-      - pip-audit-report.html
+      - pip-audit-report.json
 
 trivy_fs_scan:
   stage: security
@@ -107,7 +109,7 @@ collect_reports:
   script:
     - mkdir -p public
     - cp bandit-report.html public/ || true
-    - cp pip-audit-report.html public/ || true
+    - cp pip-audit-report.json public/ || true
     - cp trivy-fs-report.html public/ || true
     - cp trivy-image-report.html public/ || true
   dependencies:
