@@ -31,4 +31,4 @@ line-length = 88
 target-version = ["py312"] 
 
 [tool.bandit]
-exclude_dirs = ["tests", ".venv", "venv]
+exclude_dirs = ["tests", ".venv", "venv"]
