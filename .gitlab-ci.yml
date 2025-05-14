@@ -3,8 +3,8 @@ include:
 
 stages:
   - lint
-  # - test
-  # - security
+  - test
+  - security
   - deploy
 
 variables:
