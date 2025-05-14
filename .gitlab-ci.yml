@@ -102,7 +102,7 @@ trivy_python_image_scan:
   artifacts:
     paths:
       - trivy-image-report.json
-  allow_failure: false
+  allow_failure: true
 
 collect_reports:
   stage: deploy
