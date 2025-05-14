@@ -8,7 +8,7 @@ OUI_CSV_PATH = os.path.join("data", "oui.csv")
 
 def download_oui_csv():
     print(f"Downloading OUI database from {OUI_CSV_URL} ...")
-    response = requests.get(OUI_CSV_URL)
+    response = requests.get(OUI_CSV_URL, timeout=10)
     response.raise_for_status()
     os.makedirs(os.path.dirname(OUI_CSV_PATH), exist_ok=True)
     with open(OUI_CSV_PATH, "wb") as f:

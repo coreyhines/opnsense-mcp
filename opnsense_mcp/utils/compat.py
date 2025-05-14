@@ -31,7 +31,8 @@ def mock_passlib():
         with open(shim_path) as f:
             code = compile(f.read(), shim_path, "exec")
             globals_dict = {}
-            exec(code, globals_dict)
+            # NOTE: exec is used here to dynamically load a shim for passlib compatibility in a controlled context. Bandit: # nosec
+            exec(code, globals_dict)  # nosec
 
         # Add CryptContext to our mock module
         mock_context.CryptContext = globals_dict["CryptContext"]

@@ -6,7 +6,7 @@ This script runs the specified test and then cleans up any artifacts.
 
 import os
 import sys
-import subprocess
+import subprocess  # nosec
 import argparse
 
 
@@ -28,7 +28,8 @@ def run_test(test_script, args):
 
     # Run the test
     try:
-        subprocess.run(cmd, check=True)
+        # NOTE: subprocess.run is used with shell=False and controlled input, which is safe. Bandit: # nosec
+        subprocess.run(cmd, check=True)  # nosec
         return True
     except subprocess.CalledProcessError as e:
         print(f"Test failed with exit code {e.returncode}")
@@ -42,7 +43,8 @@ def run_cleanup():
     print("\nCleaning up test artifacts...")
 
     try:
-        subprocess.run([sys.executable, cleanup_path], check=True)
+        # NOTE: subprocess.run is used with shell=False and controlled input, which is safe. Bandit: # nosec
+        subprocess.run([sys.executable, cleanup_path], check=True)  # nosec
         return True
     except subprocess.CalledProcessError as e:
         print(f"Cleanup failed with exit code {e.returncode}")

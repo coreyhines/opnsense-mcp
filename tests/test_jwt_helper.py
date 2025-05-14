@@ -14,7 +14,7 @@ try:
     from mcp_server.utils.jwt_helper import create_jwt, decode_jwt, JWTError
 
     # Test constants
-    SECRET_KEY = "test-secret-key"
+    SECRET_KEY = "test-secret-key"  # nosec  # NOTE: Hardcoded for testing only. Bandit: # nosec
     TEST_USERNAME = "test-user"
 
     # Create a test token

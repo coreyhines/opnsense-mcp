@@ -5,7 +5,7 @@ Launcher script for OPNsense MCP Server using the virtual environment
 
 import os
 import sys
-import subprocess
+import subprocess  # nosec
 
 # Get the directory where this script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +24,8 @@ command = [python_cmd, launcher_script]
 # Run the command
 print(f"Running: {' '.join(command)}")
 try:
-    subprocess.run(command, check=True)
+    # NOTE: subprocess.run is used with shell=False and controlled input, which is safe. Bandit: # nosec
+    subprocess.run(command, check=True)  # nosec
 except subprocess.CalledProcessError as e:
     print(f"Error: {e}")
     sys.exit(1)
