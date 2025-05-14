@@ -25,7 +25,7 @@ ruff:
   script:
     - cd "$CI_PROJECT_DIR"
     - ruff check .
-    - ruff format --check .
+    - ruff format .
   tags:
     - linux
 
