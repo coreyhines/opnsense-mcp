@@ -120,7 +120,7 @@ collect_reports:
     - python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-image-report.json public/trivy-image-report.html || true
     # Generate index.html with links to all files in public
     - |
-      python3 -c "import os; files = os.listdir('public'); with open('public/index.html', 'w') as f: f.write('<h1>Reports</h1>'); [f.write(f'<a href=\"{file}\">{file}</a><br>') for file in files if file != 'index.html']"
+      python3 -c "import os\nfiles = os.listdir('public')\nwith open('public/index.html', 'w') as f:\n    f.write('<h1>Reports</h1>')\n    for file in files:\n        if file != 'index.html':\n            f.write(f'<a href=\"{file}\">{file}</a><br>')\n"
   dependencies:
     - bandit
     - pip_audit
