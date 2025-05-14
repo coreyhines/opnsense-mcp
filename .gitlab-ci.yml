@@ -126,6 +126,7 @@ pages:
   script:
     - mkdir -p public/reports
     - echo "Publishing reports via GitLab Pages" > public.index.html
+    - cp -r reports/* public/
   artifacts:
     paths:
       - public
