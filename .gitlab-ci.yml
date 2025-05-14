@@ -125,7 +125,7 @@ pages:
   stage: deploy
   script:
     - mkdir -p public
-    - echo "Publishing reports via GitLab Pages" > public.index.html
+    - echo "Publishing reports via GitLab Pages" > public/index.html
   artifacts:
     paths:
       - public
