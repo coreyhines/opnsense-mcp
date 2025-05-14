@@ -112,6 +112,14 @@ collect_reports:
     - cp pip-audit-report.json public/ || true
     - cp trivy-fs-report.json public/ || true
     - cp trivy-image-report.json public/ || true
+    # Convert pip-audit JSON to HTML
+    - python3 opnsense_mcp/tools/convert_pip_audit_to_html.py pip-audit-report.json public/pip-audit-report.html || true
+    # Convert Trivy JSONs to HTML
+    - python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-fs-report.json public/trivy-fs-report.html || true
+    - python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-image-report.json public/trivy-image-report.html || true
+    # Generate index.html with links to all files in public
+    - |
+      python3 -c "import os; files = os.listdir('public'); with open('public/index.html', 'w') as f: f.write('<h1>Reports</h1>'); [f.write(f'<a href=\"{file}\">{file}</a><br>') for file in files if file != 'index.html']"
   dependencies:
     - bandit
     - pip_audit
