@@ -10,3 +10,5 @@ tmp_
 *.pyw
 *.pyz
 *.pywz
+opnsense_mcp/__pycache__/server.cpython-313.pyc
+opnsense_mcp/tools/__pycache__/lldp.cpython-313.pyc
