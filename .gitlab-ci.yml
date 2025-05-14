@@ -3,6 +3,7 @@ include:
 
 stages:
   - lint
+  - test
   - security
 
 variables:
