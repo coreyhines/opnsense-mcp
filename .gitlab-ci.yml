@@ -5,6 +5,7 @@ stages:
   - lint
   - test
   - security
+  - deploy
 
 variables:
   PIP_DISABLE_PIP_VERSION_CHECK: '1'
@@ -39,7 +40,10 @@ bandit:
     - source .venv/bin/activate
   script:
     - cd "$CI_PROJECT_DIR"
-    - bandit -r "$CI_PROJECT_DIR" -x "$CI_PROJECT_DIR/.venv,$CI_PROJECT_DIR/tests" -v
+    - bandit -r "$CI_PROJECT_DIR" -x "$CI_PROJECT_DIR/.venv,$CI_PROJECT_DIR/tests" -v -f html -o bandit-report.html
+  artifacts:
+    paths:
+      - bandit-report.html
 
 detect_secrets:
   stage: security
@@ -59,7 +63,6 @@ detect_secrets:
 pip_audit:
   stage: security
   before_script:
-    - python --version
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export PATH="$HOME/.local/bin:$PATH"
     - export UV_LINK_MODE="copy"
@@ -69,25 +72,22 @@ pip_audit:
     - source .venv/bin/activate
   script:
     - cd "$CI_PROJECT_DIR"
-    - pip-audit
+    - pip-audit --format html -o pip-audit-report.html
+  artifacts:
+    paths:
+      - pip-audit-report.html
 
 trivy_fs_scan:
   stage: security
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
-  before_script:
-    - python --version
-    - curl -LsSf https://astral.sh/uv/install.sh | sh
-    - export PATH="$HOME/.local/bin:$PATH"
-    - export UV_LINK_MODE="copy"
-    - uv venv
-    - uv pip install --upgrade pip
-    - uv pip install ruff bandit detect-secrets pip-audit
-    - source .venv/bin/activate
   script:
     - cd "$CI_PROJECT_DIR"
-    - trivy fs --exit-code 1 --severity HIGH,CRITICAL .
+    - trivy fs --exit-code 1 --severity HIGH,CRITICAL . -f html -o trivy-fs-report.html
+  artifacts:
+    paths:
+      - trivy-fs-report.html
   allow_failure: false
 
 trivy_python_image_scan:
@@ -95,15 +95,36 @@ trivy_python_image_scan:
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
-  before_script:
-    - python --version
-    - curl -LsSf https://astral.sh/uv/install.sh | sh
-    - export PATH="$HOME/.local/bin:$PATH"
-    - export UV_LINK_MODE="copy"
-    - uv venv
-    - uv pip install --upgrade pip
-    - uv pip install ruff bandit detect-secrets pip-audit
-    - source .venv/bin/activate
   script:
-    - trivy image --exit-code 1 --severity HIGH,CRITICAL python:3.12-bookworm
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL python:3.12-bookworm -f html -o trivy-image-report.html
+  artifacts:
+    paths:
+      - trivy-image-report.html
   allow_failure: false
+
+collect_reports:
+  stage: deploy
+  script:
+    - mkdir -p public
+    - cp bandit-report.html public/ || true
+    - cp pip-audit-report.html public/ || true
+    - cp trivy-fs-report.html public/ || true
+    - cp trivy-image-report.html public/ || true
+  dependencies:
+    - bandit
+    - pip_audit
+    - trivy_fs_scan
+    - trivy_python_image_scan
+  artifacts:
+    paths:
+      - public
+
+pages:
+  stage: deploy
+  script:
+    - echo "Publishing reports via GitLab Pages"
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
