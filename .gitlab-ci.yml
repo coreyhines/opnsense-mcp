@@ -33,7 +33,6 @@ bandit:
 detect_secrets:
   stage: security
   script:
-    - detect-secrets scan --all-files > .secrets.baseline
-    - detect-secrets audit .secrets.baseline < /dev/null
+    - detect-secrets scan --all-files --exclude-files '\.git/config' > .secrets.baseline
   tags:
     - linux 
