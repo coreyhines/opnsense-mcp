@@ -26,7 +26,7 @@ ruff:
 bandit:
   stage: security
   script:
-    - bandit -r . -x tests
+    - bandit -r $CI_PROJECT_DIR -x tests
   tags:
     - linux
 
