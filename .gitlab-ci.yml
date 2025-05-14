@@ -25,33 +25,25 @@ ruff:
   script:
     - cd "$CI_PROJECT_DIR"
     - ruff check .
-    - ruff format .
-  tags:
-    - linux
+    - ruff format --check .
 
 bandit:
   stage: security
   script:
     - cd "$CI_PROJECT_DIR"
     - bandit -r "$CI_PROJECT_DIR" -x "$CI_PROJECT_DIR/.venv,$CI_PROJECT_DIR/tests" -v
-  tags:
-    - linux
 
 detect_secrets:
   stage: security
   script:
     - cd "$CI_PROJECT_DIR"
     - detect-secrets scan --all-files --exclude-files '\.git/config' > .secrets.baseline
-  tags:
-    - linux
 
 pip_audit:
   stage: security
   script:
     - cd "$CI_PROJECT_DIR"
     - pip-audit
-  tags:
-    - linux
 
 trivy_fs_scan:
   stage: security
@@ -62,8 +54,6 @@ trivy_fs_scan:
     - cd "$CI_PROJECT_DIR"
     - trivy fs --exit-code 1 --severity HIGH,CRITICAL .
   allow_failure: false
-  tags:
-    - linux
 
 trivy_python_image_scan:
   stage: security
@@ -73,5 +63,3 @@ trivy_python_image_scan:
   script:
     - trivy image --exit-code 1 --severity HIGH,CRITICAL python:3.12-bookworm
   allow_failure: false
-  tags:
-    - linux 
