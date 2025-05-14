@@ -19,7 +19,8 @@ before_script:
 ruff:
   stage: lint
   script:
-    - ruff check --fix .
+    - cd "$CI_PROJECT_DIR"
+    - ruff check .
     - ruff format --check .
   tags:
     - linux
@@ -27,13 +28,15 @@ ruff:
 bandit:
   stage: security
   script:
-    - bandit -r $CI_PROJECT_DIR -x tests,.venv
+    - cd "$CI_PROJECT_DIR"
+    - bandit -r . -x .venv,tests
   tags:
     - linux
 
 detect_secrets:
   stage: security
   script:
+    - cd "$CI_PROJECT_DIR"
     - detect-secrets scan --all-files --exclude-files '\.git/config' > .secrets.baseline
   tags:
     - linux 
