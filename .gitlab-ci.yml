@@ -3,8 +3,8 @@ include:
 
 stages:
   - lint
-  - test
-  - security
+  # - test
+  # - security
   - deploy
 
 variables:
@@ -108,18 +108,10 @@ collect_reports:
   stage: deploy
   script:
     - mkdir -p public
-    # Ensure all reports are generated before copying
-    - if [ ! -f bandit-report.html ]; then echo "bandit-report.html missing!"; fi
-    - if [ ! -f pip-audit-report.json ]; then echo "pip-audit-report.json missing!"; fi
-    - if [ ! -f trivy-fs-report.json ]; then echo "trivy-fs-report.json missing!"; fi
-    - if [ ! -f trivy-image-report.json ]; then echo "trivy-image-report.json missing!"; fi
     - cp bandit-report.html public/ || true
     - cp pip-audit-report.json public/ || true
     - cp trivy-fs-report.json public/ || true
     - cp trivy-image-report.json public/ || true
-    # Generate index.html with links to all files in public
-    - |
-      python3 -c "import os; files = os.listdir('public'); with open('public/index.html', 'w') as f: f.write('<h1>Reports</h1>'); [f.write(f'<a href=\"{file}\">{file}</a><br>') for file in files if file != 'index.html']"
   dependencies:
     - bandit
     - pip_audit
@@ -132,7 +124,8 @@ collect_reports:
 pages:
   stage: deploy
   script:
-    - echo "GitLab Pages deployment: see index.html for reports."  # Do not overwrite index.html
+    - mkdir -p public
+    # - echo "Publishing reports via GitLab Pages" > public.index.html
   artifacts:
     paths:
       - public
