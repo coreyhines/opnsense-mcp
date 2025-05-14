@@ -13,6 +13,9 @@ dev = [
     "black",
     "ruff",
     "mypy",
+    "pre-commit",
+    "bandit",
+    "detect-secrets",
 ]
 
 [build-system]

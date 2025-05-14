@@ -1,3 +1,6 @@
+include:
+  - template: Security/SAST.gitlab-ci.yml
+
 stages:
   - lint
   - security
@@ -13,7 +16,7 @@ before_script:
   - export UV_LINK_MODE="copy"
   - uv venv
   - uv pip install --upgrade pip
-  - uv pip install ruff bandit detect-secrets
+  - uv pip install ruff bandit detect-secrets pip-audit
   - source .venv/bin/activate
 
 ruff:
@@ -38,5 +41,36 @@ detect_secrets:
   script:
     - cd "$CI_PROJECT_DIR"
     - detect-secrets scan --all-files --exclude-files '\.git/config' > .secrets.baseline
+  tags:
+    - linux
+
+pip_audit:
+  stage: security
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - pip-audit
+  tags:
+    - linux
+
+trivy_fs_scan:
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - trivy fs --exit-code 1 --severity HIGH,CRITICAL .
+  allow_failure: false
+  tags:
+    - linux
+
+trivy_python_image_scan:
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL python:3.12-bookworm
+  allow_failure: false
   tags:
     - linux 
