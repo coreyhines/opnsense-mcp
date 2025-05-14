@@ -27,7 +27,7 @@ ruff:
 bandit:
   stage: security
   script:
-    - bandit -r $CI_PROJECT_DIR -x tests .venv
+    - bandit -r $CI_PROJECT_DIR -x tests ./.venv
   tags:
     - linux
 
