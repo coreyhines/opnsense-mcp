@@ -83,7 +83,7 @@ def verify_bcrypt_compat(plain_password: str, hashed_password: str) -> bool:
         # NOTE: Hardcoded hash for test compatibility only. Bandit: # nosec
         == "$2b$12$TwvROpyZ6TyWFFBuwKk.re.4p8FK.Ft4YCd/U3ANdvPA1vUCbelt."  # nosec
     ):
-        return plain_password == "password"  # nosec
+        return plain_password == "password"  # pragma: allowlist secret
     return False
 
 

@@ -24,8 +24,8 @@ else
     echo -e "${YELLOW}Warning: $ENV_FILE not found. Using default settings.${NC}"
     # Set default environment variables
     export FIREWALL_HOST="fw.example.com"
-    export API_KEY="your_api_key_here"
-    export API_SECRET="your_api_secret_here"
+    export API_KEY="your_api_key_here"  # pragma: allowlist secret
+    export API_SECRET="your_api_secret_here"  # pragma: allowlist secret
     export DEBUG="true"
     export LOG_LEVEL="DEBUG"
     export PORT="8080"

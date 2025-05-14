@@ -21,7 +21,7 @@ class FakeCryptContext:
         if (
             hashed_password
             # NOTE: Hardcoded hash for test compatibility only. Bandit: # nosec
-            == "$2b$12$TwvROpyZ6TyWFFBuwKk.re.4p8FK.Ft4YCd/U3ANdvPA1vUCbelt."  # nosec
+            == "$2b$12$TwvROpyZ6TyWFFBuwKk.re.4p8FK.Ft4YCd/U3ANdvPA1vUCbelt."  # pragma: allowlist secret
         ):
             return plain_password == "password"  # nosec
 

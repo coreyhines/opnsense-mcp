@@ -41,7 +41,7 @@ def main():
     # Set environment variable for JWT secret key if not set
     if not os.environ.get("MCP_SECRET_KEY"):
         # NOTE: Hardcoded secret key for development only. Change in production! Bandit: # nosec
-        os.environ["MCP_SECRET_KEY"] = "development-secret-key"  # nosec
+        os.environ["MCP_SECRET_KEY"] = "development-secret-key"  # pragma: allowlist secret
 
     # Initialize the MCP server
     server = MCPServer(args.config)

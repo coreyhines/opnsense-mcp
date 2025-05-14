@@ -85,7 +85,9 @@ class OPNsenseClient:
             url = f"{self.api_host}/api/diagnostics/interface/get_arp"
             # NOTE: verify=False is used here to allow connections to OPNsense instances with self-signed certificates in a controlled environment.
             # This is not recommended for production use with untrusted networks. Bandit: # nosec
-            response = requests.get(url, headers=self.headers, verify=False, timeout=10)  # nosec
+            response = requests.get(
+                url, headers=self.headers, verify=False, timeout=10
+            )  # nosec
             response.raise_for_status()
             data = response.json()
 
@@ -145,7 +147,9 @@ class OPNsenseClient:
             url = f"{self.api_host}/api/diagnostics/interface/get_ndp"
             # NOTE: verify=False is used here to allow connections to OPNsense instances with self-signed certificates in a controlled environment.
             # This is not recommended for production use with untrusted networks. Bandit: # nosec
-            response = requests.get(url, headers=self.headers, verify=False, timeout=10)  # nosec
+            response = requests.get(
+                url, headers=self.headers, verify=False, timeout=10
+            )  # nosec
             response.raise_for_status()
             data = response.json()
 
@@ -209,7 +213,9 @@ class OPNsenseClient:
             url = f"{self.api_host}/api/lldpd/service/neighbor"
             # NOTE: verify=False is used here to allow connections to OPNsense instances with self-signed certificates in a controlled environment.
             # This is not recommended for production use with untrusted networks. Bandit: # nosec
-            response = requests.get(url, headers=self.headers, verify=False, timeout=10)  # nosec
+            response = requests.get(
+                url, headers=self.headers, verify=False, timeout=10
+            )  # nosec
             response.raise_for_status()
             data = response.json()
             # Parse the plain text response
@@ -299,7 +305,9 @@ class OPNsenseClient:
             url = f"{self.api_host}/api/dhcpv4/leases/search_lease"
             # NOTE: verify=False is used here to allow connections to OPNsense instances with self-signed certificates in a controlled environment.
             # This is not recommended for production use with untrusted networks. Bandit: # nosec
-            response = requests.get(url, headers=self.headers, verify=False, timeout=10)  # nosec
+            response = requests.get(
+                url, headers=self.headers, verify=False, timeout=10
+            )  # nosec
             response.raise_for_status()
             data = response.json()
             entries = []
@@ -346,7 +354,9 @@ class OPNsenseClient:
             url = f"{self.api_host}/api/dhcpv6/leases/search_lease"
             # NOTE: verify=False is used here to allow connections to OPNsense instances with self-signed certificates in a controlled environment.
             # This is not recommended for production use with untrusted networks. Bandit: # nosec
-            response = requests.get(url, headers=self.headers, verify=False, timeout=10)  # nosec
+            response = requests.get(
+                url, headers=self.headers, verify=False, timeout=10
+            )  # nosec
             response.raise_for_status()
             data = response.json()
             entries = []
