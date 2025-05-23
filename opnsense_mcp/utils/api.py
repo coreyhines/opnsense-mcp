@@ -26,12 +26,12 @@ ENDPOINTS = {
         "get_statistics": "/api/diagnostics/interface/get_interface_statistics",
     },
     "firewall": {
-        "get_rules": "/api/firewall/filter/get_rule",
-        "search_rules": "/api/firewall/filter/search_rule",
-        "add_rule": "/api/firewall/filter/add_rule",
-        "del_rule": "/api/firewall/filter/del_rule",
-        "set_rule": "/api/firewall/filter/set_rule",
-        "toggle_rule": "/api/firewall/filter/toggle_rule",
+        "get_rules": "/api/firewall/filter/getRule",
+        "search_rules": "/api/firewall/filter/searchRule",
+        "add_rule": "/api/firewall/filter/addRule",
+        "del_rule": "/api/firewall/filter/delRule",
+        "set_rule": "/api/firewall/filter/setRule",
+        "toggle_rule": "/api/firewall/filter/toggleRule",
     },
     "diagnostics": {
         "arp": "/api/diagnostics/interface/get_arp",
@@ -569,7 +569,7 @@ class OPNsenseClient:
         try:
             logger.debug(f"Canceling firewall rollback for revision: {revision}")
             response = await self._make_request(
-                "POST", f"/api/firewall/filter/cancel_rollback/{revision}"
+                "POST", f"/api/firewall/filter/cancelRollback/{revision}"
             )
 
             if response.get("status") != "ok":

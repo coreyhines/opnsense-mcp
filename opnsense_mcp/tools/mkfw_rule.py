@@ -85,25 +85,26 @@ class MkfwRuleTool:
                     "status": "error"
                 }
             
-            # Build rule data for OPNsense API
+            # Build rule data for OPNsense API - simplified to match documentation
             rule_data = {
-                "enabled": "1" if rule_spec.enabled else "0",
-                "sequence": "1",  # Let OPNsense assign sequence
-                "action": rule_spec.action,
-                "quick": "1",  # Apply rule immediately when matched
+                "description": rule_spec.description,
                 "interface": rule_spec.interface,
+                "action": rule_spec.action,
+                "protocol": rule_spec.protocol.upper(),  # Documentation shows uppercase
+                "source_net": rule_spec.source_net,
+                "destination_net": rule_spec.destination_net,
+                "enabled": "1" if rule_spec.enabled else "0",
                 "direction": rule_spec.direction,
                 "ipprotocol": rule_spec.ipprotocol,
-                "protocol": rule_spec.protocol,
-                "source_net": rule_spec.source_net,
-                "source_port": rule_spec.source_port,
-                "destination_net": rule_spec.destination_net,
-                "destination_port": rule_spec.destination_port,
-                "descr": rule_spec.description,
-                "gateway": rule_spec.gateway,
-                "log": "0",  # Don't log by default
-                "category": "API Created"  # Mark as API created
             }
+            
+            # Only add optional fields if they're not defaults
+            if rule_spec.source_port != "any":
+                rule_data["source_port"] = rule_spec.source_port
+            if rule_spec.destination_port != "any":
+                rule_data["destination_port"] = rule_spec.destination_port
+            if rule_spec.gateway:
+                rule_data["gateway"] = rule_spec.gateway
             
             logger.info(f"Creating firewall rule: {rule_spec.description}")
             logger.debug(f"Rule data: {rule_data}")
