@@ -50,13 +50,17 @@ vi ~/.opnsense-env
 
 - The server uses JWT-based authentication for internal operations. All secrets and keys must be stored in `.env` or a secure store.
 
-## Available Tools (Examples)
+## Available Tools
 
-- **ARP Table Tool**: Retrieves both IPv4 ARP and IPv6 NDP tables from OPNsense.
-- **DHCP Lease Tool**: Shows DHCPv4 and DHCPv6 lease tables.
-- **System Status Tool**: Gets system status information including CPU, memory, and filesystem usage.
-- **Firewall Rules Tool**: Manages firewall rules on OPNsense.
-- **LLDP Tool**: Shows LLDP neighbor table (if supported by the API).
+The following tools are typically available via the MCP server (actual availability may depend on your OPNsense configuration):
+
+- **arp**: Retrieves both IPv4 ARP and IPv6 NDP tables from OPNsense.
+- **dhcp**: Shows DHCPv4 and DHCPv6 lease tables.
+- **system**: Gets system status information including CPU, memory, and filesystem usage.
+- **firewall**: Lists firewall rules on OPNsense.
+- **lldp**: Shows LLDP neighbor table (if supported by the OPNsense API).
+
+> **Note:** Tool names and availability may change based on your OPNsense version and configuration. Use your IDE's tool discovery feature to see the current list.
 
 ## Example MCP Tool Output
 
