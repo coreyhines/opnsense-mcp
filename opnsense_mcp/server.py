@@ -16,6 +16,7 @@ from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 from opnsense_mcp.utils.api import OPNsenseClient
 from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.system import SystemTool
+from opnsense_mcp.tools.fw_rules import FwRulesTool
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ async def handle_message(
     dhcp_tool: DHCPTol,
     lldp_tool: LLDPTool,
     system_tool: SystemTool,
+    fw_rules_tool: FwRulesTool,
 ) -> Optional[Dict[str, Any]]:
     method = message.get("method")
     msg_id = message.get("id")
@@ -164,6 +166,11 @@ async def handle_message(
                 "description": "Show system status information",
                 "inputSchema": {"type": "object", "properties": {}, "required": []}
             },
+            {
+                "name": "fw_rules",
+                "description": "Get the current firewall rule set for context and reasoning",
+                "inputSchema": {"type": "object", "properties": {}, "required": []}
+            },
         ]
         return {
             "jsonrpc": "2.0",
@@ -222,6 +229,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]}
             }
+        if tool_name == "fw_rules":
+            result = await fw_rules_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]}
+            }
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
@@ -268,6 +282,7 @@ def main():
     dhcp_tool = DHCPTol(client)
     lldp_tool = LLDPTool(client)
     system_tool = SystemTool(client)
+    fw_rules_tool = FwRulesTool(client)
 
     # Handle stdin/stdout communication
     async def process_messages():
@@ -319,6 +334,7 @@ def main():
                     dhcp_tool,
                     lldp_tool,
                     system_tool,
+                    fw_rules_tool,
                 )
                 if response:
                     print(f"Writing to stdout: {json.dumps(response)}", file=sys.stderr)
