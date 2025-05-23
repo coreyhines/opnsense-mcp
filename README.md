@@ -58,6 +58,83 @@ vi ~/.opnsense-env
 - **Firewall Rules Tool**: Manages firewall rules on OPNsense.
 - **LLDP Tool**: Shows LLDP neighbor table (if supported by the API).
 
+## Example MCP Tool Output
+
+Here are some example queries and anonymized responses you might see when interacting with the MCP server via a chat interface:
+
+---
+
+**User:** Tell me about hostA.
+
+**MCP Response:**
+Host: `hostA`
+IP Address: `192.168.1.42`
+MAC Address: `AA:BB:CC:DD:EE:01`
+DHCP Lease: Active (expires in 2 hours)
+ARP Entry: Present
+LLDP Neighbor: Not detected
+
+---
+
+**User:** What is the hostname for this MAC address: `AA:BB:CC:DD:EE:02`?
+
+**MCP Response:**
+MAC Address: `AA:BB:CC:DD:EE:02`
+Hostname: `printer-01`
+IP Address: `192.168.1.55`
+DHCP Lease: Active (expires in 1 day)
+ARP Entry: Present
+
+---
+
+**User:** List all devices currently on the network.
+
+**MCP Response:**
+1. Hostname: `hostA`, IP: `192.168.1.42`, MAC: `AA:BB:CC:DD:EE:01`
+2. Hostname: `printer-01`, IP: `192.168.1.55`, MAC: `AA:BB:CC:DD:EE:02`
+3. Hostname: `laptop-guest`, IP: `192.168.1.77`, MAC: `AA:BB:CC:DD:EE:03`
+
+---
+
+**User:** Show me the current system status.
+
+**MCP Response:**
+CPU Usage: 12%
+Memory Usage: 1.2 GB / 8 GB
+Filesystem Usage: 40% used
+Uptime: 5 days, 3 hours
+
+---
+
+**User:** Who is using IP address `192.168.1.77`?
+
+**MCP Response:**
+IP Address: `192.168.1.77`
+Hostname: `laptop-guest`
+MAC Address: `AA:BB:CC:DD:EE:03`
+DHCP Lease: Expired
+ARP Entry: Present
+
+---
+
+**User:** Show me recent firewall logs for host `hostA`.
+
+**MCP Response:**
+Recent firewall log entries for `hostA` (`192.168.1.42`):
+
+| Time                | Action | Source IP      | Destination IP | Protocol | Port |
+|---------------------|--------|---------------|---------------|----------|------|
+| 2024-06-20 14:32:10 | Block  | 192.168.1.42  | 8.8.8.8       | UDP      | 53   |
+| 2024-06-20 14:31:55 | Pass   | 192.168.1.42  | 192.168.1.1   | TCP      | 443  |
+| 2024-06-20 14:30:02 | Pass   | 192.168.1.42  | 10.0.0.5      | TCP      | 22   |
+
+---
+
+**User:** Show LLDP neighbors.
+
+**MCP Response:**
+No LLDP neighbors detected.
+
 ## Troubleshooting
 
 - **Import errors**: Ensure all dependencies are installed
