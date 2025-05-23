@@ -555,9 +555,11 @@ class OPNsenseClient:
                 "POST", f"/api/firewall/filter/apply/{revision}"
             )
 
-            if apply_resp.get("status") != "ok":
+            # Handle different success response formats
+            status = apply_resp.get("status", "").strip()
+            if status.upper() not in ["OK", "SUCCESS"]:
                 raise ResponseError(
-                    f"Failed to apply firewall changes: {apply_resp.get('message', 'Unknown error')}"
+                    f"Failed to apply firewall changes: {apply_resp.get('message', apply_resp)}"
                 )
 
             logger.info("Successfully applied firewall changes")

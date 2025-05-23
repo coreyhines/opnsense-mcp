@@ -2,7 +2,7 @@ vars/
 .cursor/
 .opnsense-env
 .venv/
-tmp_
+tmp_.*
 .github/copilot*
 **/__pycache__
 **/__pycache__/**
