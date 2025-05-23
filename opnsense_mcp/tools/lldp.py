@@ -3,6 +3,7 @@
 from typing import Dict, Any
 import logging
 from pydantic import BaseModel
+from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,9 @@ class LLDPTool:
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute LLDP neighbor table lookup"""
         try:
-            if self.client is None:
+            if self.client is None or isinstance(self.client, MockOPNsenseClient):
                 logger.warning(
-                    "No OPNsense client available, returning dummy LLDP data"
+                    "No real OPNsense client available, returning dummy LLDP data"
                 )
                 return self._get_dummy_data()
 
@@ -40,7 +41,7 @@ class LLDPTool:
             return {"lldp": lldp_entries, "status": "success"}
         except Exception as e:
             logger.error(f"Failed to get LLDP table: {str(e)}")
-            return self._get_dummy_data()
+            return {"error": f"Failed to get LLDP table: {str(e)}", "status": "error"}
 
     def _get_dummy_data(self) -> Dict[str, Any]:
         """Return dummy LLDP data for testing"""

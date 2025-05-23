@@ -1,0 +1,20 @@
+{
+  "cpu_usage": 15.5,
+  "memory_usage": 45.2,
+  "filesystem_usage": {
+    "/": 32.5,
+    "/var": 18.2,
+    "/boot": 5.7
+  },
+  "uptime": "5 days, 12:34:56",
+  "versions": {
+    "opnsense": "23.7.3",
+    "kernel": "13.2-RELEASE-p1",
+    "php": "8.2.9",
+    "python": "3.9.16"
+  },
+  "temperature": {
+    "cpu0": "45\u00b0C",
+    "cpu1": "48\u00b0C"
+  }
+}

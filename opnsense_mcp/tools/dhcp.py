@@ -50,14 +50,27 @@ class DHCPTol:
                 DHCPLease(**self._normalize_lease_entry(entry)).dict()
                 for entry in leases_v6
             ]
+            # Determine status
+            if leases_v4 is None and leases_v6 is None:
+                dhcp_status = "API returned nothing (possible misconfiguration or permissions issue)"
+            elif not lease_entries_v4 and not lease_entries_v6:
+                dhcp_status = "No DHCP leases found. Check DHCP server status, configuration, and API permissions."
+            else:
+                dhcp_status = "OK"
             return {
                 "dhcpv4": lease_entries_v4,
                 "dhcpv6": lease_entries_v6,
                 "status": "success",
+                "dhcp_status": dhcp_status,
             }
         except Exception as e:
             logger.error(f"Failed to get DHCP lease tables: {str(e)}")
-            return self._get_dummy_data()
+            return {
+                "dhcpv4": [],
+                "dhcpv6": [],
+                "status": "error",
+                "dhcp_status": f"Error retrieving DHCP leases: {str(e)}",
+            }
 
     def _get_dummy_data(self):
         return {

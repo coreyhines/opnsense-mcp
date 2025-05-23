@@ -3,7 +3,7 @@ import requests
 import os
 
 OUI_CSV_URL = "https://standards-oui.ieee.org/oui/oui.csv"
-OUI_CSV_PATH = os.path.join("data", "oui.csv")
+OUI_CSV_PATH = os.path.join("opnsense_mcp", "utils", "data", "oui.csv")
 
 
 def download_oui_csv():

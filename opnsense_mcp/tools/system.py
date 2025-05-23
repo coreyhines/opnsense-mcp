@@ -3,6 +3,7 @@
 from typing import Dict, Any
 from pydantic import BaseModel
 import logging
+from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +25,14 @@ class SystemTool:
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute system status check"""
         try:
+            if self.client is None or isinstance(self.client, MockOPNsenseClient):
+                logger.warning("No real OPNsense client available, returning mock system status data")
+                return await self.client.get_system_status()
             status_data = await self.client.get_system_status()
             return status_data
         except Exception as e:
             logger.error(f"Failed to get system status: {str(e)}")
-            raise RuntimeError(f"Failed to get system status: {str(e)}")
+            return {"error": f"Failed to get system status: {str(e)}", "status": "error"}
 
     async def _get_system_health(self) -> Dict[str, Any]:
         """Get system health information from various OPNsense endpoints"""

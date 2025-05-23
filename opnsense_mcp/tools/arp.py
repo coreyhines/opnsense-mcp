@@ -3,7 +3,7 @@
 from typing import Dict, Any
 from pydantic import BaseModel
 import logging
-from oui_lookup import OUILookup
+from opnsense_mcp.utils.oui_lookup import OUILookup
 
 logger = logging.getLogger(__name__)
 
@@ -35,41 +35,70 @@ class ARPTool:
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute ARP/NDP table lookup with optional filtering by MAC,
-        IPv4, or IPv6 address, or using targeted search if 'search' is provided.
+        IPv4, or IPv6 address, or using targeted search if 'search'
+        is provided. If 'search' is a hostname, resolve to IP(s) first.
         """
         try:
             if self.client is None:
                 logger.warning("No OPNsense client available, returning dummy data")
                 return self._get_dummy_data()
 
-            # Targeted search if 'search' parameter is provided
             search_query = params.get("search")
             if search_query:
-                arp_entries = [
-                    self._fill_manufacturer(entry)
-                    for entry in await self.client.search_arp_table(search_query)
-                ]
-                ndp_entries = [
-                    self._fill_manufacturer(entry)
-                    for entry in await self.client.search_ndp_table(search_query)
-                ]
+                # If wildcard or empty, use canonical endpoint for full table
+                if search_query.strip() == '*' or not search_query.strip():
+                    arp_data = await self.client.get_arp_table()
+                    ndp_data = await self.client.get_ndp_table()
+                    arp_entries = [self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in arp_data]
+                    ndp_entries = [self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in ndp_data]
+                    return {
+                        "arp": arp_entries,
+                        "ndp": ndp_entries,
+                        "status": "success",
+                    }
+                # Otherwise, fetch full tables and match in Python
+                resolved_ips = set()
+                resolved_macs = set()
+                resolved_hostnames = set()
+                resolved_queries = set()
+                if hasattr(self.client, "resolve_host_info"):
+                    info = await self.client.resolve_host_info(search_query)
+                    logger.debug(f"[ARPTool] resolve_host_info({search_query!r}) -> {info}")
+                    if info.get("ip"):
+                        resolved_ips.add(info["ip"])
+                    if info.get("mac"):
+                        resolved_macs.add(info["mac"])
+                    if info.get("hostname"):
+                        resolved_hostnames.add(info["hostname"])
+                    if info.get("dhcpv4"):
+                        dhcp = info["dhcpv4"]
+                        if dhcp.get("ip") or dhcp.get("address"):
+                            resolved_ips.add(dhcp.get("ip") or dhcp.get("address"))
+                        if dhcp.get("mac"):
+                            resolved_macs.add(dhcp["mac"])
+                        if dhcp.get("hostname") or dhcp.get("client-hostname"):
+                            resolved_hostnames.add(dhcp.get("hostname") or dhcp.get("client-hostname"))
+                    resolved_queries.add(search_query)
+                else:
+                    resolved_queries.add(search_query)
+                all_queries = {q.lower() for q in (resolved_queries | resolved_ips | resolved_macs | resolved_hostnames) if q}
+                logger.debug(f"[ARPTool] In-memory ARP/NDP search queries: {all_queries}")
+                arp_data = await self.client.get_arp_table()
+                ndp_data = await self.client.get_ndp_table()
+                def match_any(entry):
+                    return any(
+                        q in str(entry.get("ip", "")).lower()
+                        or q in str(entry.get("mac", "")).lower()
+                        or q in str(entry.get("hostname", "")).lower()
+                        for q in all_queries
+                    )
+                arp_entries = [self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in arp_data if match_any(entry)]
+                ndp_entries = [self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in ndp_data if match_any(entry)]
                 return {
                     "arp": arp_entries,
                     "ndp": ndp_entries,
                     "status": "success",
                 }
-
-            # Get both ARP and NDP tables (full-table fallback)
-            arp_data = await self.client.get_arp_table()
-            ndp_data = await self.client.get_ndp_table()
-
-            # Convert to ARPEntry models and fill manufacturer
-            arp_entries = [
-                self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in arp_data
-            ]
-            ndp_entries = [
-                self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in ndp_data
-            ]
 
             # Filtering logic
             mac_filter = params.get("mac")

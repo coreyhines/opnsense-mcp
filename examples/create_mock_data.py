@@ -6,6 +6,7 @@ Creates example data files for development mode.
 
 import json
 from pathlib import Path
+from datetime import datetime, timedelta
 
 # Current directory
 current_dir = Path(__file__).parent.resolve()
@@ -130,6 +131,50 @@ firewall_data = {
     "status": "success",
 }
 
+# Create firewall logs mock data
+# Generate realistic firewall logs for the past hour
+now = datetime.now()
+firewall_logs = []
+events = [
+    {
+        "interface": "WAN",
+        "action": "block",
+        "protocol": "tcp",
+        "src_ip": "203.0.113.100",
+        "src_port": 12345,
+        "dst_ip": "192.168.1.10",
+        "dst_port": 22,
+        "description": "SSH connection attempt blocked",
+    },
+    {
+        "interface": "LAN",
+        "action": "pass",
+        "protocol": "tcp",
+        "src_ip": "192.168.1.20",
+        "src_port": 54321,
+        "dst_ip": "8.8.8.8",
+        "dst_port": 443,
+        "description": "HTTPS traffic allowed",
+    },
+    {
+        "interface": "WAN",
+        "action": "block",
+        "protocol": "udp",
+        "src_ip": "203.0.113.200",
+        "src_port": 5060,
+        "dst_ip": "192.168.1.1",
+        "dst_port": 5060,
+        "description": "SIP traffic blocked",
+    },
+]
+
+# Generate 50 log entries over the past hour
+for i in range(50):
+    event = events[i % len(events)]
+    timestamp = now - timedelta(minutes=i)
+    log_entry = {"timestamp": timestamp.strftime("%Y-%m-%dT%H:%M:%S"), **event}
+    firewall_logs.append(log_entry)
+
 # Create services mock data
 services_data = {
     "services": [
@@ -166,6 +211,7 @@ mock_files = {
     "interfaces.json": interface_data,
     "firewall_rules.json": firewall_data,
     "services.json": services_data,
+    "firewall_logs.json": {"logs": firewall_logs, "status": "success"},
 }
 
 # Write mock data files

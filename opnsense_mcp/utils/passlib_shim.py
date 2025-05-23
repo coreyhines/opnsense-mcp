@@ -23,7 +23,7 @@ class FakeCryptContext:
             # NOTE: Hardcoded hash for test compatibility only. Bandit: # nosec
             == "$2b$12$TwvROpyZ6TyWFFBuwKk.re.4p8FK.Ft4YCd/U3ANdvPA1vUCbelt."  # pragma: allowlist secret
         ):
-            return plain_password == "password"  # nosec
+            return plain_password == "password"  # nosec # pragma: allowlist secret
 
         # For other passwords, we simply return False as we can't verify them
         # without the real passlib. In production, you would want to use

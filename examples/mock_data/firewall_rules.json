@@ -1,0 +1,46 @@
+{
+  "rules": [
+    {
+      "id": "1",
+      "sequence": 1,
+      "description": "Allow LAN to WAN",
+      "interface": "lan",
+      "protocol": "any",
+      "source": {
+        "net": "lan",
+        "port": "any"
+      },
+      "destination": {
+        "net": "wan",
+        "port": "any"
+      },
+      "action": "pass",
+      "enabled": true,
+      "gateway": "",
+      "direction": "out",
+      "ipprotocol": "inet"
+    },
+    {
+      "id": "2",
+      "sequence": 2,
+      "description": "Block WAN to LAN",
+      "interface": "wan",
+      "protocol": "any",
+      "source": {
+        "net": "wan",
+        "port": "any"
+      },
+      "destination": {
+        "net": "lan",
+        "port": "any"
+      },
+      "action": "block",
+      "enabled": true,
+      "gateway": "",
+      "direction": "in",
+      "ipprotocol": "inet"
+    }
+  ],
+  "count": 2,
+  "status": "success"
+}

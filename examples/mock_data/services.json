@@ -1,0 +1,27 @@
+{
+  "services": [
+    {
+      "id": "dhcpd",
+      "name": "DHCP Server",
+      "description": "Dynamic Host Configuration Protocol server",
+      "status": "running",
+      "enabled": true
+    },
+    {
+      "id": "unbound",
+      "name": "Unbound DNS",
+      "description": "DNS Resolver",
+      "status": "running",
+      "enabled": true
+    },
+    {
+      "id": "openvpn",
+      "name": "OpenVPN Server",
+      "description": "Virtual Private Network server",
+      "status": "stopped",
+      "enabled": false
+    }
+  ],
+  "status": "success",
+  "total": 3
+}

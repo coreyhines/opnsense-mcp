@@ -1,0 +1,43 @@
+{
+  "interfaces": [
+    {
+      "name": "igb0",
+      "description": "WAN",
+      "status": "up",
+      "addresses": [
+        {
+          "address": "203.0.113.1",
+          "netmask": "24",
+          "type": "ipv4"
+        },
+        {
+          "address": "2001:db8::1",
+          "netmask": "64",
+          "type": "ipv6"
+        }
+      ],
+      "media": "Ethernet autoselect (1000baseT <full-duplex>)",
+      "mtu": 1500
+    },
+    {
+      "name": "igb1",
+      "description": "LAN",
+      "status": "up",
+      "addresses": [
+        {
+          "address": "192.168.1.1",
+          "netmask": "24",
+          "type": "ipv4"
+        },
+        {
+          "address": "fd00::1",
+          "netmask": "64",
+          "type": "ipv6"
+        }
+      ],
+      "media": "Ethernet autoselect (1000baseT <full-duplex>)",
+      "mtu": 1500
+    }
+  ],
+  "status": "success"
+}

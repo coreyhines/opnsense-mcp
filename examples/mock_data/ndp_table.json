@@ -1,0 +1,24 @@
+{
+    "entries": [
+        {
+            "ip": "fe80::1234:5678:90ab:cdef",
+            "mac": "00:11:22:33:44:55",
+            "interface": "igb0",
+            "hostname": "desktop-pc.local",
+            "expiry": "1200",
+            "manufacturer": "Intel Corporate",
+            "static": false
+        },
+        {
+            "ip": "2001:db8::1",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "interface": "igb0",
+            "hostname": "laptop.local",
+            "expiry": "permanent",
+            "manufacturer": "Apple, Inc.",
+            "static": true
+        }
+    ],
+    "count": 2,
+    "status": "success"
+}
