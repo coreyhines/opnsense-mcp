@@ -1,6 +1,6 @@
 # OPNsense MCP Server
 
-This server provides OPNsense API functionality through a Model Context Protocol (MCP) interface.
+This server provides OPNsense API functionality through a Model Context Protocol (MCP) interface (JSON-RPC over stdio), not HTTP REST endpoints.
 
 ## Setup
 
@@ -20,205 +20,67 @@ MCP_SECRET_KEY=your_jwt_secret_key
 
 You can use a `.env` file in the project root, or set these in your shell environment. The server will automatically load from `~/.opnsense-env` if present.
 
-## Project Structure
+## Project Maintenance & Best Practices
 
-The project has been thoroughly cleaned up and organized:
-- All redundant and legacy files have been removed
-- Consistent naming scheme has been established
-- No more `_new.py` files - all functionality in standard files
-- Streamlined test suite with cleanup capabilities
-
-See `docs/cleanup_summary.md` for details on the cleanup process.
-
-## Project Maintenance
-
-This project follows strict cleanup practices. When working with this code:
-
-- Use vi/vim as the editor of choice
-- Always clean up temporary and test files
-- Run the cleanup script after testing (`python cleanup.py`)
-
-For more details, see [Cleanup Strategy](docs/cleanup_strategy.md)
+- Use vi/vim as the editor of choice (VS Code is supported as an IDE only)
+- Always clean up temporary and test files (use `tmp_` or `test_` prefixes)
+- Store all secrets in `.env` or a secure store, never in code
+- Podman is the preferred container runtime (not Docker)
 
 ## Running the Server
-
-There are multiple ways to run the server:
-
-### Standard Method
 
 Start the server with:
 ```bash
 python main.py
 ```
 
-Optional arguments:
-- `--host`: Host to bind to (default: 127.0.0.1)
-- `--port`: Port to bind to (default: 8000)
-- `--config`: Path to config file (default: vars/key.yaml)
+## IDE Integration
 
-### IDE Integration
+- The server is designed for integration with Cursor IDE and other MCP-compatible IDEs.
+- All secrets should be stored in `.env` files or `~/.opnsense-env`, not in code.
+- Use vi or vim for editing files. VS Code can be used as an IDE, but not as a text editor.
+- If using an IDE that does not support all dependencies, ensure your environment is activated or install missing packages.
 
-For running the server in VS Code or Cursor IDE environments:
+#### Example Environment Setup
 
-#### VS Code Tasks
+```bash
+cp examples/.opnsense-env ~/.opnsense-env
+vi ~/.opnsense-env
+```
 
-Several predefined tasks are available in VS Code:
+## Tool Discovery and Invocation
 
-- **Run Cursor Launcher (Most Compatible)**: Best option for all environments
-- **Run IDE Launcher (Recommended)**: Alternative with more features
-- **Run Enhanced Minimal MCP Server**: For specific environments
-
-Run a task with: `Ctrl+Shift+P` → `Tasks: Run Task` → Select the desired task
-
-#### Cursor IDE Integration
-
-The server is configured to run directly in Cursor IDE as an MCP server:
-
-1. Open the OPNsense project in Cursor IDE
-2. Access it via the MCP servers list in Cursor
-
-See `docs/cursor_ide_integration.md` for details on the IDE integration.
+- Tools are discovered and invoked via the MCP protocol (JSON-RPC over stdio), not via HTTP endpoints.
+- The server will advertise available tools (e.g., ARP, DHCP, firewall, system status) to the IDE or MCP client.
+- Tool invocation is handled by sending a JSON-RPC request with the tool name and arguments.
 
 ## Authentication
 
-The server uses JWT-based authentication. To access the tools:
+- The server uses JWT-based authentication for internal operations. All secrets and keys must be stored in `.env` or a secure store.
 
-1. Get an access token:
-```http
-POST /token
-Content-Type: application/x-www-form-urlencoded
+## Available Tools (Examples)
 
-username=admin&password=password
-```
+- **ARP Table Tool**: Retrieves both IPv4 ARP and IPv6 NDP tables from OPNsense.
+- **DHCP Lease Tool**: Shows DHCPv4 and DHCPv6 lease tables.
+- **System Status Tool**: Gets system status information including CPU, memory, and filesystem usage.
+- **Firewall Rules Tool**: Manages firewall rules on OPNsense.
+- **LLDP Tool**: Shows LLDP neighbor table (if supported by the API).
 
-2. Use the token in subsequent requests:
-```http
-GET /tools
-Authorization: Bearer <your_access_token>
-```
+## Troubleshooting
 
-## Available Tools
+- **Import errors**: Ensure all dependencies are installed
+- **Port conflicts**: Change the port in your config or launch arguments
+- **Missing dependencies**: Install the missing package
+- **Authentication fails**: Check your environment and credentials
 
-### ARP Table Tool
-Retrieves both IPv4 ARP and IPv6 NDP tables from OPNsense.
+## Verification
 
-Example request:
-```http
-POST /execute/arp_table
-```
+- All core functionality and tests should pass after cleanup
+- Project is ready for further development
 
-Response:
-```json
-{
-    "arp": [
-        {
-            "hostname": "device1",
-            "ip": "192.168.1.100",
-            "mac": "00:11:22:33:44:55"
-        }
-    ],
-    "ndp": [
-        {
-            "hostname": "device2",
-            "ip": "fe80::1",
-            "mac": "00:11:22:33:44:66"
-        }
-    ]
-}
-```
+## Notes
 
-### Interface Configuration Tool
-Manage network interfaces on OPNsense.
-
-Example requests:
-```http
-# List all interfaces
-POST /execute/interface_config
-{
-    "action": "list"
-}
-
-# Get specific interface
-POST /execute/interface_config
-{
-    "action": "get",
-    "interface": "wan"
-}
-```
-
-Response:
-```json
-{
-    "interfaces": [
-        {
-            "name": "wan",
-            "device": "em0",
-            "ipv4": "192.168.1.1",
-            "ipv6": "fe80::1",
-            "status": "up",
-            "mtu": 1500,
-            "media": "1000baseT",
-            "enabled": true
-        }
-    ],
-    "status": "success"
-}
-```
-
-### System Status Tool
-Get system status information including CPU, memory, and filesystem usage.
-
-Example request:
-```http
-POST /execute/system_status
-```
-
-Response:
-```json
-{
-    "cpu_usage": 15.5,
-    "memory_usage": 45.2,
-    "filesystem_usage": {
-        "/": 68.5,
-        "/var": 34.2
-    },
-    "uptime": "10 days, 2:15:30",
-    "versions": {
-        "opnsense": "23.7",
-        "kernel": "13.1-RELEASE"
-    }
-}
-```
-
-### Firewall Rules Tool
-Manage firewall rules on OPNsense.
-
-Example request:
-```http
-POST /execute/firewall_rules
-```
-
-Response:
-```json
-{
-    "rules": [
-        {
-            "sequence": 1,
-            "description": "Allow LAN to WAN",
-            "interface": "lan",
-            "protocol": "any",
-            "source": "lan net",
-            "destination": "any",
-            "action": "pass",
-            "enabled": true
-        }
-    ],
-    "status": "success"
-}
-```
-
-## Development
-
-Add new tools by:
-1. Creating a new tool class in `mcp_server/tools/`
-2. Adding the tool to the available tools list in `MCPServer.get_tool()`
+- For production, always use the main server with all dependencies installed
+- The server communicates via MCP protocol (JSON-RPC over stdio), not HTTP REST endpoints
+- Podman is the preferred container runtime
+- Use vi/vim for editing; VS Code is supported as an IDE only

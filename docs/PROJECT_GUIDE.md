@@ -9,6 +9,7 @@ This guide covers the architecture, setup, IDE integration, cleanup, and best pr
 ## Architecture & Implementation
 
 - The main server (`main.py`) is the only supported and recommended entry point for production and development.
+- The server communicates using the MCP protocol (JSON-RPC over stdio), not HTTP REST endpoints.
 - Uses a custom JWT implementation for authentication and authorization.
 
 ### Custom JWT Implementation
@@ -52,19 +53,14 @@ except JWTError:
    python main.py
    ```
 
-### API Endpoints
-
-- `/token` - Authenticate and get JWT token
-- `/tools` - List available tools
-- `/execute/{tool_name}` - Execute a specific tool
-
 ---
 
-## IDE Integration
+## IDE Integration & Editing
 
-- Supports VS Code and Cursor IDE (and other Python IDEs)
-- All secrets should be stored in `.env` files or `~/.opnsense-env`, not in code
-- If using an IDE that does not support all dependencies, ensure your environment is activated or install missing packages
+- The server is designed for integration with Cursor IDE and other MCP-compatible IDEs.
+- All secrets should be stored in `.env` files or `~/.opnsense-env`, not in code.
+- Use vi or vim for editing files. VS Code can be used as an IDE, but not as a text editor.
+- If using an IDE that does not support all dependencies, ensure your environment is activated or install missing packages.
 
 #### Example Environment Setup
 
@@ -77,19 +73,19 @@ vi ~/.opnsense-env
 
 ## Cleanup & Best Practices
 
-- Keep only essential launchers, tests, and scripts
-- Automate cleanup of temporary/test files and artifacts
-- Use VS Code tasks and scripts for automated cleanup
-- Follow naming conventions for easy cleanup (e.g., tmp_, test_ prefixes)
-- Always cleanup after editing (including vi/vim swap files)
-- For Podman: clean up containers/volumes after testing
+- Keep only essential launchers, tests, and scripts.
+- Automate cleanup of temporary/test files and artifacts.
+- Name temp/test files with `tmp_` or `test_` for easy auto-cleanup.
+- Always cleanup after editing (including vi/vim swap files).
+- For Podman: clean up containers/volumes after testing. Podman is the preferred container runtime (not Docker).
 
 ### Best Practices
 
-- Use cleanup tasks/scripts after testing or editing
-- Name temp/test files with tmp_or test_ for auto-cleanup
-- Clean up vi/vim swap files
-- For CI/CD, run cleanup after tests
+- Use cleanup tasks/scripts after testing or editing.
+- Name temp/test files with `tmp_` or `test_` for auto-cleanup.
+- Clean up vi/vim swap files.
+- For CI/CD, run cleanup after tests.
+- Store all secrets in `.env` or a secure store, never in code.
 
 ---
 
@@ -112,3 +108,6 @@ vi ~/.opnsense-env
 ## Notes
 
 - For production, always use the main server with all dependencies installed
+- The server communicates via MCP protocol (JSON-RPC over stdio), not HTTP REST endpoints
+- Podman is the preferred container runtime
+- Use vi/vim for editing; VS Code is supported as an IDE only
