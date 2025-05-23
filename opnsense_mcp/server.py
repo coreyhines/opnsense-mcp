@@ -17,6 +17,7 @@ from opnsense_mcp.utils.api import OPNsenseClient
 from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
+from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ async def handle_message(
     lldp_tool: LLDPTool,
     system_tool: SystemTool,
     fw_rules_tool: FwRulesTool,
+    mkfw_rule_tool: MkfwRuleTool,
 ) -> Optional[Dict[str, Any]]:
     method = message.get("method")
     msg_id = message.get("id")
@@ -196,6 +198,80 @@ async def handle_message(
                     "required": []
                 }
             },
+            {
+                "name": "mkfw_rule",
+                "description": "Create a new firewall rule and optionally apply changes",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "description": {
+                            "type": "string",
+                            "description": "Description of the rule (required)"
+                        },
+                        "interface": {
+                            "type": "string",
+                            "description": "Interface name (default: 'lan')",
+                            "optional": True
+                        },
+                        "action": {
+                            "type": "string",
+                            "description": "pass, block, or reject (default: 'pass')",
+                            "optional": True
+                        },
+                        "protocol": {
+                            "type": "string",
+                            "description": "any, tcp, udp, icmp, etc. (default: 'any')",
+                            "optional": True
+                        },
+                        "source_net": {
+                            "type": "string",
+                            "description": "Source network/IP (default: 'any')",
+                            "optional": True
+                        },
+                        "source_port": {
+                            "type": "string",
+                            "description": "Source port (default: 'any')",
+                            "optional": True
+                        },
+                        "destination_net": {
+                            "type": "string",
+                            "description": "Destination network/IP (default: 'any')",
+                            "optional": True
+                        },
+                        "destination_port": {
+                            "type": "string",
+                            "description": "Destination port (default: 'any')",
+                            "optional": True
+                        },
+                        "direction": {
+                            "type": "string",
+                            "description": "in or out (default: 'in')",
+                            "optional": True
+                        },
+                        "ipprotocol": {
+                            "type": "string",
+                            "description": "inet or inet6 (default: 'inet')",
+                            "optional": True
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "true or false (default: true)",
+                            "optional": True
+                        },
+                        "gateway": {
+                            "type": "string",
+                            "description": "Gateway to use (default: '')",
+                            "optional": True
+                        },
+                        "apply": {
+                            "type": "boolean",
+                            "description": "Whether to apply changes immediately (default: true)",
+                            "optional": True
+                        }
+                    },
+                    "required": ["description"]
+                }
+            },
         ]
         return {
             "jsonrpc": "2.0",
@@ -261,6 +337,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]}
             }
+        if tool_name == "mkfw_rule":
+            result = await mkfw_rule_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]}
+            }
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
@@ -308,6 +391,7 @@ def main():
     lldp_tool = LLDPTool(client)
     system_tool = SystemTool(client)
     fw_rules_tool = FwRulesTool(client)
+    mkfw_rule_tool = MkfwRuleTool(client)
 
     # Handle stdin/stdout communication
     async def process_messages():
@@ -360,6 +444,7 @@ def main():
                     lldp_tool,
                     system_tool,
                     fw_rules_tool,
+                    mkfw_rule_tool,
                 )
                 if response:
                     print(f"Writing to stdout: {json.dumps(response)}", file=sys.stderr)
