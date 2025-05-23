@@ -169,7 +169,32 @@ async def handle_message(
             {
                 "name": "fw_rules",
                 "description": "Get the current firewall rule set for context and reasoning",
-                "inputSchema": {"type": "object", "properties": {}, "required": []}
+                "inputSchema": {
+                    "type": "object", 
+                    "properties": {
+                        "interface": {
+                            "type": "string",
+                            "description": "Filter by interface name (supports partial matching and groups)",
+                            "optional": True
+                        },
+                        "action": {
+                            "type": "string",
+                            "description": "Filter by action (pass, block, reject, etc.)",
+                            "optional": True
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Filter by enabled status",
+                            "optional": True
+                        },
+                        "protocol": {
+                            "type": "string", 
+                            "description": "Filter by protocol (tcp, udp, icmp, etc.)",
+                            "optional": True
+                        }
+                    },
+                    "required": []
+                }
             },
         ]
         return {
