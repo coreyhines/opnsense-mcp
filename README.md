@@ -20,13 +20,6 @@ MCP_SECRET_KEY=your_jwt_secret_key
 
 You can use a `.env` file in the project root, or set these in your shell environment. The server will automatically load from `~/.opnsense-env` if present.
 
-## Project Maintenance & Best Practices
-
-- Use vi/vim as the editor of choice (VS Code is supported as an IDE only)
-- Always clean up temporary and test files (use `tmp_` or `test_` prefixes)
-- Store all secrets in `.env` or a secure store, never in code
-- Podman is the preferred container runtime (not Docker)
-
 ## Running the Server
 
 Start the server with:
@@ -38,7 +31,6 @@ python main.py
 
 - The server is designed for integration with Cursor IDE and other MCP-compatible IDEs.
 - All secrets should be stored in `.env` files or `~/.opnsense-env`, not in code.
-- Use vi or vim for editing files. VS Code can be used as an IDE, but not as a text editor.
 - If using an IDE that does not support all dependencies, ensure your environment is activated or install missing packages.
 
 #### Example Environment Setup
@@ -84,3 +76,5 @@ vi ~/.opnsense-env
 - The server communicates via MCP protocol (JSON-RPC over stdio), not HTTP REST endpoints
 - Podman is the preferred container runtime
 - Use vi/vim for editing; VS Code is supported as an IDE only
+- Always clean up temporary and test files (use `tmp_` or `test_` prefixes)
+- Store all secrets in `.env` or a secure store, never in code
