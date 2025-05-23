@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class FirewallRuleSpec(BaseModel):
     """Model for firewall rule creation specification"""
     description: str
-    interface: str = "lan"
+    interface: str = ""  # Use empty string as default since "lan" is not valid on this system
     action: str = "pass"  # pass, block, reject
     protocol: str = "any"  # any, tcp, udp, icmp, etc.
     source_net: str = "any"
@@ -52,18 +52,18 @@ class MkfwRuleTool:
         
         Parameters:
         - description: Description of the rule (required)
-        - interface: Interface name (default: "lan")
+        - interface: Interface name - use "wan", "opt1", etc. or leave empty for any (default: "")
         - action: pass, block, or reject (default: "pass")
         - protocol: any, tcp, udp, icmp, etc. (default: "any")
         - source_net: Source network/IP (default: "any")
         - source_port: Source port (default: "any")
         - destination_net: Destination network/IP (default: "any")
         - destination_port: Destination port (default: "any")
-        - direction: in or out (default: "in")
-        - ipprotocol: inet or inet6 (default: "inet")
         - enabled: true or false (default: true)
         - gateway: Gateway to use (default: "")
         - apply: Whether to apply changes immediately (default: true)
+        
+        Note: This OPNsense instance uses interface names like "wan", "opt1" rather than "lan".
         """
         try:
             if params is None:
@@ -88,17 +88,17 @@ class MkfwRuleTool:
             # Build rule data for OPNsense API - simplified to match documentation
             rule_data = {
                 "description": rule_spec.description,
-                "interface": rule_spec.interface,
                 "action": rule_spec.action,
                 "protocol": rule_spec.protocol.upper(),  # Documentation shows uppercase
                 "source_net": rule_spec.source_net,
                 "destination_net": rule_spec.destination_net,
-                "enabled": "1" if rule_spec.enabled else "0",
-                "direction": rule_spec.direction,
-                "ipprotocol": rule_spec.ipprotocol,
             }
             
             # Only add optional fields if they're not defaults
+            if rule_spec.interface:  # Only add if not empty
+                rule_data["interface"] = rule_spec.interface
+            if rule_spec.enabled is False:  # Only add if disabled (default is enabled)
+                rule_data["enabled"] = "0"
             if rule_spec.source_port != "any":
                 rule_data["source_port"] = rule_spec.source_port
             if rule_spec.destination_port != "any":

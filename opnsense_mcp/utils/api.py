@@ -439,12 +439,17 @@ class OPNsenseClient:
                 json={"rule": rule_data},
             )
 
-            if not isinstance(response, dict) or "uuid" not in response:
+            if not isinstance(response, dict):
                 raise ResponseError(
                     "Failed to create firewall rule, invalid response format"
                 )
 
-            # Get the full rule details
+            # Check for successful creation - OPNsense returns {"result":"saved","uuid":"..."}
+            if response.get("result") != "saved" or "uuid" not in response:
+                error_msg = response.get("message", "Unknown error")
+                raise ResponseError(f"Failed to create firewall rule: {error_msg}")
+
+            # Get the rule UUID
             rule_uuid = response.get("uuid")
             logger.info(f"Successfully created firewall rule with UUID: {rule_uuid}")
 
