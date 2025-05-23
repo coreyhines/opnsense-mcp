@@ -31,7 +31,7 @@ python main.py
 
 - The server is designed for integration with Cursor IDE and other MCP-compatible IDEs.
 - All secrets should be stored in `.env` files or `~/.opnsense-env`, not in code.
-- If using an IDE that does not support all dependencies, ensure your environment is activated or install missing packages.
+- If using an IDE that does not support all dependencies, activate your Python virtual environment (venv) or install any missing packages as needed.
 
 #### Example Environment Setup
 
