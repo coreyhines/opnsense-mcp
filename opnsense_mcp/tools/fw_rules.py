@@ -178,8 +178,10 @@ class FwRulesTool:
     async def _filter_rules_by_interface(
         self, rules: list[dict[str, Any]], interface_query: str
     ) -> list[dict[str, Any]]:
-        """Filter rules by interface name (with partial matching and group
-        resolution)"""
+        """
+        Filter rules by interface name (with partial matching and group
+        resolution)
+        """
         if not interface_query:
             return rules
 
@@ -225,12 +227,14 @@ class FwRulesTool:
         """
         Return the current firewall rule set with optional filtering.
 
-        Parameters:
+        Parameters
+        ----------
         - interface: Filter by interface name (supports partial matching and
           groups)
         - action: Filter by action (pass, block, reject, etc.)
         - enabled: Filter by enabled status (true/false)
         - protocol: Filter by protocol
+
         """
         try:
             if params is None:

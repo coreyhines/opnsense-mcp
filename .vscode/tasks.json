@@ -2,17 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Run MCP Server (Development)",
-      "type": "shell",
-      "command": "${workspaceFolder}/examples/run_dev_server.sh",
-      "problemMatcher": [],
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
-    },
-    {
       "label": "Create Mock Data",
       "type": "shell",
       "command": "python ${workspaceFolder}/examples/create_mock_data.py",
@@ -25,7 +14,7 @@
     {
       "label": "Test System API",
       "type": "shell",
-      "command": "python ${workspaceFolder}/test_standalone.py system",
+      "command": "python ${workspaceFolder}/tests/test_standalone.py system",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -35,7 +24,7 @@
     {
       "label": "Test ARP API",
       "type": "shell",
-      "command": "python ${workspaceFolder}/test_standalone.py arp",
+      "command": "python ${workspaceFolder}/tests/test_standalone.py arp",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -45,7 +34,7 @@
     {
       "label": "Test Integration",
       "type": "shell",
-      "command": "python ${workspaceFolder}/test_integration.py",
+      "command": "python ${workspaceFolder}/tests/test_integration.py",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -53,40 +42,13 @@
       }
     },
     {
-      "label": "Test System API (with Cleanup)",
+      "label": "Run All Tests",
       "type": "shell",
-      "command": "python ${workspaceFolder}/run_test_with_cleanup.py test_standalone.py system",
+      "command": "python -m pytest ${workspaceFolder}/tests/ -v",
       "problemMatcher": [],
       "group": {
         "kind": "test",
         "isDefault": true
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Test Integration (with Cleanup)",
-      "type": "shell",
-      "command": "python ${workspaceFolder}/run_test_with_cleanup.py test_integration.py",
-      "problemMatcher": [],
-      "group": {
-        "kind": "test",
-        "isDefault": false
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Create Mock Data (with Cleanup)",
-      "type": "shell",
-      "command": "python ${workspaceFolder}/run_test_with_cleanup.py examples/create_mock_data.py",
-      "problemMatcher": [],
-      "group": {
-        "kind": "none"
       },
       "presentation": {
         "reveal": "always",

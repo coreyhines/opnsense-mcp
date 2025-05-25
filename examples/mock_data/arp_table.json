@@ -3,7 +3,7 @@
     {
       "ip": "192.168.1.10",
       "mac": "00:11:22:33:44:55",
-      "interface": "igb0",
+      "intf": "igb0",
       "hostname": "desktop-pc.local",
       "expiry": "1200",
       "manufacturer": "Intel Corporate",
@@ -12,7 +12,7 @@
     {
       "ip": "192.168.1.20",
       "mac": "aa:bb:cc:dd:ee:ff",
-      "interface": "igb0",
+      "intf": "igb0",
       "hostname": "laptop.local",
       "expiry": "1150",
       "manufacturer": "Apple, Inc.",
@@ -21,7 +21,7 @@
     {
       "ip": "192.168.1.1",
       "mac": "00:aa:bb:cc:dd:ee",
-      "interface": "igb0",
+      "intf": "igb0",
       "hostname": "router.local",
       "expiry": "permanent",
       "manufacturer": "Netgear",

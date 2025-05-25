@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class FirewallRuleSpec(BaseModel):
     enabled: bool = True
     gateway: str = ""
 
-    @validator("action")
+    @field_validator("action")
     @classmethod
     def validate_action(cls, v):
         allowed = ["pass", "block", "reject"]
@@ -35,7 +35,7 @@ class FirewallRuleSpec(BaseModel):
             raise ValueError(f"Action must be one of: {allowed}")
         return v.lower()
 
-    @validator("direction")
+    @field_validator("direction")
     @classmethod
     def validate_direction(cls, v):
         allowed = ["in", "out"]
@@ -43,7 +43,7 @@ class FirewallRuleSpec(BaseModel):
             raise ValueError(f"Direction must be one of: {allowed}")
         return v.lower()
 
-    @validator("ipprotocol")
+    @field_validator("ipprotocol")
     @classmethod
     def validate_ipprotocol(cls, v):
         allowed = ["inet", "inet6"]
@@ -53,6 +53,31 @@ class FirewallRuleSpec(BaseModel):
 
 
 class MkfwRuleTool:
+    name = "mkfw_rule"
+    description = "Create firewall rules"
+    inputSchema = {
+        "type": "object",
+        "properties": {
+            "description": {"type": "string", "description": "Rule description"},
+            "interface": {"type": "string", "description": "Interface name"},
+            "action": {
+                "type": "string",
+                "description": "Rule action (pass/block/reject)",
+            },
+            "protocol": {
+                "type": "string",
+                "description": "Protocol (any/tcp/udp/icmp)",
+            },
+            "source_net": {"type": "string", "description": "Source network"},
+            "source_port": {"type": "string", "description": "Source port"},
+            "destination_net": {"type": "string", "description": "Destination network"},
+            "destination_port": {"type": "string", "description": "Destination port"},
+            "enabled": {"type": "boolean", "description": "Enable rule"},
+            "apply": {"type": "boolean", "description": "Apply changes immediately"},
+        },
+        "required": ["description"],
+    }
+
     def __init__(self, client):
         self.client = client
 
@@ -60,7 +85,8 @@ class MkfwRuleTool:
         """
         Create a new firewall rule and apply changes.
 
-        Parameters:
+        Parameters
+        ----------
         - description: Description of the rule (required)
         - interface: Interface name - use "wan", "opt1", etc. or leave empty
           for any (default: "")
@@ -76,6 +102,7 @@ class MkfwRuleTool:
 
         Note: This OPNsense instance uses interface names like "wan", "opt1"
         rather than "lan".
+
         """
         try:
             if params is None:

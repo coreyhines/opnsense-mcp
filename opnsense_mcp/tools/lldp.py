@@ -39,7 +39,7 @@ class LLDPTool:
                 return self._get_dummy_data()
 
             lldp_data = await self.client.get_lldp_table()
-            lldp_entries = [LLDPEntry(**entry).dict() for entry in lldp_data]
+            lldp_entries = [LLDPEntry(**entry).model_dump() for entry in lldp_data]
         except Exception as e:
             logger.exception("Failed to get LLDP table")
             return {
