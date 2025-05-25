@@ -52,11 +52,11 @@ class ARPTool:
                     arp_data = await self.client.get_arp_table()
                     ndp_data = await self.client.get_ndp_table()
                     arp_entries = [
-                        self._fill_manufacturer(ARPEntry(**entry).dict())
+                        self._fill_manufacturer(ARPEntry(**entry).model_dump())
                         for entry in arp_data
                     ]
                     ndp_entries = [
-                        self._fill_manufacturer(ARPEntry(**entry).dict())
+                        self._fill_manufacturer(ARPEntry(**entry).model_dump())
                         for entry in ndp_data
                     ]
                     return {
@@ -118,12 +118,12 @@ class ARPTool:
                     )
 
                 arp_entries = [
-                    self._fill_manufacturer(ARPEntry(**entry).dict())
+                    self._fill_manufacturer(ARPEntry(**entry).model_dump())
                     for entry in arp_data
                     if match_any(entry)
                 ]
                 ndp_entries = [
-                    self._fill_manufacturer(ARPEntry(**entry).dict())
+                    self._fill_manufacturer(ARPEntry(**entry).model_dump())
                     for entry in ndp_data
                     if match_any(entry)
                 ]
@@ -137,10 +137,12 @@ class ARPTool:
             arp_data = await self.client.get_arp_table()
             ndp_data = await self.client.get_ndp_table()
             arp_entries = [
-                self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in arp_data
+                self._fill_manufacturer(ARPEntry(**entry).model_dump())
+                for entry in arp_data
             ]
             ndp_entries = [
-                self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in ndp_data
+                self._fill_manufacturer(ARPEntry(**entry).model_dump())
+                for entry in ndp_data
             ]
 
             # Filtering logic

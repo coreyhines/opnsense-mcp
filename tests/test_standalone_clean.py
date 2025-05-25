@@ -56,7 +56,8 @@ class OPNsenseClient:
     def _get_basic_auth(self) -> str:
         """Create basic auth header from api key and secret."""
         auth_str = f"{self.api_key}:{self.api_secret}"
-        return base64.b64encode(auth_str.encode()).decode()
+        encoded = base64.b64encode(auth_str.encode()).decode()
+        return encoded
 
     def request(
         self, endpoint: str, method: str = "GET", **kwargs: Any
@@ -78,23 +79,23 @@ class OPNsenseClient:
                 return {"raw_response": response.text}
 
         except requests.exceptions.RequestException as e:
-            logger.exception("Request failed")
+            logger.error(f"Request failed: {e}")
             raise OPNsenseAPIError(f"API request failed: {e}") from e
 
     def get_system_status(self) -> dict[str, Any]:
         """Get system status information."""
         try:
             return self.request("/core/system/status")
-        except Exception:
-            logger.exception("Failed to get system status")
+        except Exception as e:
+            logger.error(f"Failed to get system status: {e}")
             raise
 
     def get_arp_table(self) -> dict[str, Any]:
         """Get ARP table entries."""
         try:
             return self.request("/diagnostics/interface/getArp")
-        except Exception:
-            logger.exception("Failed to get ARP table")
+        except Exception as e:
+            logger.error(f"Failed to get ARP table: {e}")
             raise
 
 
@@ -103,8 +104,8 @@ def load_config(config_path: str) -> dict[str, Any]:
     try:
         with Path(config_path).open() as f:
             return yaml.safe_load(f)
-    except Exception:
-        logger.exception("Failed to load config from %s", config_path)
+    except Exception as e:
+        logger.error(f"Failed to load config from {config_path}: {e}")
         raise
 
 
@@ -124,8 +125,8 @@ def test_system_status(client: OPNsenseClient) -> None:
         if "versions" in status:
             logger.info("Version info available")
 
-    except Exception:
-        logger.exception("System status test failed")
+    except Exception as e:
+        logger.error(f"System status test failed: {e}")
         raise
 
 
@@ -147,13 +148,13 @@ def test_arp_table(client: OPNsenseClient) -> None:
             entries = arp_data["arp"]
             logger.info(f"Found {len(entries)} ARP entries")
 
-    except Exception:
-        logger.exception("ARP table test failed")
+    except Exception as e:
+        logger.error(f"ARP table test failed: {e}")
         raise
 
 
 def main() -> None:
-    """Run the standalone tester."""
+    """Main entry point for the standalone tester."""
     parser = argparse.ArgumentParser(description="Test OPNsense API functionality")
     parser.add_argument(
         "--config",
@@ -192,8 +193,8 @@ def main() -> None:
 
         logger.info("Test completed successfully!")
 
-    except Exception:
-        logger.exception("Test failed")
+    except Exception as e:
+        logger.error(f"Test failed: {e}")
         sys.exit(1)
 
 

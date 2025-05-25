@@ -124,3 +124,18 @@ class MockOPNsenseClient:
             if ip in log.get("src_ip", "") or ip in log.get("dst_ip", "")
         ]
         return filtered[:row_count]
+
+    async def get_firewall_interface_list(self) -> dict[str, Any]:
+        """Get mock firewall interface list."""
+        logger.info("Mock API: getting firewall interface list")
+        return {
+            "interfaces": {
+                "lan": "LAN (igb0)",
+                "wan": "WAN (igb1)",
+                "opt1": "OPT1 (igb2)",
+                "opt2": "OPT2 (igb3)",
+                "loopback": "Loopback",
+                "any": "Any",
+            },
+            "status": "success",
+        }

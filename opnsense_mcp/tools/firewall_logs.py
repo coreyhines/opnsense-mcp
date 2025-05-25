@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Firewall log parsing and analysis"""
+"""Firewall log parsing and analysis."""
 
 import logging
 import re
 from collections import Counter
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -41,7 +42,7 @@ class FirewallLogsTool:
     """Tool for retrieving and analyzing firewall logs"""
 
     def __init__(self, client):
-        """Initialize tool with API client"""
+        """Initialize tool with API client."""
         self.client = client
         self._log_cache = None
         self._log_cache_time = 0
@@ -234,3 +235,82 @@ class FirewallLogsTool:
             top_blocked_ports=blocked_ports.most_common(10),
             time_range=time_range,
         )
+
+    async def execute(self, params: dict[str, Any] = None) -> dict[str, Any]:
+        """
+        Execute the firewall logs tool with optional parameters.
+
+        Args:
+            params: Optional parameters for filtering logs
+                - limit: Maximum number of logs to return
+                - action: Filter by action (pass, block, reject)
+                - src_ip: Filter by source IP
+                - dst_ip: Filter by destination IP
+                - protocol: Filter by protocol (tcp, udp, icmp)
+
+        Returns:
+            Dictionary containing log entries and summary information
+
+        """
+        if params is None:
+            params = {}
+
+        try:
+            # Get firewall logs with optional filters
+            logs = await self.get_logs(
+                limit=params.get("limit"),
+                action=params.get("action"),
+                src_ip=params.get("src_ip"),
+                dst_ip=params.get("dst_ip"),
+                protocol=params.get("protocol"),
+            )
+
+            # Generate summary
+            summary = await self.get_log_summary(logs)
+
+            # Convert logs to dict format for JSON serialization
+            log_entries = []
+            for log in logs:
+                log_dict = {
+                    "timestamp": log.timestamp.isoformat(),
+                    "interface": log.interface,
+                    "action": log.action,
+                    "protocol": log.protocol,
+                    "src_ip": log.src_ip,
+                    "src_port": log.src_port,
+                    "dst_ip": log.dst_ip,
+                    "dst_port": log.dst_port,
+                    "rule_id": log.rule_id,
+                    "description": log.description,
+                }
+                log_entries.append(log_dict)
+
+            # Convert summary to dict format
+            summary_dict = {
+                "total_entries": summary.total_entries,
+                "action_counts": summary.action_counts,
+                "top_source_ips": summary.top_source_ips,
+                "top_destination_ips": summary.top_destination_ips,
+                "top_blocked_ports": summary.top_blocked_ports,
+                "time_range": [
+                    summary.time_range[0].isoformat(),
+                    summary.time_range[1].isoformat(),
+                ],
+            }
+
+            return {
+                "status": "success",
+                "log_entries": log_entries,
+                "summary": summary_dict,
+                "total_logs": len(log_entries),
+            }
+
+        except Exception as e:
+            logger.exception("Error executing firewall logs tool")
+            return {
+                "status": "error",
+                "message": str(e),
+                "log_entries": [],
+                "summary": None,
+                "total_logs": 0,
+            }

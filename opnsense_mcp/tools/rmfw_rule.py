@@ -7,6 +7,20 @@ logger = logging.getLogger(__name__)
 
 
 class RmfwRuleTool:
+    name = "rmfw_rule"
+    description = "Delete firewall rules"
+    inputSchema = {
+        "type": "object",
+        "properties": {
+            "rule_uuid": {
+                "type": "string",
+                "description": "UUID of the rule to delete",
+            },
+            "apply": {"type": "boolean", "description": "Apply changes immediately"},
+        },
+        "required": ["rule_uuid"],
+    }
+
     def __init__(self, client):
         self.client = client
 

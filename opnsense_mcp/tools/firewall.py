@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""
+Firewall tool for OPNsense MCP server.
+
+This module provides firewall management capabilities including
+rule retrieval, log filtering, and network analysis.
+"""
 
 import ipaddress
 import sys
@@ -9,14 +15,14 @@ from pydantic import BaseModel
 
 
 class FirewallEndpoint(BaseModel):
-    """Model for firewall rule endpoint (source/destination)"""
+    """Model for firewall rule endpoint (source/destination)."""
 
     net: str
     port: str
 
 
 class FirewallRule(BaseModel):
-    """Model for firewall rule data"""
+    """Model for firewall rule data."""
 
     id: str
     sequence: int
@@ -33,15 +39,20 @@ class FirewallRule(BaseModel):
 
 
 class FirewallTool:
-    def __init__(self, client):
+    """Tool for managing OPNsense firewall rules and logs."""
+
+    def __init__(self, client: Any) -> None:
+        """Initialize the FirewallTool with an OPNsense client."""
         self.client = client
         self._log_cache = None
         self._log_cache_time = 0
         self._log_cache_ttl = 90  # seconds
 
-    async def _resolve_interface_name(self, iface_query):
+    async def _resolve_interface_name(self, iface_query: str) -> str:
         """
-        Recursively resolve any user-supplied interface name, alias, or
+        Recursively resolve any user-supplied interface name.
+
+        Resolve any user-supplied interface name, alias, or
         display name to the real interface name.
         """
         try:
@@ -62,7 +73,8 @@ class FirewallTool:
             # No match found, return as is
             return iface_query
 
-    async def _get_cached_logs(self, refresh=False):
+    async def _get_cached_logs(self, refresh: bool = False) -> list[dict[str, Any]]:
+        """Get cached firewall logs with optional refresh."""
         now = time.time()
         if (
             not refresh
@@ -77,6 +89,8 @@ class FirewallTool:
 
     async def execute(self, params: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         """
+        Filter firewall logs by criteria.
+
         Production: Filter firewall logs by IP, MAC, hostname, subnet,
         interface (with recursion), rule UUID, or label.
         """
@@ -194,7 +208,7 @@ class FirewallTool:
             # Default: get rules
             rules = await self.client.get_firewall_rules()
             return {
-                "rules": [FirewallRule(**rule).dict() for rule in rules],
+                "rules": [FirewallRule(**rule).model_dump() for rule in rules],
                 "status": "success",
             }
         except Exception as e:

@@ -44,11 +44,11 @@ class DHCPTool:
             leases_v4 = await self.client.get_dhcpv4_leases()
             leases_v6 = await self.client.get_dhcpv6_leases()
             lease_entries_v4 = [
-                DHCPLease(**self._normalize_lease_entry(entry)).dict()
+                DHCPLease(**self._normalize_lease_entry(entry)).model_dump()
                 for entry in leases_v4
             ]
             lease_entries_v6 = [
-                DHCPLease(**self._normalize_lease_entry(entry)).dict()
+                DHCPLease(**self._normalize_lease_entry(entry)).model_dump()
                 for entry in leases_v6
             ]
             # Determine status
