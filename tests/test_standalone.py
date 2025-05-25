@@ -4,28 +4,28 @@ Standalone command-line tool for testing OPNsense API functionality directly.
 This provides a simple interface for testing key API functions.
 """
 
-import os
-import sys
-import asyncio
 import argparse
-import logging
-import ssl
-import requests
-import json
+import asyncio
 import base64
+import json
+import logging
+import os
+import ssl
+import sys
+
+import requests
 import yaml
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
 
 class OPNsenseAPIError(Exception):
     """Base API error for OPNsense"""
-
-    pass
 
 
 class OPNsenseClient:
@@ -91,7 +91,7 @@ class OPNsenseClient:
             return response.json()
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {e}")
+            logger.exception("Request failed")
             raise OPNsenseAPIError(f"Request failed: {e}")
 
     async def get_system_status(self):
@@ -143,7 +143,7 @@ class OPNsenseClient:
             return result
 
         except Exception as e:
-            logger.error(f"Failed to get system status: {e}")
+            logger.exception("Failed to get system status")
             raise OPNsenseAPIError(f"Failed to get system status: {e}")
 
     async def get_arp_table(self):
@@ -172,21 +172,24 @@ class OPNsenseClient:
                     logger.warning(f"Error processing ARP entry: {e}")
                     continue
 
-            return {"entries": entries, "count": len(entries), "status": "success"}
+            return {
+                "entries": entries,
+                "count": len(entries),
+                "status": "success",
+            }
 
         except Exception as e:
-            logger.error(f"Failed to get ARP table: {e}")
+            logger.exception("Failed to get ARP table")
             raise OPNsenseAPIError(f"Failed to get ARP table: {e}")
 
 
 def load_config(config_path):
     """Load configuration from YAML file"""
     try:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-            return config
-    except Exception as e:
-        logger.error(f"Failed to load config: {e}")
+        with open(config_path) as f:
+            return yaml.safe_load(f)
+    except Exception:
+        logger.exception("Failed to load config")
         sys.exit(1)
 
 
@@ -240,7 +243,10 @@ async def test_arp_table(client):
 async def main():
     parser = argparse.ArgumentParser(description="Test OPNsense API functionality")
     parser.add_argument(
-        "--config", type=str, default="vars/key.yaml", help="Path to config file"
+        "--config",
+        type=str,
+        default="vars/key.yaml",
+        help="Path to config file",
     )
     parser.add_argument("function", choices=["system", "arp"], help="Function to test")
     args = parser.parse_args()

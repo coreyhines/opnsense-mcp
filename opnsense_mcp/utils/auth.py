@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-from typing import Optional
-from pydantic import BaseModel
+import os
+from datetime import datetime, timedelta
+
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
-from mcp_server.utils.jwt_helper import create_jwt
-import os
+from pydantic import BaseModel
+
+from opnsense_mcp.utils.jwt_helper import create_jwt
 
 # Security configurations
 SECRET_KEY = os.environ.get("MCP_SECRET_KEY", "your-secret-key-here")
@@ -24,12 +25,12 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    username: Optional[str] = None
+    username: str | None = None
 
 
 class User(BaseModel):
     username: str
-    disabled: Optional[bool] = None
+    disabled: bool | None = None
 
 
 class UserInDB(User):
@@ -48,6 +49,7 @@ def get_user(users_db, username: str):
     if username in users_db:
         user_dict = users_db[username]
         return UserInDB(**user_dict)
+    return None
 
 
 def authenticate_user(users_db, username: str, password: str):
@@ -59,7 +61,7 @@ def authenticate_user(users_db, username: str, password: str):
     return user
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -70,13 +72,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     expire_minutes = int((expire - datetime.utcnow()).total_seconds() / 60)
 
     # Use our custom create_jwt function
-    encoded_jwt = create_jwt(
+    return create_jwt(
         to_encode,
         SECRET_KEY,
         algorithm=ALGORITHM,
         expire_minutes=expire_minutes,
     )
-    return encoded_jwt
 
 
 if __name__ == "__main__":

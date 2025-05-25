@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-from typing import Dict, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -10,18 +10,37 @@ class InterfaceTool:
     def __init__(self, client):
         self.client = client
 
-    async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_params(self, params: dict[str, Any]) -> None:
+        """Validate input parameters"""
+        if not isinstance(params, dict):
+            raise TypeError("Invalid parameters: expected dictionary")
+
+    def _validate_action(self, action: str) -> None:
+        """Validate action parameter"""
+        if action not in ["list", "get"]:
+            raise ValueError(
+                f"Invalid action: {action}. Supported actions are 'list' and 'get'"
+            )
+
+    def _validate_interface_param(self, interface_name: str | None) -> None:
+        """Validate interface parameter for get action"""
+        if not interface_name:
+            raise ValueError("Missing interface parameter for 'get' action")
+
+    def _raise_interface_not_found(self, interface_name: str) -> None:
+        """Raise error for interface not found"""
+        raise ValueError(
+            f"Interface {interface_name} not found or has no active neighbors"
+        )
+
+    async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Execute interface configuration actions"""
         try:
             # Validate parameters
-            if not isinstance(params, dict):
-                raise ValueError("Invalid parameters: expected dictionary")
+            self._validate_params(params)
 
             action = params.get("action", "list")
-            if action not in ["list", "get"]:
-                raise ValueError(
-                    f"Invalid action: {action}. Supported actions are 'list' and 'get'"
-                )
+            self._validate_action(action)
 
             # Handle list action
             if action == "list":
@@ -51,17 +70,16 @@ class InterfaceTool:
                         }
                         interface_list.append(intf_data)
 
-                    return {"interfaces": interface_list, "status": "success"}
-
                 except Exception as e:
-                    logger.error(f"Failed to list interfaces: {str(e)}")
-                    raise RuntimeError(f"Failed to list interfaces: {str(e)}")
+                    logger.exception("Failed to list interfaces")
+                    raise RuntimeError(f"Failed to list interfaces: {str(e)}") from e
+                else:
+                    return {"interfaces": interface_list, "status": "success"}
 
             # Handle get action
             elif action == "get":
                 interface_name = params.get("interface")
-                if not interface_name:
-                    raise ValueError("Missing interface parameter for 'get' action")
+                self._validate_interface_param(interface_name)
 
                 try:
                     # Get interface details from both ARP and NDP tables
@@ -76,32 +94,28 @@ class InterfaceTool:
                         e for e in ndp_data if e.get("intf") == interface_name
                     ]
 
-                    if ipv4_entries or ipv6_entries:
-                        return {
-                            "interface": {
-                                "name": interface_name,
-                                "status": "active",
-                                "ipv4_neighbors": ipv4_entries,
-                                "ipv6_neighbors": ipv6_entries,
-                            },
-                            "status": "success",
-                        }
-                    else:
-                        raise ValueError(
-                            f"Interface {interface_name} not found or has no "
-                            f"active neighbors"
-                        )
+                    if not (ipv4_entries or ipv6_entries):
+                        self._raise_interface_not_found(interface_name)
 
                 except Exception as e:
-                    logger.error(f"Failed to get interface {interface_name}: {str(e)}")
-                    raise RuntimeError(f"Failed to get interface details: {str(e)}")
+                    logger.exception(f"Failed to get interface {interface_name}")
+                    raise RuntimeError(
+                        f"Failed to get interface details: {str(e)}"
+                    ) from e
+                else:
+                    return {
+                        "interface": {
+                            "name": interface_name,
+                            "status": "active",
+                            "ipv4_neighbors": ipv4_entries,
+                            "ipv6_neighbors": ipv6_entries,
+                        },
+                        "status": "success",
+                    }
 
         except ValueError as e:
             logger.warning(f"Validation error in interface tool: {str(e)}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error in interface tool: {str(e)}")
-            raise RuntimeError(f"Interface tool error: {str(e)}")
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to execute interface action: {e}")
+            logger.exception("Unexpected error in interface tool")
+            raise RuntimeError(f"Interface tool error: {str(e)}") from e

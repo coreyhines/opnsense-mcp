@@ -1,58 +1,69 @@
 #!/usr/bin/env python3
 
-from typing import Dict, Any, Optional
-from pydantic import BaseModel, validator
 import logging
+from typing import Any
+
+from pydantic import BaseModel, validator
 
 logger = logging.getLogger(__name__)
 
+
 class FirewallRuleSpec(BaseModel):
     """Model for firewall rule creation specification"""
+
     description: str
-    interface: str = ""  # Use empty string as default since "lan" is not valid on this system
+    interface: str = (
+        ""  # Use empty string as default since "lan" is not valid on this
+        # system
+    )
     action: str = "pass"  # pass, block, reject
     protocol: str = "any"  # any, tcp, udp, icmp, etc.
     source_net: str = "any"
     source_port: str = "any"
-    destination_net: str = "any" 
+    destination_net: str = "any"
     destination_port: str = "any"
     direction: str = "in"  # in, out
     ipprotocol: str = "inet"  # inet, inet6
     enabled: bool = True
     gateway: str = ""
-    
-    @validator('action')
+
+    @validator("action")
+    @classmethod
     def validate_action(cls, v):
-        allowed = ['pass', 'block', 'reject']
+        allowed = ["pass", "block", "reject"]
         if v.lower() not in allowed:
-            raise ValueError(f'Action must be one of: {allowed}')
+            raise ValueError(f"Action must be one of: {allowed}")
         return v.lower()
-    
-    @validator('direction')
+
+    @validator("direction")
+    @classmethod
     def validate_direction(cls, v):
-        allowed = ['in', 'out']
+        allowed = ["in", "out"]
         if v.lower() not in allowed:
-            raise ValueError(f'Direction must be one of: {allowed}')
+            raise ValueError(f"Direction must be one of: {allowed}")
         return v.lower()
-    
-    @validator('ipprotocol')
+
+    @validator("ipprotocol")
+    @classmethod
     def validate_ipprotocol(cls, v):
-        allowed = ['inet', 'inet6']
+        allowed = ["inet", "inet6"]
         if v.lower() not in allowed:
-            raise ValueError(f'IP protocol must be one of: {allowed}')
+            raise ValueError(f"IP protocol must be one of: {allowed}")
         return v.lower()
+
 
 class MkfwRuleTool:
     def __init__(self, client):
         self.client = client
-    
-    async def execute(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
+
+    async def execute(self, params: dict[str, Any] = None) -> dict[str, Any]:
         """
         Create a new firewall rule and apply changes.
-        
+
         Parameters:
         - description: Description of the rule (required)
-        - interface: Interface name - use "wan", "opt1", etc. or leave empty for any (default: "")
+        - interface: Interface name - use "wan", "opt1", etc. or leave empty
+          for any (default: "")
         - action: pass, block, or reject (default: "pass")
         - protocol: any, tcp, udp, icmp, etc. (default: "any")
         - source_net: Source network/IP (default: "any")
@@ -62,42 +73,46 @@ class MkfwRuleTool:
         - enabled: true or false (default: true)
         - gateway: Gateway to use (default: "")
         - apply: Whether to apply changes immediately (default: true)
-        
-        Note: This OPNsense instance uses interface names like "wan", "opt1" rather than "lan".
+
+        Note: This OPNsense instance uses interface names like "wan", "opt1"
+        rather than "lan".
         """
         try:
             if params is None:
                 params = {}
-            
+
             # Validate required parameter
             if not params.get("description"):
                 return {
                     "error": "Description is required for firewall rules",
-                    "status": "error"
+                    "status": "error",
                 }
-            
+
             # Create and validate rule specification
             try:
                 rule_spec = FirewallRuleSpec(**params)
             except Exception as e:
                 return {
                     "error": f"Invalid rule parameters: {e}",
-                    "status": "error"
+                    "status": "error",
                 }
-            
-            # Build rule data for OPNsense API - simplified to match documentation
+
+            # Build rule data for OPNsense API - simplified to match
+            # documentation
             rule_data = {
                 "description": rule_spec.description,
                 "action": rule_spec.action,
-                "protocol": rule_spec.protocol.upper(),  # Documentation shows uppercase
+                # Documentation shows uppercase
+                "protocol": rule_spec.protocol.upper(),
                 "source_net": rule_spec.source_net,
                 "destination_net": rule_spec.destination_net,
             }
-            
+
             # Only add optional fields if they're not defaults
             if rule_spec.interface:  # Only add if not empty
                 rule_data["interface"] = rule_spec.interface
-            if rule_spec.enabled is False:  # Only add if disabled (default is enabled)
+            # Only add if disabled (default is enabled)
+            if rule_spec.enabled is False:
                 rule_data["enabled"] = "0"
             if rule_spec.source_port != "any":
                 rule_data["source_port"] = rule_spec.source_port
@@ -105,37 +120,39 @@ class MkfwRuleTool:
                 rule_data["destination_port"] = rule_spec.destination_port
             if rule_spec.gateway:
                 rule_data["gateway"] = rule_spec.gateway
-            
+
             logger.info(f"Creating firewall rule: {rule_spec.description}")
             logger.debug(f"Rule data: {rule_data}")
-            
+
             # Create the rule
             result = await self.client.add_firewall_rule(rule_data)
-            
+
             if result.get("result") != "success":
                 return {
                     "error": f"Failed to create rule: {result}",
-                    "status": "error"
+                    "status": "error",
                 }
-            
+
             rule_uuid = result.get("uuid")
             logger.info(f"Successfully created rule with UUID: {rule_uuid}")
-            
+
             # Apply changes if requested (default: true)
             apply_changes = params.get("apply", True)
             if apply_changes:
                 logger.info("Applying firewall changes...")
                 apply_result = await self.client.apply_firewall_changes()
-                
+
                 if apply_result.get("result") != "success":
                     return {
-                        "error": f"Rule created but failed to apply changes: {apply_result}",
+                        "error": (
+                            f"Rule created but failed to apply changes: {apply_result}"
+                        ),
                         "rule_uuid": rule_uuid,
-                        "status": "partial_success"
+                        "status": "partial_success",
                     }
-                
+
                 logger.info("Successfully applied firewall changes")
-                
+
                 return {
                     "rule_uuid": rule_uuid,
                     "revision": apply_result.get("revision"),
@@ -143,22 +160,24 @@ class MkfwRuleTool:
                     "interface": rule_spec.interface,
                     "action": rule_spec.action,
                     "applied": True,
-                    "status": "success"
-                }
-            else:
-                return {
-                    "rule_uuid": rule_uuid,
-                    "description": rule_spec.description,
-                    "interface": rule_spec.interface,
-                    "action": rule_spec.action,
-                    "applied": False,
                     "status": "success",
-                    "note": "Rule created but not applied. Use apply_firewall_changes() to activate."
                 }
-                
+            return {
+                "rule_uuid": rule_uuid,
+                "description": rule_spec.description,
+                "interface": rule_spec.interface,
+                "action": rule_spec.action,
+                "applied": False,
+                "status": "success",
+                "note": (
+                    "Rule created but not applied. Use "
+                    "apply_firewall_changes() to activate."
+                ),
+            }
+
         except Exception as e:
-            logger.error(f"Failed to create firewall rule: {e}")
+            logger.exception("Failed to create firewall rule")
             return {
                 "error": f"Failed to create firewall rule: {e}",
-                "status": "error"
-            } 
+                "status": "error",
+            }

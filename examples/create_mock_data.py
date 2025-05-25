@@ -5,8 +5,8 @@ Creates example data files for development mode.
 """
 
 import json
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # Current directory
 current_dir = Path(__file__).parent.resolve()
@@ -224,5 +224,6 @@ for filename, data in mock_files.items():
 print(f"\nMock data for development has been created in {mock_data_dir}")
 print("You can now use these files with the mock_api option in your config.")
 print(
-    "Ensure your config has development.mock_api=true and development.mock_data_path points to this directory."
+    "Ensure your config has development.mock_api=true and "
+    "development.mock_data_path points to this directory."
 )

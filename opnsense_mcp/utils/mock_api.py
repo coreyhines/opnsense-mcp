@@ -2,10 +2,9 @@
 """Mock API client for development and testing"""
 
 import json
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 import logging
-
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 class MockOPNsenseClient:
     """Mock OPNsense API client for development and testing"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize the mock client with config"""
         self.config = config
         # Get absolute path to mock data
@@ -37,12 +36,12 @@ class MockOPNsenseClient:
             for file_path in mock_path.glob("*.json"):
                 try:
                     logger.info(f"Loading mock data from {file_path}")
-                    with open(file_path, "r") as f:
+                    with open(file_path) as f:
                         data = json.load(f)
                         self.mock_data[file_path.stem] = data
                         logger.debug(f"Loaded {file_path.stem} data: {data}")
-                except Exception as e:
-                    logger.error(f"Failed to load {file_path.name}: {e}")
+                except Exception:
+                    logger.exception(f"Failed to load {file_path.name}")
 
             logger.info(
                 "Successfully loaded mock data. "
@@ -50,12 +49,10 @@ class MockOPNsenseClient:
             )
             for key in self.mock_data:
                 if isinstance(self.mock_data[key], dict):
-                    logger.debug(
-                        f"{key} structure: " f"{list(self.mock_data[key].keys())}"
-                    )
+                    logger.debug(f"{key} structure: {list(self.mock_data[key].keys())}")
 
-        except Exception as e:
-            logger.error(f"Failed to load mock data: {e}")
+        except Exception:
+            logger.exception("Failed to load mock data")
             self.mock_data = {}
 
     async def get_system_status(self):
@@ -81,7 +78,7 @@ class MockOPNsenseClient:
         data = self.mock_data.get("firewall_rules", {})
         return data.get("rules", [])
 
-    async def get_firewall_logs(self, limit: int = 500) -> List[Dict[str, Any]]:
+    async def get_firewall_logs(self, limit: int = 500) -> list[dict[str, Any]]:
         """Get mock firewall logs"""
         logger.info(f"Mock API keys available: {list(self.mock_data.keys())}")
         data = self.mock_data.get("firewall_logs", {})

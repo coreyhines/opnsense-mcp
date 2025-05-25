@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Firewall log parsing and analysis"""
 
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime
-from pydantic import BaseModel
-from collections import Counter
-import re
 import logging
+import re
+from collections import Counter
+from datetime import datetime
 
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -20,22 +19,22 @@ class FirewallLogEntry(BaseModel):
     action: str
     protocol: str
     src_ip: str
-    src_port: Optional[int]
+    src_port: int | None
     dst_ip: str
-    dst_port: Optional[int]
-    rule_id: Optional[str] = None
-    description: Optional[str] = None
+    dst_port: int | None
+    rule_id: str | None = None
+    description: str | None = None
 
 
 class FirewallLogSummary(BaseModel):
     """Summary statistics for firewall logs"""
 
     total_entries: int
-    action_counts: Dict[str, int]
-    top_source_ips: List[Tuple[str, int]]
-    top_destination_ips: List[Tuple[str, int]]
-    top_blocked_ports: List[Tuple[int, int]]
-    time_range: Tuple[datetime, datetime]
+    action_counts: dict[str, int]
+    top_source_ips: list[tuple[str, int]]
+    top_destination_ips: list[tuple[str, int]]
+    top_blocked_ports: list[tuple[int, int]]
+    time_range: tuple[datetime, datetime]
 
 
 class FirewallLogsTool:
@@ -51,11 +50,11 @@ class FirewallLogsTool:
     async def get_logs(
         self,
         limit: int = 500,
-        action: Optional[str] = None,
-        src_ip: Optional[str] = None,
-        dst_ip: Optional[str] = None,
-        protocol: Optional[str] = None,
-    ) -> List[FirewallLogEntry]:
+        action: str | None = None,
+        src_ip: str | None = None,
+        dst_ip: str | None = None,
+        protocol: str | None = None,
+    ) -> list[FirewallLogEntry]:
         """Retrieve and parse firewall logs with optional filtering"""
         logger.info(
             f"FirewallLogsTool: Getting logs with limit={limit}, "
@@ -72,7 +71,7 @@ class FirewallLogsTool:
 
             if log_count > 0 and not isinstance(raw_logs[0], dict):
                 logger.error(
-                    "Invalid log format - expected dict, got " f"{type(raw_logs[0])}"
+                    f"Invalid log format - expected dict, got {type(raw_logs[0])}"
                 )
                 return []
 
@@ -128,19 +127,19 @@ class FirewallLogsTool:
                         f"{entry.dst_ip}:{entry.dst_port}"
                     )
 
-                except Exception as e:
-                    logger.error(f"Failed to parse log entry {i} - {log}: {str(e)}")
+                except Exception:
+                    logger.exception(f"Failed to parse log entry {i} - {log}")
                     continue
 
-        except Exception as e:
-            logger.error(f"Failed to get firewall logs: {str(e)}")
+        except Exception:
+            logger.exception("Failed to get firewall logs")
             return []
 
         filtered_count = len(parsed_logs)
         logger.info(f"FirewallLogsTool: Returning {filtered_count} parsed logs")
         return parsed_logs
 
-    def _parse_log_line(self, line: str) -> Optional[FirewallLogEntry]:
+    def _parse_log_line(self, line: str) -> FirewallLogEntry | None:
         """Parse a single firewall log line into a structured format"""
         # Example log line format:
         # 2025-05-22T10:15:30 WAN block in tcp 192.168.1.100:12345 ->
@@ -190,14 +189,14 @@ class FirewallLogsTool:
         except Exception:
             return None
 
-    def _split_ip_port(self, address: str) -> Tuple[str, Optional[int]]:
+    def _split_ip_port(self, address: str) -> tuple[str, int | None]:
         """Split an address:port string into separate values"""
         if ":" in address:
             ip, port = address.rsplit(":", 1)
             return ip, int(port)
         return address, None
 
-    async def get_log_summary(self, logs: List[FirewallLogEntry]) -> FirewallLogSummary:
+    async def get_log_summary(self, logs: list[FirewallLogEntry]) -> FirewallLogSummary:
         """Generate a summary of firewall log activity"""
         if not logs:
             return FirewallLogSummary(

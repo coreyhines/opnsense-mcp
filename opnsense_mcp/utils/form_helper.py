@@ -9,7 +9,8 @@ class SimpleFormData:
     """Simple class to handle form data"""
 
     def __init__(self, username: str = "", password: str = ""):
-        # NOTE: Default password is empty for demonstration/testing only. Bandit: # nosec
+        # NOTE: Default password is empty for demonstration/testing only.
+        # Bandit: # nosec
         self.username = username
         self.password = password
 

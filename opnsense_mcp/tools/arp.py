@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-from typing import Dict, Any
-from pydantic import BaseModel
 import logging
+from typing import Any
+
+from pydantic import BaseModel
+
 from opnsense_mcp.utils.oui_lookup import OUILookup
 
 logger = logging.getLogger(__name__)
@@ -32,7 +34,7 @@ class ARPTool:
     def __init__(self, client):
         self.client = client
 
-    async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         Execute ARP/NDP table lookup with optional filtering by MAC,
         IPv4, or IPv6 address, or using targeted search if 'search'
@@ -46,11 +48,17 @@ class ARPTool:
             search_query = params.get("search")
             if search_query:
                 # If wildcard or empty, use canonical endpoint for full table
-                if search_query.strip() == '*' or not search_query.strip():
+                if search_query.strip() == "*" or not search_query.strip():
                     arp_data = await self.client.get_arp_table()
                     ndp_data = await self.client.get_ndp_table()
-                    arp_entries = [self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in arp_data]
-                    ndp_entries = [self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in ndp_data]
+                    arp_entries = [
+                        self._fill_manufacturer(ARPEntry(**entry).dict())
+                        for entry in arp_data
+                    ]
+                    ndp_entries = [
+                        self._fill_manufacturer(ARPEntry(**entry).dict())
+                        for entry in ndp_data
+                    ]
                     return {
                         "arp": arp_entries,
                         "ndp": ndp_entries,
@@ -63,7 +71,9 @@ class ARPTool:
                 resolved_queries = set()
                 if hasattr(self.client, "resolve_host_info"):
                     info = await self.client.resolve_host_info(search_query)
-                    logger.debug(f"[ARPTool] resolve_host_info({search_query!r}) -> {info}")
+                    logger.debug(
+                        f"[ARPTool] resolve_host_info({search_query!r}) -> {info}"
+                    )
                     if info.get("ip"):
                         resolved_ips.add(info["ip"])
                     if info.get("mac"):
@@ -77,14 +87,28 @@ class ARPTool:
                         if dhcp.get("mac"):
                             resolved_macs.add(dhcp["mac"])
                         if dhcp.get("hostname") or dhcp.get("client-hostname"):
-                            resolved_hostnames.add(dhcp.get("hostname") or dhcp.get("client-hostname"))
+                            resolved_hostnames.add(
+                                dhcp.get("hostname") or dhcp.get("client-hostname")
+                            )
                     resolved_queries.add(search_query)
                 else:
                     resolved_queries.add(search_query)
-                all_queries = {q.lower() for q in (resolved_queries | resolved_ips | resolved_macs | resolved_hostnames) if q}
-                logger.debug(f"[ARPTool] In-memory ARP/NDP search queries: {all_queries}")
+                all_queries = {
+                    q.lower()
+                    for q in (
+                        resolved_queries
+                        | resolved_ips
+                        | resolved_macs
+                        | resolved_hostnames
+                    )
+                    if q
+                }
+                logger.debug(
+                    f"[ARPTool] In-memory ARP/NDP search queries: {all_queries}"
+                )
                 arp_data = await self.client.get_arp_table()
                 ndp_data = await self.client.get_ndp_table()
+
                 def match_any(entry):
                     return any(
                         q in str(entry.get("ip", "")).lower()
@@ -92,13 +116,32 @@ class ARPTool:
                         or q in str(entry.get("hostname", "")).lower()
                         for q in all_queries
                     )
-                arp_entries = [self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in arp_data if match_any(entry)]
-                ndp_entries = [self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in ndp_data if match_any(entry)]
+
+                arp_entries = [
+                    self._fill_manufacturer(ARPEntry(**entry).dict())
+                    for entry in arp_data
+                    if match_any(entry)
+                ]
+                ndp_entries = [
+                    self._fill_manufacturer(ARPEntry(**entry).dict())
+                    for entry in ndp_data
+                    if match_any(entry)
+                ]
                 return {
                     "arp": arp_entries,
                     "ndp": ndp_entries,
                     "status": "success",
                 }
+
+            # If no search query, get full tables
+            arp_data = await self.client.get_arp_table()
+            ndp_data = await self.client.get_ndp_table()
+            arp_entries = [
+                self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in arp_data
+            ]
+            ndp_entries = [
+                self._fill_manufacturer(ARPEntry(**entry).dict()) for entry in ndp_data
+            ]
 
             # Filtering logic
             mac_filter = params.get("mac")
@@ -126,16 +169,17 @@ class ARPTool:
                     entry for entry in ndp_entries if entry.get("ip", "") == ipv6_filter
                 ]
 
+        except Exception as e:
+            logger.exception("Failed to get ARP/NDP tables")
+            logger.error(f"Exception details: {e}")
+            # Fallback to dummy data on error
+            return self._get_dummy_data()
+        else:
             return {
                 "arp": arp_entries,
                 "ndp": ndp_entries,
                 "status": "success",
             }
-
-        except Exception as e:
-            logger.error(f"Failed to get ARP/NDP tables: {str(e)}")
-            # Fallback to dummy data on error
-            return self._get_dummy_data()
 
     def _fill_manufacturer(self, entry):
         if not entry.get("manufacturer"):
@@ -144,7 +188,7 @@ class ARPTool:
                 entry["manufacturer"] = oui_lookup.lookup(mac) or ""
         return entry
 
-    def _get_dummy_data(self) -> Dict[str, Any]:
+    def _get_dummy_data(self) -> dict[str, Any]:
         """Return dummy data for testing"""
         return {
             "arp": [

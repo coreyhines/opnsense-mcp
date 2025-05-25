@@ -1,7 +1,8 @@
+import logging
+from typing import Any
+
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
-from typing import Union, Dict, Any
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ class MCPException(Exception):
         self,
         status_code: int,
         message: str,
-        details: Union[str, Dict[str, Any]] = None,
+        details: str | dict[str, Any] = None,
     ):
         self.status_code = status_code
         self.message = message

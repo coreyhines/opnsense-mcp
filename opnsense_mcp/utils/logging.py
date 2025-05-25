@@ -5,10 +5,9 @@ Logging configuration for the MCP Server
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 
-def setup_logging(log_file: Optional[str] = None, level: str = "INFO"):
+def setup_logging(log_file: str | None = None, level: str = "INFO"):
     """Configure logging for the MCP server"""
     # Create formatter
     formatter = logging.Formatter(

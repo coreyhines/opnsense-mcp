@@ -1,64 +1,66 @@
 #!/usr/bin/env python3
 """
-OPNsense MCP API Interactive Tester
+OPNsense MCP API Interactive Tester.
 
-This script provides an interactive environment for testing the enhanced OPNsense MCP API.
-It's designed to be used within an IDE or development environment for quick API exploration.
+This script provides an interactive environment for testing the enhanced OPNsense MCP
+API. It's designed to be used within an IDE or development environment for quick
+API exploration.
 """
 
-import os
-import sys
-import json
-import asyncio
 import argparse
+import asyncio
+import json
 import logging
+import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
 import yaml
 
 # Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(str(Path(__file__).parent.resolve()))
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
 
 class APITester:
-    """Interactive API tester class"""
+    """Interactive API tester class."""
 
-    def __init__(self, config_path):
-        """Initialize tester with config"""
+    def __init__(self, config_path: str) -> None:
+        """Initialize tester with config."""
         self.config = self._load_config(config_path)
         self.client = None
         self.tools = {}
 
-    def _load_config(self, config_path):
-        """Load configuration from file"""
+    def _load_config(self, config_path: str) -> dict[str, Any]:
+        """Load configuration from file."""
         try:
             path = Path(config_path)
             if not path.exists():
-                logger.error(f"Config file not found: {config_path}")
+                logger.error("Config file not found: %s", config_path)
                 sys.exit(1)
 
             if path.suffix in [".yaml", ".yml"]:
-                with open(path, "r") as f:
+                with path.open() as f:
                     return yaml.safe_load(f)
             else:
-                with open(path, "r") as f:
+                with path.open() as f:
                     return json.load(f)
 
-        except Exception as e:
-            logger.error(f"Failed to load config: {e}")
+        except Exception:
+            logger.exception("Failed to load config")
             sys.exit(1)
 
-    async def setup(self):
-        """Initialize API client and tools"""
+    async def setup(self) -> None:
+        """Initialize API client and tools."""
         try:
             # Import API client
-            from mcp_server.utils.api_new import OPNsenseClient
+            from opnsense_mcp.utils.api import OPNsenseClient
 
             self.client = OPNsenseClient(self.config["opnsense"])
             logger.info(
@@ -68,11 +70,11 @@ class APITester:
             # Import all tools
             self.tools = await self._load_tools()
             logger.info(f"Loaded {len(self.tools)} API tools")
-        except Exception as e:
-            logger.error(f"Failed to initialize API client: {e}")
+        except Exception:
+            logger.exception("Failed to initialize API client")
             sys.exit(1)
 
-    async def _load_tools(self) -> Dict[str, Any]:
+    async def _load_tools(self) -> dict[str, Any]:
         """Load all available API tools"""
         tools = {}
 
@@ -87,7 +89,10 @@ class APITester:
             "dns": ("DNSTool", "mcp_server.tools.dns_new"),
             "traffic": ("TrafficShaperTool", "mcp_server.tools.traffic_new"),
             "ids": ("IDSTool", "mcp_server.tools.ids_new"),
-            "certificate": ("CertificateTool", "mcp_server.tools.certificate_new"),
+            "certificate": (
+                "CertificateTool",
+                "mcp_server.tools.certificate_new",
+            ),
         }
 
         # Try to import and initialize each tool
@@ -104,7 +109,7 @@ class APITester:
 
     async def execute_tool(
         self, tool_name: str, action: str, **params
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute a specific tool action with parameters"""
         if tool_name not in self.tools:
             raise ValueError(f"Unknown tool: {tool_name}")
@@ -114,8 +119,7 @@ class APITester:
         tool_params.update(params)
 
         logger.info(f"Executing {tool_name}.{action} with {params}")
-        result = await self.tools[tool_name].execute(tool_params)
-        return result
+        return await self.tools[tool_name].execute(tool_params)
 
     async def interactive(self):
         """Run an interactive session"""
@@ -195,7 +199,7 @@ async def main():
             try:
                 params = json.loads(args.params)
             except json.JSONDecodeError:
-                logger.error("Invalid JSON parameters")
+                logger.exception("Invalid JSON parameters")
                 sys.exit(1)
 
         result = await tester.execute_tool(args.tool, args.action, **params)

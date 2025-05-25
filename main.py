@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
+"""
+OPNsense MCP Server entry point.
 
-import uvicorn
+This module provides a simple entry point for running the OPNsense MCP server.
+It redirects to the actual MCP server implementation in opnsense_mcp.server.
+"""
+
 import argparse
 import os
-from mcp_server import MCPServer
-from mcp_server.utils.logging import setup_logging
+
+from opnsense_mcp.server import main as mcp_main
+from opnsense_mcp.utils.logging import setup_logging
 
 
-def main():
+def main() -> None:
+    """
+    Start the OPNsense MCP Server.
+
+    This function parses command line arguments and starts the MCP server.
+    The server communicates over stdio using the Model Context Protocol.
+    """
     parser = argparse.ArgumentParser(description="OPNsense MCP Server")
-    parser.add_argument(
-        "--host",
-        type=str,
-        default="127.0.0.1",
-        help="Host to bind the server to",
-    )
-    parser.add_argument(
-        "--port", type=int, default=8000, help="Port to bind the server to"
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="vars/key.yaml",
-        help="Path to configuration file",
-    )
     parser.add_argument("--log-file", type=str, help="Path to log file (optional)")
     parser.add_argument(
         "--log-level",
@@ -40,16 +37,19 @@ def main():
 
     # Set environment variable for JWT secret key if not set
     if not os.environ.get("MCP_SECRET_KEY"):
-        # NOTE: Hardcoded secret key for development only. Change in production! Bandit: # nosec
+        # NOTE: Hardcoded secret key for development only. Change in production!
+        # Bandit: # nosec
         os.environ["MCP_SECRET_KEY"] = (
             "development-secret-key"  # pragma: allowlist secret
         )
 
-    # Initialize the MCP server
-    server = MCPServer(args.config)
+    # Set up MCP environment
+    os.environ["PYTHONUNBUFFERED"] = "1"
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    os.environ["MCP_TRANSPORT"] = "stdio"
 
-    # Run the server
-    uvicorn.run(server.app, host=args.host, port=args.port)
+    # Run the MCP server
+    mcp_main()
 
 
 if __name__ == "__main__":

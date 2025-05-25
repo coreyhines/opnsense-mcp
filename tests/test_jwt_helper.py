@@ -3,20 +3,18 @@
 Test script for JWT helper implementation
 """
 
-import sys
 import os
+import sys
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     # Try to import our custom JWT implementation
-    from mcp_server.utils.jwt_helper import create_jwt, decode_jwt, JWTError
+    from opnsense_mcp.utils.jwt_helper import JWTError, create_jwt, decode_jwt
 
     # Test constants
-    SECRET_KEY = (
-        "test-secret-key"  # nosec  # NOTE: Hardcoded for testing only. Bandit: # nosec
-    )
+    SECRET_KEY = "test-secret-key"  # nosec  # NOTE: Hardcoded for testing only. Bandit: # nosec
     TEST_USERNAME = "test-user"
 
     # Create a test token

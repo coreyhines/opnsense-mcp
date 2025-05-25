@@ -1,7 +1,7 @@
 import csv
-import os
+from pathlib import Path
 
-OUI_CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "oui.csv")
+OUI_CSV_PATH = Path(__file__).parent / "data" / "oui.csv"
 
 
 class OUILookup:
@@ -10,9 +10,9 @@ class OUILookup:
         self._load_oui_csv(csv_path)
 
     def _load_oui_csv(self, csv_path):
-        if not os.path.exists(csv_path):
+        if not csv_path.exists():
             raise FileNotFoundError(f"OUI CSV not found at {csv_path}")
-        with open(csv_path, newline="", encoding="utf-8") as csvfile:
+        with csv_path.open(newline="", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 assignment = row.get("Assignment", "").replace("-", ":").lower()

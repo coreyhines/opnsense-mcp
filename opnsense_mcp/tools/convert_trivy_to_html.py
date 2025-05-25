@@ -1,11 +1,12 @@
 import json
 import sys
+from pathlib import Path
 
 
 def main():
     input_file = sys.argv[1]
     output_file = sys.argv[2]
-    with open(input_file) as f:
+    with Path(input_file).open() as f:
         data = json.load(f)
 
     html = [
@@ -23,7 +24,9 @@ def main():
                 html.append("<p>No vulnerabilities found for this target.</p>")
                 continue
             html.append(
-                "<table border='1'><tr><th>PkgName</th><th>InstalledVersion</th><th>VulnID</th><th>Severity</th><th>Title</th><th>Description</th><th>FixedVersion</th></tr>"
+                "<table border='1'><tr><th>PkgName</th><th>InstalledVersion</th>"
+                "<th>VulnID</th><th>Severity</th><th>Title</th><th>Description</th>"
+                "<th>FixedVersion</th></tr>"
             )
             for vuln in vulns:
                 html.append(
@@ -37,7 +40,7 @@ def main():
                 )
             html.append("</table>")
     html.append("</body></html>")
-    with open(output_file, "w") as f:
+    with Path(output_file).open("w") as f:
         f.write("\n".join(html))
 
 

@@ -5,11 +5,12 @@ This script sets up the MCP server with all the enhanced API tools
 and allows for easy testing of individual components.
 """
 
+import argparse
+import asyncio
+import logging
 import os
 import sys
-import asyncio
-import argparse
-import logging
+
 import yaml
 
 # Add parent directory to path for imports
@@ -17,7 +18,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -25,17 +27,15 @@ logger = logging.getLogger(__name__)
 def load_config(config_path):
     """Load configuration from YAML file"""
     try:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-            return config
-    except Exception as e:
-        logger.error(f"Failed to load config: {e}")
+        with open(config_path) as f:
+            return yaml.safe_load(f)
+    except Exception:
+        logger.exception("Failed to load config")
         sys.exit(1)
 
 
 async def run_tool_tests(client, tool_name=None):
     """Run tests for all tools or a specific tool"""
-
     tools = {
         # Network tools
         "arp": ("ARPTool", "mcp_server.tools.arp_new"),
@@ -93,30 +93,29 @@ async def test_specific_tool(client, tool_name, tool_class_name, tool_module):
         # Run specific test based on the tool type
         if tool_name == "system":
             return await test_system_tool(tool)
-        elif tool_name == "arp":
+        if tool_name == "arp":
             return await test_arp_tool(tool)
-        elif tool_name == "interface":
+        if tool_name == "interface":
             return await test_interface_tool(tool)
-        elif tool_name == "firewall":
+        if tool_name == "firewall":
             return await test_firewall_tool(tool)
-        elif tool_name == "service":
+        if tool_name == "service":
             return await test_service_tool(tool)
-        elif tool_name == "vpn":
+        if tool_name == "vpn":
             return await test_vpn_tool(tool)
-        elif tool_name == "dns":
+        if tool_name == "dns":
             return await test_dns_tool(tool)
-        elif tool_name == "traffic":
+        if tool_name == "traffic":
             return await test_traffic_tool(tool)
-        elif tool_name == "ids":
+        if tool_name == "ids":
             return await test_ids_tool(tool)
-        elif tool_name == "certificate":
+        if tool_name == "certificate":
             return await test_certificate_tool(tool)
-        else:
-            logger.error(f"No test defined for {tool_name}")
-            return False
+        logger.error(f"No test defined for {tool_name}")
+        return False
 
-    except Exception as e:
-        logger.error(f"Error testing {tool_name}: {e}")
+    except Exception:
+        logger.exception(f"Error testing {tool_name}")
         return False
 
 
@@ -307,7 +306,7 @@ async def main():
     logger.info(f"Testing OPNsense MCP integration with {config['firewall_host']}")
 
     # Initialize API client
-    from mcp_server.utils.api_new import OPNsenseClient
+    from opnsense_mcp.utils.api import OPNsenseClient
 
     client = OPNsenseClient(config)
 

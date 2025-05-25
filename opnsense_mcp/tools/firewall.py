@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-from typing import Dict, Any, List
-from pydantic import BaseModel
 import ipaddress
 import sys
 import time
+from typing import Any
+
+from pydantic import BaseModel
 
 
 class FirewallEndpoint(BaseModel):
@@ -39,7 +40,10 @@ class FirewallTool:
         self._log_cache_ttl = 90  # seconds
 
     async def _resolve_interface_name(self, iface_query):
-        """Recursively resolve any user-supplied interface name, alias, or display name to the real interface name."""
+        """
+        Recursively resolve any user-supplied interface name, alias, or
+        display name to the real interface name.
+        """
         try:
             iface_map = await self.client.get_interfaces()
             if not isinstance(iface_map, dict):
@@ -52,9 +56,10 @@ class FirewallTool:
                 if iface_query == display:
                     # Recurse in case display is itself an alias for another real name
                     return await self._resolve_interface_name(real)
-            # No match found, return as is
-            return iface_query
         except Exception:
+            return iface_query
+        else:
+            # No match found, return as is
             return iface_query
 
     async def _get_cached_logs(self, refresh=False):
@@ -70,11 +75,15 @@ class FirewallTool:
         self._log_cache_time = now
         return logs
 
-    async def execute(self, params: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
-        """Production: Filter firewall logs by IP, MAC, hostname, subnet, interface (with recursion), rule UUID, or label."""
+    async def execute(self, params: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+        """
+        Production: Filter firewall logs by IP, MAC, hostname, subnet,
+        interface (with recursion), rule UUID, or label.
+        """
         try:
             refresh = params.get("refresh", False)
-            # If logs requested (no filters), return the first 500 logs for inspection
+            # If logs requested (no filters), return the first 500 logs
+            # for inspection
             if params and params.get("logs") is True and len(params) == 1:
                 logs = await self._get_cached_logs(refresh=refresh)
                 return {"logs": logs[:500], "status": "success"}
@@ -134,7 +143,8 @@ class FirewallTool:
                                         src_match = ipaddress.ip_address(src_ip) in net
                                 except Exception as e:
                                     print(
-                                        f"[DEBUG] Subnet filter: src_ip parse error: {src_ip} ({e})",
+                                        f"[DEBUG] Subnet filter: src_ip parse error: "
+                                        f"{src_ip} ({e})",
                                         file=sys.stderr,
                                     )
                                 try:
@@ -142,18 +152,23 @@ class FirewallTool:
                                         dst_match = ipaddress.ip_address(dst_ip) in net
                                 except Exception as e:
                                     print(
-                                        f"[DEBUG] Subnet filter: dst_ip parse error: {dst_ip} ({e})",
+                                        f"[DEBUG] Subnet filter: dst_ip parse "
+                                        f"error: {dst_ip} ({e})",
                                         file=sys.stderr,
                                     )
                                 if src_match or dst_match:
                                     match = True
                                 print(
-                                    f"[DEBUG] Subnet filter: src={src_ip}, dst={dst_ip}, subnet={net}, src_match={src_match}, dst_match={dst_match}, match={match}",
+                                    f"[DEBUG] Subnet filter: src={src_ip}, "
+                                    f"dst={dst_ip}, subnet={net}, "
+                                    f"src_match={src_match}, "
+                                    f"dst_match={dst_match}, match={match}",
                                     file=sys.stderr,
                                 )
                             except Exception as e:
                                 print(
-                                    f"[DEBUG] Subnet filter: net parse error: {params['log_search_subnet']} ({e})",
+                                    f"[DEBUG] Subnet filter: net parse error: "
+                                    f"{params['log_search_subnet']} ({e})",
                                     file=sys.stderr,
                                 )
                         # Interface match (resolved)
@@ -183,4 +198,4 @@ class FirewallTool:
                 "status": "success",
             }
         except Exception as e:
-            raise RuntimeError(f"Failed to get firewall rules or logs: {e}")
+            raise RuntimeError(f"Failed to get firewall rules or logs: {e}") from e

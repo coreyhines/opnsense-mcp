@@ -3,10 +3,10 @@ Custom JWT module to replace jose dependency
 """
 
 import base64
+import hashlib
+import hmac
 import json
 import time
-import hmac
-import hashlib
 
 
 def b64encode(data):
@@ -88,9 +88,8 @@ def decode_jwt(token, secret_key, algorithms=None):
     payload = json.loads(b64decode(encoded_payload))
 
     # Check expiration
-    if "exp" in payload:
-        if payload["exp"] < time.time():
-            raise ValueError("Token has expired")
+    if "exp" in payload and payload["exp"] < time.time():
+        raise ValueError("Token has expired")
 
     return payload
 
@@ -98,5 +97,3 @@ def decode_jwt(token, secret_key, algorithms=None):
 # Define JWT error for compatibility
 class JWTError(Exception):
     """Error raised when JWT verification fails"""
-
-    pass

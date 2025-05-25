@@ -1,23 +1,3 @@
-[project]
-name = "opnsense-mcp"
-version = "1.0.0"
-description = "OPNsense MCP Server"
-requires-python = ">=3.10"
-dependencies = [
-    "fastmcp>=2.3.0",
-    "python-dotenv>=1.0.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "black",
-    "ruff",
-    "mypy",
-    "pre-commit",
-    "bandit",
-    "detect-secrets",
-]
-
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -28,10 +8,59 @@ packages = ["opnsense_mcp"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "D",   # pydocstyle
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "I",    # isort
+    "N",    # pep8-naming
+    "C4",   # flake8-comprehensions
+    "G",    # flake8-logging-format
+    "PIE",  # flake8-pie
+    "T20",  # flake8-print
+    "RET",  # flake8-return
+    "SLF",  # flake8-self
+    "TCH",  # flake8-type-checking
+    "ARG",  # flake8-unused-arguments
+    "PTH",  # flake8-use-pathlib
+    "TRY",  # flake8-try-except-raise
+    "PERF", # perflint
+    "ANN",  # flake8-annotations
+]
+ignore = [
+    "D203",  # incorrect-blank-line-before-class
+    "D212",  # multi-line-summary-first-line
+    "T20",   # Allow print statements
+    "G004",  # Allow f-string in logging (will be gradually fixed)
+    "TRY003", # Allow long messages in exception classes
+    "ERA001", # Don't remove commented code automatically
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can have longer lines and more flexible rules
+"tests/*" = ["E501", "ARG", "SLF001", "ANN001"]
+# Example files can skip argument annotations
+"examples/*" = ["ANN001"]
+# Test files anywhere can skip argument annotations
+"test_*.py" = ["ANN001"]
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+# Use spaces around keywords
+indent-style = "space"
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+# Auto-detect line endings
+line-ending = "auto"
 
 [tool.black]
 line-length = 88
-target-version = ["py312"] 
+target-version = ["py312"]
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "venv"]

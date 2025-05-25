@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-from typing import Dict, Any
 import logging
+from typing import Any
+
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ class DHCPLease(BaseModel):
     description: str | None = None
 
 
-class DHCPTol:
+class DHCPTool:
     name = "dhcp"
     description = "Show DHCPv4 and DHCPv6 lease tables"
     inputSchema = {"type": "object", "properties": {}, "required": []}
@@ -32,7 +33,7 @@ class DHCPTol:
             entry["ip"] = entry.pop("address")
         return entry
 
-    async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Execute DHCP lease table lookup for both IPv4 and IPv6"""
         try:
             if self.client is None:
@@ -52,24 +53,31 @@ class DHCPTol:
             ]
             # Determine status
             if leases_v4 is None and leases_v6 is None:
-                dhcp_status = "API returned nothing (possible misconfiguration or permissions issue)"
+                dhcp_status = (
+                    "API returned nothing (possible misconfiguration or "
+                    "permissions issue)"
+                )
             elif not lease_entries_v4 and not lease_entries_v6:
-                dhcp_status = "No DHCP leases found. Check DHCP server status, configuration, and API permissions."
+                dhcp_status = (
+                    "No DHCP leases found. Check DHCP server status, "
+                    "configuration, and API permissions."
+                )
             else:
                 dhcp_status = "OK"
-            return {
-                "dhcpv4": lease_entries_v4,
-                "dhcpv6": lease_entries_v6,
-                "status": "success",
-                "dhcp_status": dhcp_status,
-            }
         except Exception as e:
-            logger.error(f"Failed to get DHCP lease tables: {str(e)}")
+            logger.exception("Failed to get DHCP lease tables")
             return {
                 "dhcpv4": [],
                 "dhcpv6": [],
                 "status": "error",
                 "dhcp_status": f"Error retrieving DHCP leases: {str(e)}",
+            }
+        else:
+            return {
+                "dhcpv4": lease_entries_v4,
+                "dhcpv6": lease_entries_v6,
+                "status": "success",
+                "dhcp_status": dhcp_status,
             }
 
     def _get_dummy_data(self):

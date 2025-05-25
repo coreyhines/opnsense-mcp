@@ -1,0 +1,17 @@
+{
+    "python.linting.enabled": true,
+    "python.linting.flake8Enabled": false,
+    "python.defaultInterpreterPath": "./.venv/bin/python",
+    "editor.rulers": [88],
+    "editor.wordWrap": "off",
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit",
+            "source.fixAll": "explicit"
+        }
+    },
+    "ruff.lint.enable": true,
+    "ruff.format.enable": true,
+    "ruff.organizeImports": true
+}

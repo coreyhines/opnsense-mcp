@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """OPNsense Model Context Protocol server for firewall management"""
 
-from pathlib import Path
 import json
 import logging
 import os
 import sys
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Any
+
 from dotenv import load_dotenv
 
 from opnsense_mcp.tools.arp import ARPTool
-from opnsense_mcp.tools.dhcp import DHCPTol
+from opnsense_mcp.tools.dhcp import DHCPTool
 from opnsense_mcp.tools.firewall_logs import FirewallLogsTool
-from opnsense_mcp.utils.mock_api import MockOPNsenseClient
-from opnsense_mcp.utils.api import OPNsenseClient
-from opnsense_mcp.tools.lldp import LLDPTool
-from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
+from opnsense_mcp.tools.interface_list import InterfaceListTool
+from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
+from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+from opnsense_mcp.tools.system import SystemTool
+from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +45,14 @@ def get_opnsense_client():
                 "verify_ssl": ssl_verify,
             }
         )
-    else:
-        logger.warning("No OPNsense credentials found, using mock client")
-        workspace_root = Path(__file__).parent.parent
-        mock_data_path = workspace_root / "examples" / "mock_data"
-        config = {"development": {"mock_data_path": str(mock_data_path)}}
-        return MockOPNsenseClient(config)
+    logger.warning("No OPNsense credentials found, using mock client")
+    workspace_root = Path(__file__).parent.parent
+    mock_data_path = workspace_root / "examples" / "mock_data"
+    config = {"development": {"mock_data_path": str(mock_data_path)}}
+    return MockOPNsenseClient(config)
 
 
-def format_log_response(logs: list) -> Dict[str, Any]:
+def format_log_response(logs: list) -> dict[str, Any]:
     """Format logs into an MCP protocol response"""
     log_entries = []
     for log in logs:
@@ -84,15 +86,17 @@ def format_log_response(logs: list) -> Dict[str, Any]:
 
 
 async def handle_message(
-    message: Dict[str, Any],
+    message: dict[str, Any],
     firewall_logs: FirewallLogsTool,
     arp_tool: ARPTool,
-    dhcp_tool: DHCPTol,
+    dhcp_tool: DHCPTool,
     lldp_tool: LLDPTool,
     system_tool: SystemTool,
     fw_rules_tool: FwRulesTool,
     mkfw_rule_tool: MkfwRuleTool,
-) -> Optional[Dict[str, Any]]:
+    rmfw_rule_tool: RmfwRuleTool,
+    interface_list_tool: InterfaceListTool,
+) -> dict[str, Any] | None:
     method = message.get("method")
     msg_id = message.get("id")
 
@@ -106,14 +110,9 @@ async def handle_message(
             "id": msg_id,
             "result": {
                 "protocolVersion": protocol_version,
-                "serverInfo": {
-                    "name": "opnsense-mcp",
-                    "version": "1.0.0"
-                },
-                "capabilities": {
-                    "tools": {"listChanged": False}
-                }
-            }
+                "serverInfo": {"name": "opnsense-mcp", "version": "1.0.0"},
+                "capabilities": {"tools": {"listChanged": False}},
+            },
         }
 
     # Support both tools/list and ListOfferings
@@ -131,8 +130,8 @@ async def handle_message(
                         "dst_ip": {"type": "string", "optional": True},
                         "protocol": {"type": "string", "optional": True},
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             {
                 "name": "arp",
@@ -140,12 +139,24 @@ async def handle_message(
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "mac": {"type": "string", "description": "Filter by MAC address", "optional": True},
-                        "ip": {"type": "string", "description": "Filter by IP address", "optional": True},
-                        "search": {"type": "string", "description": "Targeted search by IP/MAC/hostname", "optional": True},
+                        "mac": {
+                            "type": "string",
+                            "description": "Filter by MAC address",
+                            "optional": True,
+                        },
+                        "ip": {
+                            "type": "string",
+                            "description": "Filter by IP address",
+                            "optional": True,
+                        },
+                        "search": {
+                            "type": "string",
+                            "description": ("Targeted search by IP/MAC/hostname"),
+                            "optional": True,
+                        },
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             {
                 "name": "dhcp",
@@ -153,133 +164,184 @@ async def handle_message(
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "search": {"type": "string", "description": "Search by hostname/IP/MAC", "optional": True},
+                        "search": {
+                            "type": "string",
+                            "description": ("Search by hostname/IP/MAC"),
+                            "optional": True,
+                        },
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             {
                 "name": "lldp",
                 "description": "Show LLDP neighbor table",
-                "inputSchema": {"type": "object", "properties": {}, "required": []}
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
             },
             {
                 "name": "system",
                 "description": "Show system status information",
-                "inputSchema": {"type": "object", "properties": {}, "required": []}
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
             },
             {
                 "name": "fw_rules",
-                "description": "Get the current firewall rule set for context and reasoning",
+                "description": (
+                    "Get the current firewall rule set for context and reasoning"
+                ),
                 "inputSchema": {
-                    "type": "object", 
+                    "type": "object",
                     "properties": {
                         "interface": {
                             "type": "string",
-                            "description": "Filter by interface name (supports partial matching and groups)",
-                            "optional": True
+                            "description": (
+                                "Filter by interface name "
+                                "(supports partial matching and groups)"
+                            ),
+                            "optional": True,
                         },
                         "action": {
                             "type": "string",
-                            "description": "Filter by action (pass, block, reject, etc.)",
-                            "optional": True
+                            "description": (
+                                "Filter by action (pass, block, reject, etc.)"
+                            ),
+                            "optional": True,
                         },
                         "enabled": {
                             "type": "boolean",
                             "description": "Filter by enabled status",
-                            "optional": True
+                            "optional": True,
                         },
                         "protocol": {
-                            "type": "string", 
-                            "description": "Filter by protocol (tcp, udp, icmp, etc.)",
-                            "optional": True
-                        }
+                            "type": "string",
+                            "description": (
+                                "Filter by protocol (tcp, udp, icmp, etc.)"
+                            ),
+                            "optional": True,
+                        },
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             {
                 "name": "mkfw_rule",
-                "description": "Create a new firewall rule and optionally apply changes",
+                "description": (
+                    "Create a new firewall rule and optionally apply changes"
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "description": {
                             "type": "string",
-                            "description": "Description of the rule (required)"
+                            "description": ("Description of the rule (required)"),
                         },
                         "interface": {
                             "type": "string",
                             "description": "Interface name (default: 'lan')",
-                            "optional": True
+                            "optional": True,
                         },
                         "action": {
                             "type": "string",
-                            "description": "pass, block, or reject (default: 'pass')",
-                            "optional": True
+                            "description": ("pass, block, or reject (default: 'pass')"),
+                            "optional": True,
                         },
                         "protocol": {
                             "type": "string",
-                            "description": "any, tcp, udp, icmp, etc. (default: 'any')",
-                            "optional": True
+                            "description": (
+                                "any, tcp, udp, icmp, etc. (default: 'any')"
+                            ),
+                            "optional": True,
                         },
                         "source_net": {
                             "type": "string",
-                            "description": "Source network/IP (default: 'any')",
-                            "optional": True
+                            "description": ("Source network/IP (default: 'any')"),
+                            "optional": True,
                         },
                         "source_port": {
                             "type": "string",
                             "description": "Source port (default: 'any')",
-                            "optional": True
+                            "optional": True,
                         },
                         "destination_net": {
                             "type": "string",
-                            "description": "Destination network/IP (default: 'any')",
-                            "optional": True
+                            "description": ("Destination network/IP (default: 'any')"),
+                            "optional": True,
                         },
                         "destination_port": {
                             "type": "string",
                             "description": "Destination port (default: 'any')",
-                            "optional": True
+                            "optional": True,
                         },
                         "direction": {
                             "type": "string",
                             "description": "in or out (default: 'in')",
-                            "optional": True
+                            "optional": True,
                         },
                         "ipprotocol": {
                             "type": "string",
                             "description": "inet or inet6 (default: 'inet')",
-                            "optional": True
+                            "optional": True,
                         },
                         "enabled": {
                             "type": "boolean",
                             "description": "true or false (default: true)",
-                            "optional": True
+                            "optional": True,
                         },
                         "gateway": {
                             "type": "string",
                             "description": "Gateway to use (default: '')",
-                            "optional": True
+                            "optional": True,
                         },
                         "apply": {
                             "type": "boolean",
-                            "description": "Whether to apply changes immediately (default: true)",
-                            "optional": True
-                        }
+                            "description": (
+                                "Whether to apply changes immediately (default: true)"
+                            ),
+                            "optional": True,
+                        },
                     },
-                    "required": ["description"]
-                }
+                    "required": ["description"],
+                },
+            },
+            {
+                "name": "rmfw_rule",
+                "description": ("Delete a firewall rule and optionally apply changes"),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "rule_uuid": {
+                            "type": "string",
+                            "description": ("UUID of the rule to delete (required)"),
+                        },
+                        "apply": {
+                            "type": "boolean",
+                            "description": (
+                                "Whether to apply changes immediately (default: true)"
+                            ),
+                            "optional": True,
+                        },
+                    },
+                    "required": ["rule_uuid"],
+                },
+            },
+            {
+                "name": "interface_list",
+                "description": "Get available interface names for firewall rules",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
             },
         ]
-        return {
-            "jsonrpc": "2.0",
-            "id": msg_id,
-            "result": {
-                "tools": tools
-            }
-        }
+        return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}}
 
     # Support both tools/call and tool/call
     if method in ("tools/call", "tool/call"):
@@ -294,14 +356,14 @@ async def handle_message(
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(result)}]}
+                "result": {"content": [{"type": "text", "text": str(result)}]},
             }
         if tool_name == "dhcp":
             result = await dhcp_tool.execute(arguments)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(result)}]}
+                "result": {"content": [{"type": "text", "text": str(result)}]},
             }
         if tool_name == "get_logs":
             logs = await firewall_logs.get_logs(
@@ -314,35 +376,49 @@ async def handle_message(
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(logs)}]}
+                "result": {"content": [{"type": "text", "text": str(logs)}]},
             }
         if tool_name == "lldp":
             result = await lldp_tool.execute(arguments)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(result)}]}
+                "result": {"content": [{"type": "text", "text": str(result)}]},
             }
         if tool_name == "system":
             result = await system_tool.execute(arguments)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(result)}]}
+                "result": {"content": [{"type": "text", "text": str(result)}]},
             }
         if tool_name == "fw_rules":
             result = await fw_rules_tool.execute(arguments)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(result)}]}
+                "result": {"content": [{"type": "text", "text": str(result)}]},
             }
         if tool_name == "mkfw_rule":
             result = await mkfw_rule_tool.execute(arguments)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(result)}]}
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "rmfw_rule":
+            result = await rmfw_rule_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "interface_list":
+            result = await interface_list_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
             }
         return {
             "jsonrpc": "2.0",
@@ -357,8 +433,8 @@ async def handle_message(
 
 
 def error_response(
-    code: int, message: str, msg_id: Optional[str] = None
-) -> Dict[str, Any]:
+    code: int, message: str, msg_id: str | None = None
+) -> dict[str, Any]:
     """Create a JSON-RPC error response"""
     return {
         "jsonrpc": "2.0",
@@ -387,11 +463,13 @@ def main():
     # Initialize tools
     firewall_logs = FirewallLogsTool(client)
     arp_tool = ARPTool(client)
-    dhcp_tool = DHCPTol(client)
+    dhcp_tool = DHCPTool(client)
     lldp_tool = LLDPTool(client)
     system_tool = SystemTool(client)
     fw_rules_tool = FwRulesTool(client)
     mkfw_rule_tool = MkfwRuleTool(client)
+    rmfw_rule_tool = RmfwRuleTool(client)
+    interface_list_tool = InterfaceListTool(client)
 
     # Handle stdin/stdout communication
     async def process_messages():
@@ -445,9 +523,14 @@ def main():
                     system_tool,
                     fw_rules_tool,
                     mkfw_rule_tool,
+                    rmfw_rule_tool,
+                    interface_list_tool,
                 )
                 if response:
-                    print(f"Writing to stdout: {json.dumps(response)}", file=sys.stderr)
+                    print(
+                        f"Writing to stdout: {json.dumps(response)}",
+                        file=sys.stderr,
+                    )
                     sys.stdout.write(json.dumps(response) + "\n")
                     sys.stdout.flush()
                     logger.debug(f"Sent response: {response}")
@@ -457,12 +540,15 @@ def main():
                         f"Method '{message.get('method')}' not found",
                         msg_id,
                     )
-                    print(f"Writing to stdout: {json.dumps(err)}", file=sys.stderr)
+                    print(
+                        f"Writing to stdout: {json.dumps(err)}",
+                        file=sys.stderr,
+                    )
                     sys.stdout.write(json.dumps(err) + "\n")
                     sys.stdout.flush()
 
-            except json.JSONDecodeError as e:
-                logger.error(f"Invalid JSON: {e}")
+            except json.JSONDecodeError:
+                logger.exception("Invalid JSON")
                 err = error_response(-32700, "Parse error")
                 sys.stdout.write(json.dumps(err) + "\n")
                 sys.stdout.flush()
@@ -482,6 +568,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
+    except Exception:
+        logger.exception("Fatal error")
         sys.exit(1)

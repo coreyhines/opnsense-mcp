@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-from typing import Dict, Any
-from pydantic import BaseModel
 import logging
+from typing import Any
+
+from pydantic import BaseModel
+
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
@@ -13,28 +15,33 @@ class SystemStatus(BaseModel):
 
     cpu_usage: float
     memory_usage: float
-    filesystem_usage: Dict[str, float]
+    filesystem_usage: dict[str, float]
     uptime: str
-    versions: Dict[str, str]
+    versions: dict[str, str]
 
 
 class SystemTool:
     def __init__(self, client):
         self.client = client
 
-    async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Execute system status check"""
         try:
             if self.client is None or isinstance(self.client, MockOPNsenseClient):
-                logger.warning("No real OPNsense client available, returning mock system status data")
+                logger.warning(
+                    "No real OPNsense client available, returning mock "
+                    "system status data"
+                )
                 return await self.client.get_system_status()
-            status_data = await self.client.get_system_status()
-            return status_data
+            return await self.client.get_system_status()
         except Exception as e:
-            logger.error(f"Failed to get system status: {str(e)}")
-            return {"error": f"Failed to get system status: {str(e)}", "status": "error"}
+            logger.exception("Failed to get system status")
+            return {
+                "error": f"Failed to get system status: {str(e)}",
+                "status": "error",
+            }
 
-    async def _get_system_health(self) -> Dict[str, Any]:
+    async def _get_system_health(self) -> dict[str, Any]:
         """Get system health information from various OPNsense endpoints"""
         try:
             status_data = {
@@ -80,8 +87,8 @@ class SystemTool:
             except Exception as e:
                 logger.warning(f"Failed to get system health data: {str(e)}")
 
-            return status_data
-
         except Exception as e:
-            logger.error(f"Failed to get system health information: {str(e)}")
-            raise RuntimeError(f"Failed to get system health: {str(e)}")
+            logger.exception("Failed to get system health information")
+            raise RuntimeError(f"Failed to get system health: {str(e)}") from e
+        else:
+            return status_data

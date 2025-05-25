@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-from typing import Dict, Any
 import logging
+from typing import Any
+
 from pydantic import BaseModel
+
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,7 @@ class LLDPTool:
     def __init__(self, client):
         self.client = client
 
-    async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Execute LLDP neighbor table lookup"""
         try:
             if self.client is None or isinstance(self.client, MockOPNsenseClient):
@@ -38,12 +40,16 @@ class LLDPTool:
 
             lldp_data = await self.client.get_lldp_table()
             lldp_entries = [LLDPEntry(**entry).dict() for entry in lldp_data]
-            return {"lldp": lldp_entries, "status": "success"}
         except Exception as e:
-            logger.error(f"Failed to get LLDP table: {str(e)}")
-            return {"error": f"Failed to get LLDP table: {str(e)}", "status": "error"}
+            logger.exception("Failed to get LLDP table")
+            return {
+                "error": f"Failed to get LLDP table: {str(e)}",
+                "status": "error",
+            }
+        else:
+            return {"lldp": lldp_entries, "status": "success"}
 
-    def _get_dummy_data(self) -> Dict[str, Any]:
+    def _get_dummy_data(self) -> dict[str, Any]:
         """Return dummy LLDP data for testing"""
         return {
             "lldp": [
