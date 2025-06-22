@@ -1,10 +1,12 @@
 # OPNsense MCP Server Configuration Examples
 
-This directory contains example configuration files for the OPNsense MCP Server in both JSON and YAML formats, optimized for development and IDE usage.
+This directory contains example configuration files for the OPNsense MCP Server
+in both JSON and YAML formats, optimized for development and IDE usage.
 
 ## Using the Configuration Files for Development
 
-The provided `mcp.json` and `mcp.yaml` files are specifically configured for development environments, with settings that make debugging and testing easier.
+The provided `mcp.json` and `mcp.yaml` files are specifically configured for
+development environments, with settings that make debugging and testing easier.
 
 ### Prerequisites
 
@@ -13,7 +15,8 @@ The provided `mcp.json` and `mcp.yaml` files are specifically configured for dev
 
 ### Installation with UV
 
-UV is a fast Python package installer and resolver that can significantly speed up dependency installation and Python environment management.
+UV is a fast Python package installer and resolver that can significantly speed
+up dependency installation and Python environment management.
 
 1. Create a new virtual environment:
 
@@ -39,7 +42,8 @@ UV is a fast Python package installer and resolver that can significantly speed 
 
 ### Running the MCP Server with UV in an IDE
 
-These configuration files are designed to work well with IDEs like VS Code, PyCharm, or other development environments.
+These configuration files are designed to work well with IDEs like VS Code,
+PyCharm, or other development environments.
 
 #### Using JSON Configuration
 
@@ -141,7 +145,8 @@ For development with an IDE (VS Code, PyCharm, etc.), follow these steps:
 4. Customize the configuration:
    - Edit `examples/mcp.json` or `examples/mcp.yaml` with vi as needed
    - Set your OPNsense firewall connection details
-   - Keep `development.mock_api: true` to use mock data without a real OPNsense instance
+   - Keep `development.mock_api: true` to use mock data without a real OPNsense
+     instance
 
 5. Run the server using your preferred method:
 
@@ -233,6 +238,7 @@ The development configuration includes:
 ## Security Notes
 
 1. Replace the example API key and secret with your actual OPNsense API credentials
-2. Generate a secure random string for `auth.secret_key` (e.g., `openssl rand -hex 32`)
+2. Generate a secure random string for `auth.secret_key` (e.g.,
+   `openssl rand -hex 32`)
 3. Create secure passwords for users and hash them with bcrypt
 4. Enable SSL in production environments

@@ -1,12 +1,8 @@
-# OPNsense MCP Server - IDE In1. Create your environment file
+# OPNsense MCP Server - IDE Integration Guide
 
-   ```bash
-   cp examples/.opnsense-env ~/.opnsense-env
-   # Edit with vi
-   vi ~/.opnsense-env
-   ```tion Guide
-
-This document provides instructions on how to integrate the OPNsense MCP Server with various Integrated Development Environments (IDEs) for a smooth development experience.
+This document provides instructions on how to integrate the OPNsense MCP Server
+with various Integrated Development Environments (IDEs) for a smooth development
+experience.
 
 ## Quick Start
 
@@ -85,7 +81,8 @@ For PyCharm users:
 
 ## Other IDEs
 
-For other IDEs, you can use the provided `mcp_ide_config.json` as a reference for setting up your environment.
+For other IDEs, you can use the provided `mcp_ide_config.json` as a reference for
+setting up your environment.
 
 ## Using the Environment Variables
 
@@ -115,7 +112,8 @@ Several tools are provided to help with development:
 You can run the MCP server directly using UV with:
 
 ```bash
-uv run --env-file ~/.opnsense-env --with fastapi,uvicorn,pydantic,pyopnsense /Users/corey/vs-code/opnsense/mcp_server/server_new.py
+uv run --env-file ~/.opnsense-env --with fastapi,uvicorn,pydantic,pyopnsense \
+  /Users/corey/vs-code/opnsense/mcp_server/server_new.py
 ```
 
 This command can be integrated with various IDEs and task runners.
