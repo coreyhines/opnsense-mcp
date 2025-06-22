@@ -12,7 +12,7 @@ try:
     from opnsense_mcp.utils.jwt_helper import JWTError, create_jwt, decode_jwt
 
     # Test constants
-    SECRET_KEY = "test-secret-key"
+    SECRET_KEY = "test-secret-key"  # pragma: allowlist secret
     TEST_USERNAME = "test-user"
 
     # Create a test token
