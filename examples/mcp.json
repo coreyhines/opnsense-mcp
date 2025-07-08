@@ -3,7 +3,8 @@
     "version": "1.0.0",
     "command": "python3",
     "args": [
-        "opnsense_mcp/server.py"
+        "-m",
+        "opnsense_mcp.server"
     ],
     "env": {
         "PYTHONUNBUFFERED": "1",
@@ -16,41 +17,7 @@
     },
     "capabilities": {
         "tools": {
-            "arp": {
-                "description": "Show ARP/NDP table",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "ip": {
-                            "type": "string",
-                            "description": "Filter by IP address"
-                        }
-                    }
-                }
-            },
-            "lldp": {
-                "description": "Show LLDP neighbor table",
-                "parameters": {
-                    "type": "object",
-                    "properties": {}
-                }
-            }
-        },
-        "resources": {
-            "enabled": true,
-            "version": "1.0.0"
-        },
-        "logging": {
-            "enabled": false,
-            "version": "1.0.0"
-        },
-        "prompts": {
-            "enabled": false,
-            "version": "1.0.0"
-        },
-        "roots": {
-            "listChanged": false,
-            "version": "1.0.0"
+            "listChanged": false
         }
     }
 }

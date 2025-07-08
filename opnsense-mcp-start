@@ -62,4 +62,4 @@ echo -e "${GREEN}Starting OPNsense MCP Server...${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop the server${NC}"
 
 # Command to run
-uv run python -m mcp_server.server_new
+python3 -m opnsense_mcp.server
