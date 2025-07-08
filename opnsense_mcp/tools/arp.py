@@ -30,45 +30,60 @@ class ARPEntry(BaseModel):
 class ARPTool:
     """Tool for retrieving ARP/NDP table information."""
 
-    def __init__(self, client: OPNsenseClient | None = None) -> None:
+    def __init__(self: "ARPTool", client: OPNsenseClient | None = None) -> None:
         """
         Initialize the ARP tool.
 
         Args:
+        ----
             client: OPNsense client instance for API communication.
 
         """
         self.client = client
 
-    async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
+    async def execute(self: "ARPTool", params: dict[str, Any]) -> dict[str, Any]:
         """
         Execute the ARP tool with given parameters.
 
         Args:
+        ----
             params: Dictionary containing optional filters like mac, ip, or search.
 
         Returns:
-            Dictionary containing ARP table results and error information.
+        -------
+            Dictionary containing ARP and NDP table results and error information.
 
         """
         if not self.client:
-            return {"result": None, "error": "No client available"}
+            return {
+                "arp": [],
+                "ndp": [],
+                "status": "error",
+                "error": "No client available",
+            }
 
         try:
-            result = await self.client.get_arp_table(params)
-            return {"result": result, "error": None}
+            # Accepts 'search', 'ip', 'mac', or defaults to '*'
+            query = params.get("search") or params.get("ip") or params.get("mac") or "*"
+            arp_entries = await self.client.search_arp_table(query)
+            ndp_entries = await self.client.search_ndp_table(query)
+            arp_entries = [self._fill_manufacturer(entry) for entry in arp_entries]
+            ndp_entries = [self._fill_manufacturer(entry) for entry in ndp_entries]
         except Exception as e:
             logger.exception("Error executing ARP tool")
-            return {"result": None, "error": str(e)}
+            return {"arp": [], "ndp": [], "status": "error", "error": str(e)}
+        else:
+            return {"arp": arp_entries, "ndp": ndp_entries, "status": "success"}
 
-    def _fill_manufacturer(self, entry):
+    def _fill_manufacturer(self: "ARPTool", entry: dict[str, Any]) -> dict[str, Any]:
+        """Fill manufacturer info for ARP/NDP entry if missing."""
         if not entry.get("manufacturer"):
             mac = entry.get("mac")
             if mac:
-                entry["manufacturer"] = oui_lookup.lookup(mac) or ""
+                entry["manufacturer"] = oui_lookup.lookup(mac)
         return entry
 
-    def _get_dummy_data(self) -> dict[str, Any]:
+    def _get_dummy_data(self: "ARPTool") -> dict[str, Any]:
         """Return dummy data for testing."""
         return {
             "arp": [

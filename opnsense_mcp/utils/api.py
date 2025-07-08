@@ -109,11 +109,12 @@ class ResponseError(APIError):
 class OPNsenseClient:
     """OPNsense API client for firewall management and diagnostics."""
 
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(self: "OPNsenseClient", config: dict[str, Any]) -> None:
         """
         Initialize the OPNsense API client.
 
         Args:
+        ----
             config: Configuration dictionary containing API credentials and host info.
 
         """
@@ -160,12 +161,12 @@ class OPNsenseClient:
 
         logger.info("Successfully initialized OPNsense clients")
 
-    def _get_basic_auth(self) -> str:
+    def _get_basic_auth(self: "OPNsenseClient") -> str:
         """Create basic auth header from api key and secret."""
         auth_str = f"{self.config['api_key']}:{self.config['api_secret']}"
         return base64.b64encode(auth_str.encode()).decode()
 
-    def setup_ssl(self) -> None:
+    def setup_ssl(self: "OPNsenseClient") -> None:
         """Configure SSL context for API calls."""
         # We deliberately use unverified context since OPNsense often uses
         # self-signed certs
@@ -173,45 +174,45 @@ class OPNsenseClient:
         ctx.verify_mode = ssl.CERT_NONE
         ssl.create_default_context = lambda: ctx
 
-    def _raise_unexpected_response_format(self) -> None:
+    def _raise_unexpected_response_format(self: "OPNsenseClient") -> None:
         """Raise error for unexpected response format."""
         raise TypeError("Unexpected response format from firewall API")
 
-    def _raise_invalid_create_response(self) -> None:
+    def _raise_invalid_create_response(self: "OPNsenseClient") -> None:
         """Raise error for invalid create response format."""
         raise ResponseError("Failed to create firewall rule, invalid response format")
 
-    def _raise_create_rule_failed(self, error_msg: str) -> None:
+    def _raise_create_rule_failed(self: "OPNsenseClient", error_msg: str) -> None:
         """Raise error for failed rule creation."""
         raise ResponseError(f"Failed to create firewall rule: {error_msg}")
 
-    def _raise_update_rule_failed(self, error_msg: str) -> None:
+    def _raise_update_rule_failed(self: "OPNsenseClient", error_msg: str) -> None:
         """Raise error for failed rule update."""
         raise ResponseError(f"Failed to update firewall rule: {error_msg}")
 
-    def _raise_delete_rule_failed(self, error_msg: str) -> None:
+    def _raise_delete_rule_failed(self: "OPNsenseClient", error_msg: str) -> None:
         """Raise error for failed rule deletion."""
         raise ResponseError(f"Failed to delete firewall rule: {error_msg}")
 
-    def _raise_toggle_rule_failed(self, error_msg: str) -> None:
+    def _raise_toggle_rule_failed(self: "OPNsenseClient", error_msg: str) -> None:
         """Raise error for failed rule toggle."""
         raise ResponseError(f"Failed to toggle firewall rule: {error_msg}")
 
-    def _raise_apply_changes_failed(self, error_msg: str) -> None:
+    def _raise_apply_changes_failed(self: "OPNsenseClient", error_msg: str) -> None:
         """Raise error for failed firewall changes apply."""
         raise ResponseError(f"Failed to apply firewall changes: {error_msg}")
 
-    def _raise_cancel_rollback_failed(self, error_msg: str) -> None:
+    def _raise_cancel_rollback_failed(self: "OPNsenseClient", error_msg: str) -> None:
         """Raise error for failed rollback cancellation."""
         raise ResponseError(f"Failed to cancel rollback: {error_msg}")
 
-    def _raise_savepoint_failed(self) -> None:
+    def _raise_savepoint_failed(self: "OPNsenseClient") -> None:
         """Raise error for failed savepoint creation."""
         raise ResponseError("Failed to create firewall savepoint")
 
     @retry(max_attempts=3)
     async def _make_request(
-        self,
+        self: "OPNsenseClient",
         method: str,
         endpoint: str,
         **kwargs: str | dict[str, str] | list[str] | int | bool | None,
@@ -269,15 +270,30 @@ class OPNsenseClient:
             logger.exception("Unexpected error in API request")
             raise
 
-    async def get_arp_table(self) -> dict[str, Any] | list[dict[str, Any]]:
-        """Get ARP table from OPNsense."""
-        return self.diag_client.get_arp()
+    async def get_arp_table(self: "OPNsenseClient") -> list[dict[str, Any]]:
+        """Get ARP table from OPNsense. Always return a list of entries."""
+        raw = self.diag_client.get_arp()
+        # Add debug logging
+        logger.debug(f"Raw ARP table response: {raw}")
+        if isinstance(raw, list):
+            return raw
+        if isinstance(raw, dict):
+            # Try common keys
+            for key in ("entries", "data", "arp"):
+                if key in raw and isinstance(raw[key], list):
+                    return raw[key]
+        # Fallback: wrap in list if it's a single entry dict
+        if isinstance(raw, dict):
+            return [raw]
+        return []
 
-    async def get_ndp_table(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def get_ndp_table(
+        self: "OPNsenseClient",
+    ) -> dict[str, Any] | list[dict[str, Any]]:
         """Get NDP table from OPNsense."""
         return self.diag_client.get_ndp()
 
-    async def get_firewall_rules(self) -> list[dict[str, Any]]:
+    async def get_firewall_rules(self: "OPNsenseClient") -> list[dict[str, Any]]:
         """Get firewall rules from OPNsense."""
         try:
             logger.debug("Fetching firewall rules...")
@@ -302,7 +318,7 @@ class OPNsenseClient:
             )
             return rules
 
-    async def get_system_status(self) -> dict[str, Any]:
+    async def get_system_status(self: "OPNsenseClient") -> dict[str, Any]:
         """Get system version and info from OPNsense."""
         try:
             logger.debug(
@@ -330,12 +346,18 @@ class OPNsenseClient:
             }
         except Exception as e:
             logger.exception("Failed to get system status")
+            return {"status": "error", "error": str(e)}
+        else:
             return {
-                "error": f"Failed to get system status: {e!s}",
-                "status": "error",
+                "hostname": name,
+                "versions": {
+                    "opnsense": opnsense_version,
+                    "kernel": kernel_version,
+                },
+                "status": "success",
             }
 
-    async def get_interfaces(self) -> list[dict[str, Any]]:
+    async def get_interfaces(self: "OPNsenseClient") -> list[dict[str, Any]]:
         """Get all interfaces from OPNsense using diagnostics interface."""
         try:
             # We'll use the existing diagnostics client to get interface information
@@ -373,12 +395,12 @@ class OPNsenseClient:
         else:
             return interfaces
 
-    async def get_interface(self, name: str) -> dict[str, Any] | None:
+    async def get_interface(self: "OPNsenseClient", name: str) -> dict[str, Any] | None:
         """Get specific interface configuration."""
         interfaces = await self.get_interfaces()
         return next((iface for iface in interfaces if iface["name"] == name), None)
 
-    async def get_firewall_interface_list(self) -> dict[str, Any]:
+    async def get_firewall_interface_list(self: "OPNsenseClient") -> dict[str, Any]:
         """Get available interface names for firewall rules."""
         try:
             logger.debug("Fetching firewall interface list...")
@@ -396,9 +418,13 @@ class OPNsenseClient:
         except Exception as e:
             logger.exception("Failed to get firewall interface list")
             raise RequestError(f"Failed to get interface list: {e!s}") from e
+        else:
+            return response
 
     # New methods for firewall rule management
-    async def add_firewall_rule(self, rule_data: dict[str, Any]) -> dict[str, Any]:
+    async def add_firewall_rule(
+        self: "OPNsenseClient", rule_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Add a new firewall rule."""
         try:
             logger.debug(f"Creating firewall rule: {rule_data}")
@@ -429,7 +455,7 @@ class OPNsenseClient:
             return {"uuid": rule_uuid, "result": "success"}
 
     async def update_firewall_rule(
-        self,
+        self: "OPNsenseClient",
         uuid: str,
         rule_data: dict[str, Any],
     ) -> dict[str, Any]:
@@ -455,7 +481,7 @@ class OPNsenseClient:
             logger.info(f"Successfully updated firewall rule {uuid}")
             return {"uuid": uuid, "result": "success"}
 
-    async def delete_firewall_rule(self, uuid: str) -> dict[str, Any]:
+    async def delete_firewall_rule(self: "OPNsenseClient", uuid: str) -> dict[str, Any]:
         """Delete a firewall rule."""
         try:
             logger.debug(f"Deleting firewall rule {uuid}")
@@ -477,7 +503,9 @@ class OPNsenseClient:
             logger.info(f"Successfully deleted firewall rule {uuid}")
             return {"result": "success"}
 
-    async def toggle_firewall_rule(self, uuid: str, enabled: bool) -> dict[str, Any]:
+    async def toggle_firewall_rule(
+        self: "OPNsenseClient", uuid: str, enabled: bool
+    ) -> dict[str, Any]:
         """Enable or disable a firewall rule."""
         try:
             status = "1" if enabled else "0"
@@ -506,7 +534,7 @@ class OPNsenseClient:
                 "result": "success",
             }
 
-    async def apply_firewall_changes(self) -> dict[str, Any]:
+    async def apply_firewall_changes(self: "OPNsenseClient") -> dict[str, Any]:
         """Apply firewall changes and create a rollback point."""
         try:
             # Create a savepoint first
@@ -549,7 +577,9 @@ class OPNsenseClient:
                 "result": "success",
             }
 
-    async def cancel_firewall_rollback(self, revision: str) -> dict[str, Any]:
+    async def cancel_firewall_rollback(
+        self: "OPNsenseClient", revision: str
+    ) -> dict[str, Any]:
         """Cancel a pending firewall rollback."""
         try:
             logger.debug(
@@ -574,29 +604,83 @@ class OPNsenseClient:
             )
             return {"result": "success"}
 
-    async def search_arp_table(self, query: str) -> list[dict]:
-        """
-        Search ARP table for IP, MAC, or hostname.
+    def _normalize_query(self: "OPNsenseClient", query: str) -> str:
+        """Normalize query for robust matching (lowercase, strip, etc.)."""
+        return query.strip().lower() if query else ""
 
-        Uses the OPNsense API. If query is '*', returns full table.
-        """
-        query = query.strip()
+    def _match_entry(self: "OPNsenseClient", entry: dict, query: str) -> bool:
+        """Return True if query matches any relevant field in entry."""
+        q = self._normalize_query(query)
+        if not q:
+            return False
+        for field in ("ip", "mac", "hostname", "intf", "intf_description"):
+            v = str(entry.get(field, "")).lower()
+            if q in v:
+                return True
+        return False
+
+    async def search_arp_table(self: "OPNsenseClient", query: str) -> list[dict]:
+        """Robust ARP search: Accepts any identifier, correlates with DHCP."""
+        query_norm = self._normalize_query(query)
+        matches = []
         try:
-            if query == "*" or not query:
-                # Use canonical endpoint for full table
-                return await self._get_arp_table()
-
-            # Use search endpoint for specific queries
-            endpoint = "/api/diagnostics/interface/search_arp"
-            params = {"search": query}
-            response = await self._make_request("GET", endpoint, params=params)
+            if query_norm == "*" or not query_norm:
+                matches = await self.get_arp_table()
+            else:
+                # Use search endpoint for specific queries
+                endpoint = "/api/diagnostics/interface/search_arp"
+                params = {"search": query}
+                response = await self._make_request("GET", endpoint, params=params)
+                logger.debug(f"Raw ARP search response for '{query}': {response}")
+                # Try to extract entries from common keys
+                if isinstance(response, dict):
+                    for key in ("data", "entries", "arp"):
+                        if key in response and isinstance(response[key], list):
+                            matches = response[key]
+                            break
+                # Fallback: full table and filter in Python
+                if not matches:
+                    full_table = await self.get_arp_table()
+                    matches = [
+                        entry for entry in full_table if self._match_entry(entry, query)
+                    ]
+                # If still nothing, try to correlate with DHCP
+                if not matches:
+                    dhcpv4 = await self.get_dhcpv4_leases()
+                    dhcpv6 = await self.get_dhcpv6_leases()
+                    all_leases = dhcpv4 + dhcpv6
+                    for lease in all_leases:
+                        if self._match_entry(lease, query):
+                            # Try to find ARP by IP or MAC
+                            full_table = await self.get_arp_table()
+                            for entry in full_table:
+                                if entry.get("ip") == lease.get("ip") or entry.get(
+                                    "mac"
+                                ) == lease.get("mac"):
+                                    matches.append(entry)
+                                    break
+                            # If still not found, synthesize an entry from DHCP
+                            if not matches:
+                                matches.append(
+                                    {
+                                        "ip": lease.get("ip"),
+                                        "mac": lease.get("mac"),
+                                        "hostname": lease.get("hostname"),
+                                        "intf": lease.get("if_descr", ""),
+                                        "type": lease.get("type", "dhcp"),
+                                        "manufacturer": lease.get("man", ""),
+                                        "description": lease.get("descr", ""),
+                                        "source": "dhcp-only",
+                                    }
+                                )
+                            break
         except Exception:
             logger.exception("Failed to search ARP table")
             return []
         else:
-            return response.get("data", []) if isinstance(response, dict) else []
+            return matches
 
-    async def search_ndp_table(self, query: str) -> list[dict]:
+    async def search_ndp_table(self: "OPNsenseClient", query: str) -> list[dict]:
         """
         Search NDP table for IPv6, MAC, or hostname.
 
@@ -606,7 +690,7 @@ class OPNsenseClient:
         try:
             if query == "*" or not query:
                 # Use canonical endpoint for full table
-                return await self._get_ndp_table()
+                return await self.get_ndp_table()
 
             # Use search endpoint for specific queries
             endpoint = "/api/diagnostics/interface/search_ndp"
@@ -618,7 +702,9 @@ class OPNsenseClient:
         else:
             return response.get("data", []) if isinstance(response, dict) else []
 
-    def _detect_endpoint(self, name: str, endpoints: list[str | None]) -> str | None:
+    def _detect_endpoint(
+        self: "OPNsenseClient", name: str, endpoints: list[str | None]
+    ) -> str | None:
         for ep in endpoints:
             if not ep:
                 continue
@@ -642,7 +728,7 @@ class OPNsenseClient:
         )
         return None
 
-    async def get_dhcpv4_leases(self) -> list[dict[str, Any]]:
+    async def get_dhcpv4_leases(self: "OPNsenseClient") -> list[dict[str, Any]]:
         """Get DHCPv4 lease table from OPNsense (official endpoint)."""
         try:
             response = await self._make_request("GET", self.dhcpv4_lease_endpoint)
@@ -658,9 +744,8 @@ class OPNsenseClient:
             return []
         else:
             return parsed
-            return []
 
-    async def get_dhcpv6_leases(self) -> list[dict[str, Any]]:
+    async def get_dhcpv6_leases(self: "OPNsenseClient") -> list[dict[str, Any]]:
         """Get DHCPv6 lease table from OPNsense (official endpoint)."""
         try:
             response = await self._make_request("GET", self.dhcpv6_lease_endpoint)
@@ -677,14 +762,16 @@ class OPNsenseClient:
         else:
             return parsed
 
-    async def get_firewall_logs(self, limit: int = 500) -> list[str]:
+    async def get_firewall_logs(self: "OPNsenseClient", limit: int = 500) -> list[str]:
         """
         Get firewall logs from OPNsense (auto-detect endpoint).
 
         Args:
+        ----
             limit: Maximum number of log entries to return. Defaults to 500.
 
         Returns:
+        -------
             List of log entries as strings.
 
         """
@@ -717,7 +804,9 @@ class OPNsenseClient:
                 return response
             return []
 
-    async def search_firewall_logs(self, ip: str, row_count: int = 50) -> list[dict]:
+    async def search_firewall_logs(
+        self: "OPNsenseClient", ip: str, row_count: int = 50
+    ) -> list[dict]:
         """Search firewall logs for a specific IP address using the correct endpoint."""
         logs = await self.get_firewall_logs()
         # Filter logs for the IP address in src or dst
@@ -726,7 +815,7 @@ class OPNsenseClient:
         ]
         return filtered[:row_count]
 
-    async def resolve_host_info(self, query: str) -> dict:
+    async def resolve_host_info(self: "OPNsenseClient", query: str) -> dict:
         """
         Recursively resolve all available info for a hostname, IP, or MAC.
 
@@ -800,7 +889,7 @@ class OPNsenseClient:
 
         return result
 
-    async def get_lldp_table(self) -> list[dict[str, str]]:
+    async def get_lldp_table(self: "OPNsenseClient") -> list[dict[str, Any]]:
         """Get LLDP neighbor table from the LLDPd plugin endpoint and parse it."""
         try:
             response = await self._make_request("GET", "/api/lldpd/service/neighbor")
@@ -838,3 +927,5 @@ class OPNsenseClient:
         except Exception:
             logger.exception("Failed to get LLDP table")
             return []
+        else:
+            return neighbors

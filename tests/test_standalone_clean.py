@@ -78,23 +78,23 @@ class OPNsenseClient:
                 return {"raw_response": response.text}
 
         except requests.exceptions.RequestException as e:
-            logger.exception(f"Request failed: {e}")
+            logger.exception("Request failed")
             raise OPNsenseAPIError(f"API request failed: {e}") from e
 
     def get_system_status(self) -> dict[str, Any]:
         """Get system status information."""
         try:
             return self.request("/core/system/status")
-        except Exception as e:
-            logger.exception(f"Failed to get system status: {e}")
+        except Exception:
+            logger.exception("Failed to get system status")
             raise
 
     def get_arp_table(self) -> dict[str, Any]:
         """Get ARP table entries."""
         try:
             return self.request("/diagnostics/interface/getArp")
-        except Exception as e:
-            logger.exception(f"Failed to get ARP table: {e}")
+        except Exception:
+            logger.exception("Failed to get ARP table")
             raise
 
 
@@ -103,8 +103,8 @@ def load_config(config_path: str) -> dict[str, Any]:
     try:
         with Path(config_path).open() as f:
             return yaml.safe_load(f)
-    except Exception as e:
-        logger.exception(f"Failed to load config from {config_path}: {e}")
+    except Exception:
+        logger.exception(f"Failed to load config from {config_path}")
         raise
 
 
@@ -124,8 +124,8 @@ def test_system_status(client: OPNsenseClient) -> None:
         if "versions" in status:
             logger.info("Version info available")
 
-    except Exception as e:
-        logger.exception(f"System status test failed: {e}")
+    except Exception:
+        logger.exception("System status test failed")
         raise
 
 
@@ -147,8 +147,8 @@ def test_arp_table(client: OPNsenseClient) -> None:
             entries = arp_data["arp"]
             logger.info(f"Found {len(entries)} ARP entries")
 
-    except Exception as e:
-        logger.exception(f"ARP table test failed: {e}")
+    except Exception:
+        logger.exception("ARP table test failed")
         raise
 
 
@@ -192,8 +192,8 @@ def main() -> None:
 
         logger.info("Test completed successfully!")
 
-    except Exception as e:
-        logger.exception(f"Test failed: {e}")
+    except Exception:
+        logger.exception("Test failed")
         sys.exit(1)
 
 
