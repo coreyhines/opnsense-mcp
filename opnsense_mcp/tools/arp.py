@@ -56,10 +56,11 @@ class ARPTool:
 
         try:
             result = await self.client.get_arp_table(params)
-            return {"result": result, "error": None}
         except Exception as e:
             logger.exception("Error executing ARP tool")
             return {"result": None, "error": str(e)}
+        else:
+            return {"result": result, "error": None}
 
     def _fill_manufacturer(self, entry):
         if not entry.get("manufacturer"):

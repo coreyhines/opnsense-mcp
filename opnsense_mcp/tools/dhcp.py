@@ -1,110 +1,130 @@
-#!/usr/bin/env python3
+"""DHCP lease management tool for OPNsense."""
 
 import logging
 from typing import Any
 
 from pydantic import BaseModel
 
+from opnsense_mcp.utils.api import OPNsenseClient
+
 logger = logging.getLogger(__name__)
 
 
 class DHCPLease(BaseModel):
+    """Model for DHCP lease entries."""
+
     ip: str
     mac: str
     hostname: str | None = None
-    start: str | None = None
-    end: str | None = None
-    online: bool | None = None
-    lease_type: str | None = None
-    description: str | None = None
+    starts: str | None = None
+    ends: str | None = None
+    state: str | None = None
 
 
 class DHCPTool:
+    """Tool for retrieving DHCP lease information from OPNsense."""
+
     name = "dhcp"
     description = "Show DHCPv4 and DHCPv6 lease tables"
-    inputSchema = {"type": "object", "properties": {}, "required": []}
+    input_schema = {"type": "object", "properties": {}, "required": []}
 
-    def __init__(self, client) -> None:
+    def __init__(self, client: OPNsenseClient | None) -> None:
+        """
+        Initialize the DHCP tool.
+
+        Args:
+            client: OPNsense client instance for API communication.
+
+        """
         self.client = client
 
-    def _normalize_lease_entry(self, entry):
+    def _normalize_lease_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
+        """
+        Normalize lease entry to standard format.
+
+        Args:
+            entry: Raw lease entry from API.
+
+        Returns:
+            Normalized lease entry.
+
+        """
         # Map 'address' to 'ip' if present
         if "address" in entry and "ip" not in entry:
-            entry["ip"] = entry.pop("address")
+            entry["ip"] = entry["address"]
         return entry
 
     async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Execute DHCP lease table lookup for both IPv4 and IPv6."""
+        """
+        Execute DHCP lease table lookup for both IPv4 and IPv6.
+
+        Args:
+            params: Execution parameters (unused for DHCP).
+
+        Returns:
+            Dictionary containing DHCP lease results.
+
+        """
         try:
-            if self.client is None:
-                logger.warning(
-                    "No OPNsense client available, returning dummy DHCP data"
-                )
-                return self._get_dummy_data()
-            leases_v4 = await self.client.get_dhcpv4_leases()
-            leases_v6 = await self.client.get_dhcpv6_leases()
-            lease_entries_v4 = [
-                DHCPLease(**self._normalize_lease_entry(entry)).model_dump()
-                for entry in leases_v4
+            if not self.client:
+                return {
+                    "dhcpv4": [],
+                    "dhcpv6": [],
+                    "status": "error",
+                    "error": "No client available",
+                }
+
+            # Get DHCPv4 leases
+            dhcpv4_leases = await self.client.get_dhcpv4_leases()
+
+            # Get DHCPv6 leases
+            dhcpv6_leases = await self.client.get_dhcpv6_leases()
+
+            # Normalize entries
+            normalized_v4 = [
+                self._normalize_lease_entry(lease) for lease in dhcpv4_leases
             ]
-            lease_entries_v6 = [
-                DHCPLease(**self._normalize_lease_entry(entry)).model_dump()
-                for entry in leases_v6
+            normalized_v6 = [
+                self._normalize_lease_entry(lease) for lease in dhcpv6_leases
             ]
-            # Determine status
-            if leases_v4 is None and leases_v6 is None:
-                dhcp_status = (
-                    "API returned nothing (possible misconfiguration or "
-                    "permissions issue)"
-                )
-            elif not lease_entries_v4 and not lease_entries_v6:
-                dhcp_status = (
-                    "No DHCP leases found. Check DHCP server status, "
-                    "configuration, and API permissions."
-                )
-            else:
-                dhcp_status = "OK"
+
+            # Combine results
+            return {
+                "dhcpv4": normalized_v4,
+                "dhcpv6": normalized_v6,
+                "status": "success",
+                "total_leases": len(normalized_v4) + len(normalized_v6),
+            }
+
         except Exception as e:
-            logger.exception("Failed to get DHCP lease tables")
+            logger.exception("Failed to get DHCP leases")
             return {
                 "dhcpv4": [],
                 "dhcpv6": [],
                 "status": "error",
-                "dhcp_status": f"Error retrieving DHCP leases: {str(e)}",
-            }
-        else:
-            return {
-                "dhcpv4": lease_entries_v4,
-                "dhcpv6": lease_entries_v6,
-                "status": "success",
-                "dhcp_status": dhcp_status,
+                "error": str(e),
             }
 
-    def _get_dummy_data(self):
+    def _get_dummy_data(self) -> dict[str, Any]:
+        """
+        Get dummy DHCP data for testing.
+
+        Returns:
+            Dictionary with dummy DHCP lease data.
+
+        """
         return {
             "dhcpv4": [
                 {
-                    "ip": "192.168.1.100",
-                    "mac": "00:11:22:33:44:55",
-                    "hostname": "dummy-client",
-                    "start": ("2025-01-01T00:00:00"),
-                    "end": ("2025-01-01T12:00:00"),
-                    "online": True,
-                    "lease_type": "dynamic",
-                    "description": ("Dummy lease entry"),
+                    "ip": "10.0.2.15",
+                    "mac": "08:00:27:12:34:56",
+                    "hostname": "test-device",
+                    "starts": "2023-01-01 12:00:00",
+                    "ends": "2023-01-02 12:00:00",
+                    "state": "active",
                 }
             ],
-            "dhcpv6": [
-                {
-                    "ip": "2001:db8::100",
-                    "mac": "00:11:22:33:44:66",
-                    "hostname": "dummy6-client",
-                    "start": ("2025-01-01T00:00:00"),
-                    "end": ("2025-01-01T12:00:00"),
-                    "online": True,
-                    "lease_type": "dynamic",
-                    "description": ("Dummy DHCPv6 lease entry"),
-                }
-            ],
-            "status": "dummy",
+            "dhcpv6": [],
+            "status": "success",
+            "total_leases": 1,
         }

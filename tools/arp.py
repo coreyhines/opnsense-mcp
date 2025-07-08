@@ -42,5 +42,5 @@ class ArpTool(BaseTool):
             result = await self.client.get_arp_table(params)
             return {"result": result, "error": None}
         except Exception as e:
-            logger.exception(f"Error executing ARP tool: {e}")
+            logger.exception("Error executing ARP tool")
             return {"result": None, "error": str(e)}

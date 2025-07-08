@@ -1,4 +1,4 @@
-"""OUI (Organizationally Unique Identifier) lookup utility for MAC address manufacturers."""
+"""OUI (Organizationally Unique Identifier) lookup utility for MAC addresses."""
 
 import csv
 from pathlib import Path

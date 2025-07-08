@@ -26,7 +26,8 @@ class OPNsenseClient:
             "MOCK_DATA_PATH", "examples/mock_data"
         )
         logger.debug(
-            f"Initialized OPNsense client (mock={mock}, mock_data_path={mock_data_path})"
+            f"Initialized OPNsense client (mock={mock}, "
+            f"mock_data_path={mock_data_path})"
         )
 
     async def get_arp_table(self, params: dict[str, Any] = None) -> dict:

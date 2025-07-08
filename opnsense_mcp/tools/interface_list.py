@@ -1,7 +1,9 @@
-#!/usr/bin/env python3
+"""Interface list management tool for OPNsense."""
 
 import logging
 from typing import Any
+
+from opnsense_mcp.utils.api import OPNsenseClient
 
 logger = logging.getLogger(__name__)
 
@@ -9,55 +11,51 @@ logger = logging.getLogger(__name__)
 class InterfaceListTool:
     """Tool for getting available firewall interface names."""
 
-    def __init__(self, client) -> None:
+    def __init__(self, client: OPNsenseClient | None) -> None:
+        """
+        Initialize the interface list tool.
+
+        Args:
+            client: OPNsense client instance for API communication.
+
+        """
         self.client = client
 
-    async def execute(self, params: dict[str, Any] = None) -> dict[str, Any]:
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Get available interface names for firewall rules.
 
+        Args:
+            params: Optional execution parameters (unused for interface list).
+
         Returns:
-        - interfaces: Dict mapping interface keys to display names
-        - success: Operation success status
+            Dictionary containing interface names and descriptions.
 
         """
         try:
-            logger.info("Fetching firewall interface list...")
-
-            # Get the interface list from OPNsense
-            interface_data = await self.client.get_firewall_interface_list()
-
-            if not interface_data:
+            if not self.client:
                 return {
-                    "error": "No interface data returned from OPNsense",
                     "interfaces": {},
                     "status": "error",
+                    "error": "No client available",
                 }
 
-            # Extract interface mappings
-            interfaces = {}
-            if isinstance(interface_data, dict):
-                # Common response formats from OPNsense
-                if "interfaces" in interface_data:
-                    interfaces = interface_data["interfaces"]
-                elif "data" in interface_data:
-                    interfaces = interface_data["data"]
-                else:
-                    # The response itself might be the interface dict
-                    interfaces = interface_data
+            # Get interface list from the API
+            response = await self.client.get_firewall_interface_list()
 
-            logger.info(f"Retrieved {len(interfaces)} interfaces")
-
+            if response.get("status") == "success":
+                interfaces = response.get("interfaces", {})
+                return {
+                    "interfaces": interfaces,
+                    "total": len(interfaces),
+                    "status": "success",
+                }
             return {
-                "interfaces": interfaces,
-                "total_count": len(interfaces),
-                "status": "success",
+                "interfaces": {},
+                "status": "error",
+                "error": response.get("error", "Unknown error"),
             }
 
         except Exception as e:
             logger.exception("Failed to get interface list")
-            return {
-                "error": f"Failed to get interface list: {e}",
-                "interfaces": {},
-                "status": "error",
-            }
+            return {"interfaces": {}, "status": "error", "error": str(e)}

@@ -9,6 +9,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from opnsense_mcp.utils.api import OPNsenseClient
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,8 +43,14 @@ class FirewallLogSummary(BaseModel):
 class GetLogsTool:
     """Tool for retrieving and analyzing firewall logs."""
 
-    def __init__(self, client) -> None:
-        """Initialize tool with API client."""
+    def __init__(self, client: OPNsenseClient | None) -> None:
+        """
+        Initialize tool with API client.
+
+        Args:
+            client: OPNsense client instance for API communication.
+
+        """
         self.client = client
         self._log_cache = None
         self._log_cache_time = 0

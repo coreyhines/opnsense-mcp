@@ -53,6 +53,6 @@ def get_tool(name: str, client: OPNsenseClient) -> BaseTool | None:
 
     try:
         return tool_class(client)
-    except Exception as e:
-        logger.exception(f"Error creating tool instance: {e}")
+    except Exception:
+        logger.exception("Error creating tool instance")
         return None
