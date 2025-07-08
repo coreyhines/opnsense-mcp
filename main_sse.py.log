@@ -1,0 +1,37 @@
+2025-06-28 21:53:15,343 - __main__ - INFO - Starting OPNsense MCP server on 0.0.0.0:8081
+2025-06-28 21:53:15,343 - asyncio - DEBUG - Using selector: KqueueSelector
+INFO:     Started server process [76260]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8081 (Press CTRL+C to quit)
+2025-06-28 21:53:18,258 - __main__ - INFO - Client connected to SSE stream
+INFO:     127.0.0.1:64367 - "GET /sse HTTP/1.1" 200 OK
+2025-06-28 21:53:33,261 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:53:33.261539+00:00\r\n\r\n'
+2025-06-28 21:53:48,262 - sse_starlette.sse - DEBUG - chunk: b'event: comment\r\ndata: keep-alive\r\n\r\n'
+2025-06-28 21:53:48,262 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:53:48.262684+00:00\r\n\r\n'
+2025-06-28 21:54:03,264 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:54:03.263901+00:00\r\n\r\n'
+INFO:     127.0.0.1:64585 - "POST /initialize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64585 - "GET /tools HTTP/1.1" 200 OK
+2025-06-28 21:54:18,263 - sse_starlette.sse - DEBUG - chunk: b'event: comment\r\ndata: keep-alive\r\n\r\n'
+2025-06-28 21:54:18,264 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:54:18.264829+00:00\r\n\r\n'
+2025-06-28 21:54:33,269 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:54:33.268719+00:00\r\n\r\n'
+2025-06-28 21:54:48,265 - sse_starlette.sse - DEBUG - chunk: b'event: comment\r\ndata: keep-alive\r\n\r\n'
+2025-06-28 21:54:48,270 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:54:48.270105+00:00\r\n\r\n'
+2025-06-28 21:55:03,270 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:55:03.270706+00:00\r\n\r\n'
+2025-06-28 21:55:18,266 - sse_starlette.sse - DEBUG - chunk: b'event: comment\r\ndata: keep-alive\r\n\r\n'
+2025-06-28 21:55:18,271 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:55:18.271499+00:00\r\n\r\n'
+2025-06-28 21:55:33,272 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:55:33.272907+00:00\r\n\r\n'
+2025-06-28 21:55:48,270 - sse_starlette.sse - DEBUG - chunk: b'event: comment\r\ndata: keep-alive\r\n\r\n'
+2025-06-28 21:55:48,273 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:55:48.273401+00:00\r\n\r\n'
+2025-06-28 21:56:03,275 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:56:03.275145+00:00\r\n\r\n'
+2025-06-28 21:56:18,272 - sse_starlette.sse - DEBUG - chunk: b'event: comment\r\ndata: keep-alive\r\n\r\n'
+2025-06-28 21:56:18,276 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:56:18.276353+00:00\r\n\r\n'
+2025-06-28 21:56:33,278 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:56:33.277966+00:00\r\n\r\n'
+2025-06-28 21:56:48,274 - sse_starlette.sse - DEBUG - chunk: b'event: comment\r\ndata: keep-alive\r\n\r\n'
+2025-06-28 21:56:48,279 - sse_starlette.sse - DEBUG - ping: b': ping - 2025-06-29 02:56:48.279003+00:00\r\n\r\n'
+2025-06-28 21:56:50,404 - sse_starlette.sse - DEBUG - Got event: http.disconnect. Stop streaming.
+2025-06-28 21:56:50,404 - __main__ - INFO - SSE client disconnected.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [76260]

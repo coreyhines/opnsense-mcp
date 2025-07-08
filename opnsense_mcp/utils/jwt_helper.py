@@ -1,99 +1,113 @@
-"""
-Custom JWT module to replace jose dependency
-"""
+"""JWT helper functions for token creation and validation."""
 
 import base64
 import hashlib
 import hmac
 import json
 import time
+from typing import Any
 
 
-def b64encode(data):
+def b64encode(data: str | bytes) -> str:
+    """Encode data to base64 URL-safe string."""
     if isinstance(data, str):
         data = data.encode("utf-8")
-    return base64.urlsafe_b64encode(data).replace(b"=", b"").decode("utf-8")
+    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
 
 
-def b64decode(data):
+def b64decode(data: str) -> bytes:
+    """Decode base64 URL-safe string to bytes."""
     data += "=" * (4 - len(data) % 4) if len(data) % 4 != 0 else ""
     return base64.urlsafe_b64decode(data)
 
 
-def create_jwt(payload, secret_key, algorithm="HS256", expire_minutes=30):
-    """Create a JWT token"""
+def create_jwt(
+    payload: dict[str, Any],
+    secret_key: str,
+    algorithm: str = "HS256",
+    expire_minutes: int = 30,
+) -> str:
+    """Create a JWT token."""
     # Create header
     header = {"alg": algorithm, "typ": "JWT"}
 
-    # Prepare payload with expiration
-    expiration = int(time.time()) + expire_minutes * 60
-    payload["exp"] = expiration
+    # Add expiration to payload
+    if expire_minutes > 0:
+        payload["exp"] = int(time.time()) + (expire_minutes * 60)
+    payload["iat"] = int(time.time())
 
     # Encode header and payload
-    encoded_header = b64encode(json.dumps(header))
-    encoded_payload = b64encode(json.dumps(payload))
+    header_b64 = b64encode(json.dumps(header))
+    payload_b64 = b64encode(json.dumps(payload))
 
     # Create signature
-    message = f"{encoded_header}.{encoded_payload}"
-
+    message = f"{header_b64}.{payload_b64}"
     if algorithm == "HS256":
-        if isinstance(secret_key, str):
-            secret_key = secret_key.encode("utf-8")
         signature = hmac.new(
-            secret_key, message.encode("utf-8"), hashlib.sha256
+            secret_key.encode("utf-8"), message.encode("utf-8"), hashlib.sha256
         ).digest()
-        encoded_signature = b64encode(signature)
     else:
-        raise ValueError(f"Algorithm {algorithm} not supported")
+        msg = f"Algorithm {algorithm} not supported"
+        raise ValueError(msg)
 
-    # Return complete JWT
-    return f"{encoded_header}.{encoded_payload}.{encoded_signature}"
+    signature_b64 = b64encode(signature)
+
+    # Return complete token
+    return f"{header_b64}.{payload_b64}.{signature_b64}"
 
 
-def decode_jwt(token, secret_key, algorithms=None):
-    """Decode and verify a JWT token"""
+def decode_jwt(
+    token: str,
+    secret_key: str,
+    algorithms: list[str] | None = None,
+) -> dict[str, Any]:
+    """Decode and verify a JWT token."""
     if algorithms is None:
         algorithms = ["HS256"]
 
-    # Split token
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise ValueError("Invalid token format")
+    try:
+        # Split token
+        parts = token.split(".")
+        if len(parts) != 3:
+            raise JWTError("Invalid token format")
 
-    encoded_header, encoded_payload, encoded_signature = parts
+        header_b64, payload_b64, signature_b64 = parts
 
-    # Verify signature
-    message = f"{encoded_header}.{encoded_payload}"
+        # Decode header
+        header = json.loads(b64decode(header_b64).decode("utf-8"))
+        algorithm = header.get("alg")
 
-    if isinstance(secret_key, str):
-        secret_key = secret_key.encode("utf-8")
+        if algorithm not in algorithms:
+            raise JWTError(f"Algorithm {algorithm} not allowed")
 
-    # Check the algorithms
-    header = json.loads(b64decode(encoded_header))
-    if header["alg"] not in algorithms:
-        raise ValueError(f"Algorithm {header['alg']} not allowed")
+        # Verify signature
+        message = f"{header_b64}.{payload_b64}"
+        if algorithm == "HS256":
+            expected_signature = hmac.new(
+                secret_key.encode("utf-8"), message.encode("utf-8"), hashlib.sha256
+            ).digest()
+        else:
+            raise JWTError(f"Algorithm {algorithm} not supported")
 
-    if header["alg"] == "HS256":
-        expected_sig = hmac.new(
-            secret_key, message.encode("utf-8"), hashlib.sha256
-        ).digest()
-        signature = b64decode(encoded_signature)
+        actual_signature = b64decode(signature_b64)
+        if not hmac.compare_digest(expected_signature, actual_signature):
+            raise JWTError("Invalid signature")
 
-        if not hmac.compare_digest(signature, expected_sig):
-            raise ValueError("Signature verification failed")
-    else:
-        raise ValueError(f"Algorithm {header['alg']} not supported")
+        # Decode payload
+        payload = json.loads(b64decode(payload_b64).decode("utf-8"))
 
-    # Parse and return payload
-    payload = json.loads(b64decode(encoded_payload))
+        # Check expiration
+        if "exp" in payload and payload["exp"] < time.time():
+            raise JWTError("Token expired")
 
-    # Check expiration
-    if "exp" in payload and payload["exp"] < time.time():
-        raise ValueError("Token has expired")
+        return payload
 
-    return payload
+    except Exception as e:
+        if isinstance(e, JWTError):
+            raise
+        raise JWTError(f"Token validation failed: {str(e)}") from e
 
 
 # Define JWT error for compatibility
 class JWTError(Exception):
-    """Error raised when JWT verification fails"""
+    """Error raised when JWT verification fails."""

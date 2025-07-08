@@ -1,14 +1,20 @@
-"""
-Simple form handling for environments where python-multipart isn't available
-"""
+"""Simple form handling for environments where python-multipart isn't available."""
 
 from fastapi import Request
 
 
 class SimpleFormData:
-    """Simple class to handle form data"""
+    """Simple class to handle form data."""
 
-    def __init__(self, username: str = "", password: str = ""):
+    def __init__(self, username: str = "", password: str = "") -> None:
+        """
+        Initialize form data helper.
+
+        Args:
+            username: Username for the form.
+            password: Password for the form (empty for demo/testing).
+
+        """
         # NOTE: Default password is empty for demonstration/testing only.
         # Bandit: # nosec
         self.username = username
@@ -16,7 +22,7 @@ class SimpleFormData:
 
 
 async def parse_form_data(request: Request) -> SimpleFormData:
-    """Parse form data from a request"""
+    """Parse form data from a request."""
     content_type = request.headers.get("content-type", "")
 
     if "application/x-www-form-urlencoded" in content_type:

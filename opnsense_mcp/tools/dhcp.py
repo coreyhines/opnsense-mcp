@@ -24,7 +24,7 @@ class DHCPTool:
     description = "Show DHCPv4 and DHCPv6 lease tables"
     inputSchema = {"type": "object", "properties": {}, "required": []}
 
-    def __init__(self, client):
+    def __init__(self, client) -> None:
         self.client = client
 
     def _normalize_lease_entry(self, entry):
@@ -34,7 +34,7 @@ class DHCPTool:
         return entry
 
     async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Execute DHCP lease table lookup for both IPv4 and IPv6"""
+        """Execute DHCP lease table lookup for both IPv4 and IPv6."""
         try:
             if self.client is None:
                 logger.warning(

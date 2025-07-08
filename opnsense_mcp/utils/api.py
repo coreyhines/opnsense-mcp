@@ -303,161 +303,36 @@ class OPNsenseClient:
             return rules
 
     async def get_system_status(self) -> dict[str, Any]:
-        """Get system status from OPNsense with robust redirect and error handling."""
+        """Get system version and info from OPNsense."""
         try:
-            logger.debug("Fetching system status information...")
-            # Make direct API call to system status endpoint
-            response = None
-            try:
-                response = await self._make_request(
-                    "GET",
-                    ENDPOINTS["system"]["status"],
-                )
-            except ResponseError as e:
-                # Check if this is a redirect or HTML error
-                logger.warning(f"System status endpoint error: {e}")
-                # Try to follow redirect manually if 302
-                url = f"{self.base_url}{ENDPOINTS['system']['status']}"
-                resp = requests.get(
-                    url,
-                    headers=self.headers,
-                    verify=False,
-                    allow_redirects=True,
-                )
-                if resp.status_code == 200:
-                    content_type = resp.headers.get("Content-Type", "")
-                    if "application/json" not in content_type:
-                        logger.exception(
-                            "System status endpoint returned non-JSON (likely HTML). "
-                            "Endpoint may require session or is not available via API.",
-                        )
-                        return {
-                            "cpu_usage": 0.0,
-                            "memory_usage": 0.0,
-                            "filesystem_usage": {},
-                            "uptime": "",
-                            "versions": {"opnsense": "", "kernel": ""},
-                            "error": (
-                                "System status endpoint returned HTML, not JSON. "
-                                "Check API permissions or use a session."
-                            ),
-                        }
-                    try:
-                        response = resp.json()
-                    except Exception as e2:
-                        logger.exception("System status endpoint returned invalid JSON")
-                        return {
-                            "cpu_usage": 0.0,
-                            "memory_usage": 0.0,
-                            "filesystem_usage": {},
-                            "uptime": "",
-                            "versions": {"opnsense": "", "kernel": ""},
-                            "error": (
-                                f"System status endpoint returned invalid JSON: {e2}"
-                            ),
-                        }
-                else:
-                    logger.exception(
-                        "System status endpoint returned status %d",
-                        resp.status_code,
-                    )
-                    return {
-                        "cpu_usage": 0.0,
-                        "memory_usage": 0.0,
-                        "filesystem_usage": {},
-                        "uptime": "",
-                        "versions": {"opnsense": "", "kernel": ""},
-                        "error": (
-                            f"System status endpoint returned status {resp.status_code}"
-                        ),
-                    }
-            if not isinstance(response, dict) or "data" not in response:
-                logger.error("Unexpected response format from status API")
-                return {
-                    "cpu_usage": 0.0,
-                    "memory_usage": 0.0,
-                    "filesystem_usage": {},
-                    "uptime": "",
-                    "versions": {"opnsense": "", "kernel": ""},
-                    "error": "Unexpected response format from status API",
-                }
-            data = response.get("data", {})
-            # Process and structure the data
-            status_data = {
-                "cpu_usage": 0.0,
-                "memory_usage": 0.0,
-                "filesystem_usage": {},
-                "uptime": "",
-                "versions": {"opnsense": "", "kernel": ""},
-                "temperature": {},
-                "interfaces": {},
-                "services": [],
+            logger.debug(
+                "Fetching system information from system_information endpoint..."
+            )
+            response = await self._make_request(
+                "GET", "/api/diagnostics/system/system_information"
+            )
+            name = response.get("name", "")
+            versions = response.get("versions", [])
+            opnsense_version = ""
+            kernel_version = ""
+            for v in versions:
+                if v.startswith("OPNsense"):
+                    opnsense_version = v
+                elif v.startswith("FreeBSD"):
+                    kernel_version = v
+            return {
+                "hostname": name,
+                "versions": {
+                    "opnsense": opnsense_version,
+                    "kernel": kernel_version,
+                },
+                "status": "success",
             }
-            # Extract CPU usage
-            if "cpu" in data:
-                cpu_info = data["cpu"]
-                if isinstance(cpu_info, dict) and "used" in cpu_info:
-                    status_data["cpu_usage"] = float(cpu_info["used"].rstrip("%"))
-            # Extract memory usage
-            if "memory" in data:
-                mem_info = data["memory"]
-                if isinstance(mem_info, dict) and "used" in mem_info:
-                    used_memory = mem_info["used"].rstrip("%")
-                    status_data["memory_usage"] = float(used_memory)
-
-            # Extract CPU usage
-            if "cpu" in data:
-                cpu_info = data["cpu"]
-                if isinstance(cpu_info, dict) and "used" in cpu_info:
-                    used_cpu = cpu_info["used"].rstrip("%")
-                    status_data["cpu_usage"] = float(used_cpu)
-            # Extract filesystem usage
-            if "filesystems" in data:
-                for fs in data["filesystems"]:
-                    if isinstance(fs, dict):
-                        mount = fs.get("mountpoint", "")
-                        used = fs.get("used_percent", "0").rstrip("%")
-                        status_data["filesystem_usage"][mount] = float(used)
-            # Extract version information
-            status_data["uptime"] = data.get("uptime", "")
-            status_data["versions"]["opnsense"] = data.get("version", "")
-            status_data["versions"]["kernel"] = data.get("kernel", "")
-            # Try to fetch additional system information if available
-            try:
-                sys_info = await self._make_request(
-                    "GET",
-                    ENDPOINTS["system"]["information"],
-                )
-                if isinstance(sys_info, dict):
-                    # Extract temperature data if available
-                    if "temperature" in sys_info:
-                        for sensor in sys_info.get("temperature", []):
-                            if not isinstance(sensor, dict):
-                                continue
-                            if not all(k in sensor for k in ["device", "temperature"]):
-                                continue
-                            status_data["temperature"][sensor["device"]] = sensor[
-                                "temperature"
-                            ]
-                    # Extract any additional system information
-                    if "product" in sys_info:
-                        status_data["versions"]["product"] = sys_info["product"]
-            except Exception as e:
-                logger.warning(
-                    f"Could not fetch additional system information: {e!s}",
-                )
-            else:
-                logger.debug(f"Successfully retrieved system status: {status_data}")
-                return status_data
         except Exception as e:
             logger.exception("Failed to get system status")
             return {
-                "cpu_usage": 0.0,
-                "memory_usage": 0.0,
-                "filesystem_usage": {},
-                "uptime": "",
-                "versions": {"opnsense": "", "kernel": ""},
                 "error": f"Failed to get system status: {e!s}",
+                "status": "error",
             }
 
     async def get_interfaces(self) -> list[dict[str, Any]]:
@@ -924,3 +799,42 @@ class OPNsenseClient:
         # Already handled above by matching all fields
 
         return result
+
+    async def get_lldp_table(self) -> list[dict[str, str]]:
+        """Get LLDP neighbor table from the LLDPd plugin endpoint and parse it."""
+        try:
+            response = await self._make_request("GET", "/api/lldpd/service/neighbor")
+            text = response.get("response", "")
+            neighbors = []
+            current = {}
+            for line in text.splitlines():
+                line = line.strip()
+                if line.startswith("Interface:"):
+                    if current:
+                        neighbors.append(current)
+                        current = {}
+                    current["intf"] = line.split(":", 1)[1].split(",")[0].strip()
+                elif line.startswith("ChassisID:"):
+                    current["chassis_id"] = line.split(":", 1)[1].strip()
+                elif line.startswith("SysName:"):
+                    current["system_name"] = line.split(":", 1)[1].strip()
+                elif line.startswith("SysDescr:"):
+                    current["system_description"] = line.split(":", 1)[1].strip()
+                elif line.startswith("MgmtIP:"):
+                    current["management_address"] = line.split(":", 1)[1].strip()
+                elif line.startswith("PortID:"):
+                    current["port_id"] = line.split(":", 1)[1].strip()
+                elif line.startswith("PortDescr:"):
+                    current["port_description"] = line.split(":", 1)[1].strip()
+                elif line.startswith("Capability:"):
+                    cap = line.split(":", 1)[1].strip()
+                    if "capabilities" in current:
+                        current["capabilities"] += ", " + cap
+                    else:
+                        current["capabilities"] = cap
+            if current:
+                neighbors.append(current)
+            return neighbors
+        except Exception:
+            logger.exception("Failed to get LLDP table")
+            return []

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mock API client for development and testing"""
+"""Mock API client for development and testing."""
 
 import json
 import logging
@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 class MockOPNsenseClient:
-    """Mock OPNsense API client for development and testing"""
+    """Mock OPNsense API client for development and testing."""
 
-    def __init__(self, config: dict[str, Any]):
-        """Initialize the mock client with config"""
+    def __init__(self, config: dict[str, Any]) -> None:
+        """Initialize the mock client with config."""
         self.config = config
         # Get absolute path to mock data
         workspace_root = Path(__file__).parent.parent.parent
@@ -23,8 +23,8 @@ class MockOPNsenseClient:
         self.mock_data_path = workspace_root / mock_data_dir
         self._load_mock_data()
 
-    def _load_mock_data(self):
-        """Load all mock data files"""
+    def _load_mock_data(self) -> None:
+        """Load all mock data files."""
         self.mock_data = {}
         try:
             mock_path = Path(self.mock_data_path).resolve()
@@ -55,31 +55,31 @@ class MockOPNsenseClient:
             logger.exception("Failed to load mock data")
             self.mock_data = {}
 
-    async def get_system_status(self):
-        """Get mock system status"""
+    async def get_system_status(self) -> dict[str, Any]:
+        """Get mock system status."""
         return self.mock_data.get("system_status", {})
 
     async def get_arp_table(self):
-        """Get mock ARP table"""
+        """Get mock ARP table."""
         data = self.mock_data.get("arp_table", {})
         return data.get("entries", [])
 
     async def get_ndp_table(self):
-        """Get mock NDP table - empty for now"""
+        """Get mock NDP table - empty for now."""
         return []
 
     async def get_interfaces(self):
-        """Get mock interfaces"""
+        """Get mock interfaces."""
         data = self.mock_data.get("interfaces", {})
         return data.get("interfaces", [])
 
     async def get_firewall_rules(self):
-        """Get mock firewall rules"""
+        """Get mock firewall rules."""
         data = self.mock_data.get("firewall_rules", {})
         return data.get("rules", [])
 
     async def get_firewall_logs(self, limit: int = 500) -> list[dict[str, Any]]:
-        """Get mock firewall logs"""
+        """Get mock firewall logs."""
         logger.info(f"Mock API keys available: {list(self.mock_data.keys())}")
         data = self.mock_data.get("firewall_logs", {})
 
@@ -91,17 +91,17 @@ class MockOPNsenseClient:
         return logs[:limit] if limit else logs
 
     async def get_dhcpv4_leases(self):
-        """Get mock DHCPv4 leases"""
+        """Get mock DHCPv4 leases."""
         data = self.mock_data.get("dhcp_leases", {})
         return data.get("v4", [])
 
     async def get_dhcpv6_leases(self):
-        """Get mock DHCPv6 leases"""
+        """Get mock DHCPv6 leases."""
         data = self.mock_data.get("dhcp_leases", {})
         return data.get("v6", [])
 
     async def search_arp_table(self, query: str):
-        """Search mock ARP table"""
+        """Search mock ARP table."""
         entries = await self.get_arp_table()
         return [
             entry
@@ -112,11 +112,11 @@ class MockOPNsenseClient:
         ]
 
     async def search_ndp_table(self, query: str):
-        """Search mock NDP table - empty for now"""
+        """Search mock NDP table - empty for now."""
         return []
 
     async def search_firewall_logs(self, ip: str, row_count: int = 50):
-        """Search mock firewall logs for a specific IP"""
+        """Search mock firewall logs for a specific IP."""
         logs = await self.get_firewall_logs()
         filtered = [
             log

@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 
-def main():
+def main() -> None:
     input_file = sys.argv[1]
     output_file = sys.argv[2]
     with Path(input_file).open() as f:
@@ -46,6 +46,6 @@ def main():
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: python convert_trivy_to_html.py input.json output.html")
+        print("Usage: python3.12 convert_trivy_to_html.py input.json output.html")
         sys.exit(1)
     main()

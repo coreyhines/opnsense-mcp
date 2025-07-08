@@ -30,13 +30,13 @@ class FirewallRule(BaseModel):
 
 
 class FwRulesTool:
-    def __init__(self, client):
+    def __init__(self, client) -> None:
         self.client = client
         self._interface_groups_cache = None
         self._interfaces_cache = None
 
     async def _get_interface_groups(self) -> dict[str, list[str]]:
-        """Get interface groups and their member interfaces"""
+        """Get interface groups and their member interfaces."""
         if self._interface_groups_cache is not None:
             return self._interface_groups_cache
 
@@ -65,7 +65,7 @@ class FwRulesTool:
             return groups
 
     async def _get_interfaces(self) -> dict[str, str]:
-        """Get all interfaces with their descriptions/aliases"""
+        """Get all interfaces with their descriptions/aliases."""
         if self._interfaces_cache is not None:
             return self._interfaces_cache
 
@@ -119,7 +119,7 @@ class FwRulesTool:
     async def _get_rules_from_endpoint(
         self, endpoint: str, source_type: str = "filter"
     ) -> list[dict[str, Any]]:
-        """Get rules from a specific API endpoint"""
+        """Get rules from a specific API endpoint."""
         try:
             logger.debug(f"Fetching rules from {endpoint}")
             params = {
@@ -142,7 +142,7 @@ class FwRulesTool:
             return rules
 
     async def _get_all_firewall_rules(self) -> list[dict[str, Any]]:
-        """Get rules from all available firewall endpoints"""
+        """Get rules from all available firewall endpoints."""
         all_rules = []
 
         # Standard filter rules
@@ -180,7 +180,7 @@ class FwRulesTool:
     ) -> list[dict[str, Any]]:
         """
         Filter rules by interface name (with partial matching and group
-        resolution)
+        resolution).
         """
         if not interface_query:
             return rules

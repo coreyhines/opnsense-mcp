@@ -7,34 +7,34 @@ logger = logging.getLogger(__name__)
 
 
 class InterfaceTool:
-    def __init__(self, client):
+    def __init__(self, client) -> None:
         self.client = client
 
     def _validate_params(self, params: dict[str, Any]) -> None:
-        """Validate input parameters"""
+        """Validate input parameters."""
         if not isinstance(params, dict):
             raise TypeError("Invalid parameters: expected dictionary")
 
     def _validate_action(self, action: str) -> None:
-        """Validate action parameter"""
+        """Validate action parameter."""
         if action not in ["list", "get"]:
             raise ValueError(
                 f"Invalid action: {action}. Supported actions are 'list' and 'get'"
             )
 
     def _validate_interface_param(self, interface_name: str | None) -> None:
-        """Validate interface parameter for get action"""
+        """Validate interface parameter for get action."""
         if not interface_name:
             raise ValueError("Missing interface parameter for 'get' action")
 
     def _raise_interface_not_found(self, interface_name: str) -> None:
-        """Raise error for interface not found"""
+        """Raise error for interface not found."""
         raise ValueError(
             f"Interface {interface_name} not found or has no active neighbors"
         )
 
     async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Execute interface configuration actions"""
+        """Execute interface configuration actions."""
         try:
             # Validate parameters
             self._validate_params(params)

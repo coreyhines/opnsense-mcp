@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class InterfaceListTool:
     """Tool for getting available firewall interface names."""
 
-    def __init__(self, client):
+    def __init__(self, client) -> None:
         self.client = client
 
     async def execute(self, params: dict[str, Any] = None) -> dict[str, Any]:

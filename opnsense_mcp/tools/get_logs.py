@@ -38,7 +38,7 @@ class FirewallLogSummary(BaseModel):
     time_range: tuple[datetime, datetime]
 
 
-class FirewallLogsTool:
+class GetLogsTool:
     """Tool for retrieving and analyzing firewall logs."""
 
     def __init__(self, client) -> None:
@@ -55,12 +55,13 @@ class FirewallLogsTool:
         src_ip: str | None = None,
         dst_ip: str | None = None,
         protocol: str | None = None,
+        filter: str | None = None,
     ) -> list[FirewallLogEntry]:
         """Retrieve and parse firewall logs with optional filtering."""
         logger.info(
-            f"FirewallLogsTool: Getting logs with limit={limit}, "
+            f"GetLogsTool: Getting logs with limit={limit}, "
             f"action={action}, src_ip={src_ip}, dst_ip={dst_ip}, "
-            f"protocol={protocol}"
+            f"protocol={protocol}, filter={filter}"
         )
 
         parsed_logs = []
@@ -68,7 +69,7 @@ class FirewallLogsTool:
             # Get raw logs from OPNsense
             raw_logs = await self.client.get_firewall_logs(limit)
             log_count = len(raw_logs) if raw_logs else 0
-            logger.info(f"FirewallLogsTool: Got {log_count} raw logs")
+            logger.info(f"GetLogsTool: Got {log_count} raw logs")
 
             if log_count > 0 and not isinstance(raw_logs[0], dict):
                 logger.error(
@@ -121,6 +122,12 @@ class FirewallLogsTool:
                         )
                         continue
 
+                    if filter:
+                        # Search in all string values of the log
+                        log_values = [str(v).lower() for v in log.values()]
+                        if not any(filter.lower() in value for value in log_values):
+                            continue
+
                     parsed_logs.append(entry)
                     logger.debug(
                         f"Added log {i} to results: "
@@ -137,7 +144,7 @@ class FirewallLogsTool:
             return []
 
         filtered_count = len(parsed_logs)
-        logger.info(f"FirewallLogsTool: Returning {filtered_count} parsed logs")
+        logger.info(f"GetLogsTool: Returning {filtered_count} parsed logs")
         return parsed_logs
 
     def _parse_log_line(self, line: str) -> FirewallLogEntry | None:
@@ -247,70 +254,36 @@ class FirewallLogsTool:
                 - src_ip: Filter by source IP
                 - dst_ip: Filter by destination IP
                 - protocol: Filter by protocol (tcp, udp, icmp)
-
-        Returns:
-            Dictionary containing log entries and summary information
+                - filter: Generic keyword filter
 
         """
         if params is None:
             params = {}
 
         try:
-            # Get firewall logs with optional filters
+            # Get logs with specified filters
             logs = await self.get_logs(
-                limit=params.get("limit"),
+                limit=params.get("limit", 500),
                 action=params.get("action"),
                 src_ip=params.get("src_ip"),
                 dst_ip=params.get("dst_ip"),
                 protocol=params.get("protocol"),
+                filter=params.get("filter"),
             )
 
-            # Generate summary
+            # Get a summary of the logs
             summary = await self.get_log_summary(logs)
 
-            # Convert logs to dict format for JSON serialization
-            log_entries = []
-            for log in logs:
-                log_dict = {
-                    "timestamp": log.timestamp.isoformat(),
-                    "interface": log.interface,
-                    "action": log.action,
-                    "protocol": log.protocol,
-                    "src_ip": log.src_ip,
-                    "src_port": log.src_port,
-                    "dst_ip": log.dst_ip,
-                    "dst_port": log.dst_port,
-                    "rule_id": log.rule_id,
-                    "description": log.description,
-                }
-                log_entries.append(log_dict)
-
-            # Convert summary to dict format
-            summary_dict = {
-                "total_entries": summary.total_entries,
-                "action_counts": summary.action_counts,
-                "top_source_ips": summary.top_source_ips,
-                "top_destination_ips": summary.top_destination_ips,
-                "top_blocked_ports": summary.top_blocked_ports,
-                "time_range": [
-                    summary.time_range[0].isoformat(),
-                    summary.time_range[1].isoformat(),
-                ],
-            }
-
             return {
+                "logs": [log.model_dump() for log in logs],
+                "summary": summary.model_dump(),
                 "status": "success",
-                "log_entries": log_entries,
-                "summary": summary_dict,
-                "total_logs": len(log_entries),
             }
 
         except Exception as e:
-            logger.exception("Error executing firewall logs tool")
-            return {
-                "status": "error",
-                "message": str(e),
-                "log_entries": [],
-                "summary": None,
-                "total_logs": 0,
-            }
+            logger.exception("Failed to execute firewall logs tool")
+            return {"error": f"Failed to execute tool: {e}", "status": "error"}
+
+
+# Alias for test compatibility
+FirewallLogsTool = GetLogsTool

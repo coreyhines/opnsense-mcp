@@ -17,4 +17,4 @@ export DEBUG=true
 export LOG_LEVEL=DEBUG
 
 # Run the server with proper Python path
-python -m opnsense_mcp.server 
+python3.12 -m opnsense_mcp.server 

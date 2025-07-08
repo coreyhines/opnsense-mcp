@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""OPNsense Model Context Protocol server for firewall management"""
+"""OPNsense MCP Server - Main entry point for the MCP server."""
 
+import asyncio
 import json
 import logging
 import os
@@ -28,9 +29,9 @@ logger = logging.getLogger(__name__)
 load_dotenv(os.path.expanduser("~/.opnsense-env"))
 
 
-def get_opnsense_client():
-    """Get OPNsense client based on environment"""
-    host = os.getenv("OPNSENSE_API_HOST")  # Use correct env var name
+def get_opnsense_client(config: dict[str, Any]) -> Any:
+    """Get an OPNsense client instance based on environment variables."""
+    host = os.getenv("OPNSENSE_FIREWALL_HOST")  # Use correct env var name
     api_key = os.getenv("OPNSENSE_API_KEY")
     api_secret = os.getenv("OPNSENSE_API_SECRET")
     ssl_verify = os.getenv("OPNSENSE_SSL_VERIFY", "false").lower() == "true"
@@ -53,7 +54,7 @@ def get_opnsense_client():
 
 
 def format_log_response(logs: list) -> dict[str, Any]:
-    """Format logs into an MCP protocol response"""
+    """Format logs into an MCP protocol response."""
     log_entries = []
     for log in logs:
         description = f"{log.action.upper()} {log.protocol} "
@@ -97,6 +98,7 @@ async def handle_message(
     rmfw_rule_tool: RmfwRuleTool,
     interface_list_tool: InterfaceListTool,
 ) -> dict[str, Any] | None:
+    """Handle incoming MCP messages and route them to appropriate tools."""
     method = message.get("method")
     msg_id = message.get("id")
 
@@ -114,6 +116,12 @@ async def handle_message(
                 "capabilities": {"tools": {"listChanged": False}},
             },
         }
+
+    # Handle notifications/initialized to prevent red indicator
+    if method == "notifications/initialized":
+        # Do not respond to notifications (no id)
+        if msg_id is None:
+            return None
 
     # Support both tools/list and ListOfferings
     if method in ("tools/list", "ListOfferings"):
@@ -435,7 +443,7 @@ async def handle_message(
 def error_response(
     code: int, message: str, msg_id: str | None = None
 ) -> dict[str, Any]:
-    """Create a JSON-RPC error response"""
+    """Create a JSON-RPC error response."""
     return {
         "jsonrpc": "2.0",
         "id": msg_id,
@@ -446,8 +454,8 @@ def error_response(
     }
 
 
-def main():
-    """Main entry point"""
+def main() -> None:
+    """Main entry point for the MCP server."""
     print("SERVER STARTED", file=sys.stderr)
     # Configure logging
     log_level = os.environ.get("LOG_LEVEL", "INFO")
@@ -458,7 +466,7 @@ def main():
     )
 
     # Initialize client
-    client = get_opnsense_client()
+    client = get_opnsense_client({})
 
     # Initialize tools
     firewall_logs = FirewallLogsTool(client)
@@ -472,8 +480,8 @@ def main():
     interface_list_tool = InterfaceListTool(client)
 
     # Handle stdin/stdout communication
-    async def process_messages():
-        """Process messages from stdin"""
+    async def process_messages() -> None:
+        """Process incoming messages from the MCP client."""
         while True:
             try:
                 # Read a line and handle EOF
@@ -526,7 +534,7 @@ def main():
                     rmfw_rule_tool,
                     interface_list_tool,
                 )
-                if response:
+                if response is not None:
                     print(
                         f"Writing to stdout: {json.dumps(response)}",
                         file=sys.stderr,
@@ -534,7 +542,7 @@ def main():
                     sys.stdout.write(json.dumps(response) + "\n")
                     sys.stdout.flush()
                     logger.debug(f"Sent response: {response}")
-                else:
+                elif msg_id is not None:
                     err = error_response(
                         -32601,
                         f"Method '{message.get('method')}' not found",
@@ -558,8 +566,6 @@ def main():
                 err = error_response(-32603, err_msg, msg_id)
                 sys.stdout.write(json.dumps(err) + "\n")
                 sys.stdout.flush()
-
-    import asyncio
 
     print("About to enter message loop", file=sys.stderr)
     asyncio.run(process_messages())

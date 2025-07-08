@@ -1,3 +1,5 @@
+"""OUI (Organizationally Unique Identifier) lookup utility for MAC address manufacturers."""
+
 import csv
 from pathlib import Path
 
@@ -5,23 +7,39 @@ OUI_CSV_PATH = Path(__file__).parent / "data" / "oui.csv"
 
 
 class OUILookup:
-    def __init__(self, csv_path=OUI_CSV_PATH):
+    """Utility class for looking up MAC address manufacturers from OUI database."""
+
+    def __init__(self, csv_path: Path = OUI_CSV_PATH) -> None:
+        """
+        Initialize the OUI lookup with CSV data.
+
+        Args:
+            csv_path: Path to the OUI CSV file.
+
+        """
         self.oui_map = {}
         self._load_oui_csv(csv_path)
 
-    def _load_oui_csv(self, csv_path):
+    def _load_oui_csv(self, csv_path: Path) -> None:
+        """
+        Load OUI data from CSV file.
+
+        Args:
+            csv_path: Path to the OUI CSV file.
+
+        """
         if not csv_path.exists():
             raise FileNotFoundError(f"OUI CSV not found at {csv_path}")
-        with csv_path.open(newline="", encoding="utf-8") as csvfile:
+
+        with csv_path.open() as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                assignment = row.get("Assignment", "").replace("-", ":").lower()
-                org_name = row.get("Organization Name", "").strip()
-                if assignment and org_name:
-                    self.oui_map[assignment] = org_name
+                assignment = row["Assignment"]
+                org_name = row["Organization Name"]
+                self.oui_map[assignment] = org_name
 
-    def lookup(self, mac):
-        """Lookup manufacturer by MAC address (returns None if not found)"""
+    def lookup(self, mac: str) -> str | None:
+        """Lookup manufacturer by MAC address (returns None if not found)."""
         mac = mac.lower().replace("-", ":")
         prefix = ":".join(mac.split(":")[:3])
         return self.oui_map.get(prefix)

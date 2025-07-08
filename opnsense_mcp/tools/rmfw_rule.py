@@ -1,88 +1,89 @@
-#!/usr/bin/env python3
+"""Firewall rule deletion tool for OPNsense."""
 
 import logging
 from typing import Any
+
+from opnsense_mcp.utils.api import OPNsenseClient
 
 logger = logging.getLogger(__name__)
 
 
 class RmfwRuleTool:
+    """Tool for deleting firewall rules in OPNsense."""
+
     name = "rmfw_rule"
     description = "Delete firewall rules"
-    inputSchema = {
+    input_schema = {
         "type": "object",
         "properties": {
             "rule_uuid": {
                 "type": "string",
                 "description": "UUID of the rule to delete",
             },
-            "apply": {"type": "boolean", "description": "Apply changes immediately"},
+            "apply": {
+                "type": "boolean",
+                "description": "Whether to apply changes immediately",
+                "default": True,
+            },
         },
         "required": ["rule_uuid"],
     }
 
-    def __init__(self, client):
+    def __init__(self, client: OPNsenseClient | None) -> None:
+        """
+        Initialize the firewall rule deletion tool.
+
+        Args:
+            client: OPNsense client instance for API communication.
+
+        """
         self.client = client
 
-    async def execute(self, params: dict[str, Any] = None) -> dict[str, Any]:
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Delete a firewall rule and optionally apply changes.
 
-        Parameters
-        ----------
-        - rule_uuid: UUID of the rule to delete (required)
-        - apply: Whether to apply changes immediately (default: true)
+        Args:
+            params: Rule deletion parameters including rule_uuid and apply flag.
+
+        Returns:
+            Dictionary containing rule deletion results.
 
         """
+        if params is None:
+            params = {}
+
+        if not self.client:
+            return {"status": "error", "error": "No client available"}
+
+        rule_uuid = params.get("rule_uuid")
+        if not rule_uuid:
+            return {
+                "status": "error",
+                "error": "rule_uuid is required for rule deletion",
+            }
+
         try:
-            if params is None:
-                params = {}
-
-            # Validate required parameter
-            rule_uuid = params.get("rule_uuid")
-            if not rule_uuid:
-                return {
-                    "error": ("rule_uuid is required to delete a firewall rule"),
-                    "status": "error",
-                }
-
-            logger.info(f"Deleting firewall rule: {rule_uuid}")
-
             # Delete the rule
             result = await self.client.delete_firewall_rule(rule_uuid)
 
-            if result.get("result") != "success":
+            if not result.get("success", False):
                 return {
-                    "error": f"Failed to delete rule: {result}",
                     "status": "error",
+                    "error": f"Failed to delete rule: {result.get('error', 'Unknown error')}",
                 }
-
-            logger.info(f"Successfully deleted rule with UUID: {rule_uuid}")
 
             # Apply changes if requested (default: true)
             apply_changes = params.get("apply", True)
             if apply_changes:
-                logger.info("Applying firewall changes...")
-                apply_result = await self.client.apply_firewall_changes()
-
-                if apply_result.get("result") != "success":
-                    return {
-                        "error": (
-                            f"Rule deleted but failed to apply changes: {apply_result}"
-                        ),
-                        "rule_uuid": rule_uuid,
-                        "status": "partial_success",
-                    }
-
-                logger.info("Successfully applied firewall changes")
-
+                await self.client.apply_firewall_changes()
                 return {
                     "rule_uuid": rule_uuid,
-                    "revision": apply_result.get("revision"),
                     "deleted": True,
                     "applied": True,
                     "status": "success",
                 }
+
             return {
                 "rule_uuid": rule_uuid,
                 "deleted": True,
@@ -96,7 +97,4 @@ class RmfwRuleTool:
 
         except Exception as e:
             logger.exception("Failed to delete firewall rule")
-            return {
-                "error": f"Failed to delete firewall rule: {e}",
-                "status": "error",
-            }
+            return {"status": "error", "error": str(e)}

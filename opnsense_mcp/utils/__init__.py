@@ -1,1 +1,1 @@
-# Auto-generated __init__.py file
+"""Utility modules for the OPNsense MCP server."""

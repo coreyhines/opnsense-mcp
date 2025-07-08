@@ -1,0 +1,37 @@
+{
+    "entries": [
+        {
+            "ip": "10.0.8.80",
+            "mac": "aa:bb:cc:dd:ee:01",
+            "intf": "ax0_vlan81",
+            "hostname": "host1.example.com",
+            "expires": "1197",
+            "type": "vlan"
+        },
+        {
+            "ip": "192.168.1.1",
+            "mac": "aa:bb:cc:dd:ee:02",
+            "intf": "em0",
+            "hostname": "router.example.com",
+            "manufacturer": "Cisco Systems",
+            "expires": "permanent"
+        },
+        {
+            "ip": "192.168.1.100",
+            "mac": "aa:bb:cc:dd:ee:03",
+            "intf": "em0",
+            "hostname": "laptop.example.com",
+            "manufacturer": "Apple Inc.",
+            "expires": "1200"
+        },
+        {
+            "ip": "192.168.1.200",
+            "mac": "aa:bb:cc:dd:ee:04",
+            "intf": "em1",
+            "hostname": "printer.example.com",
+            "manufacturer": "HP Inc.",
+            "expires": "permanent"
+        }
+    ],
+    "total": 4
+} 
