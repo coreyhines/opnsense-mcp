@@ -49,6 +49,7 @@ class GetLogsTool:
 
         Args:
         ----
+
             client: OPNsense client instance for API communication.
 
         """

@@ -2,7 +2,6 @@
 
 import json
 import sys
-from pathlib import Path
 
 
 def main() -> None:
@@ -41,6 +40,7 @@ def main() -> None:
                     f"<td>{version}</td>"
                     f"<td>{vuln.get('id', '')}</td>"
                     f"<td>{vuln.get('description', '')}</td></tr>"
+
                     for vuln in vulns
                 ]
             )
