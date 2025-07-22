@@ -65,8 +65,7 @@ except JWTError:
 - The server is designed for integration with Cursor IDE and other MCP-compatible
   IDEs.
 - All secrets should be stored in `.env` files or `~/.opnsense-env`, not in code.
-- Use vi or vim for editing files. VS Code can be used as an IDE, but not as a
-  text editor.
+- You may use any editor or IDE you prefer; VS Code, vim, and others are all supported.
 - If using an IDE that does not support all dependencies, ensure your environment
   is activated or install missing packages.
 
@@ -120,4 +119,4 @@ vi ~/.opnsense-env
 - The server communicates via MCP protocol (JSON-RPC over stdio), not HTTP REST
   endpoints
 - Podman is the preferred container runtime
-- Use vi/vim for editing; VS Code is supported as an IDE only
+- You may use any editor or IDE you prefer; VS Code, vim, and others are all supported.

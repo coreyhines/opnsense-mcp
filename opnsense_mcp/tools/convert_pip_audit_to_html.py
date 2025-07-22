@@ -2,6 +2,7 @@
 
 import json
 import sys
+from pathlib import Path
 
 
 def main() -> None:
@@ -13,7 +14,7 @@ def main() -> None:
     input_file = sys.argv[1]
     output_file = sys.argv[2]
 
-    with open(input_file) as f:
+    with Path(input_file).open() as f:
         data = json.load(f)
 
     html = [
@@ -34,19 +35,21 @@ def main() -> None:
             version = item.get("version", "")
             vulns = item.get("vulnerabilities", [])
 
-            for vuln in vulns:
-                html.append(
+            html.extend(
+                [
                     f"<tr><td>{package}</td>"
                     f"<td>{version}</td>"
                     f"<td>{vuln.get('id', '')}</td>"
                     f"<td>{vuln.get('description', '')}</td></tr>"
-                )
+                    for vuln in vulns
+                ]
+            )
 
         html.append("</table>")
 
     html.append("</body></html>")
 
-    with open(output_file, "w") as f:
+    with Path(output_file).open("w") as f:
         f.write("\n".join(html))
 
 

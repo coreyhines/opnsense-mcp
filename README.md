@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ```env
 OPNSENSE_API_KEY=your_api_key
 OPNSENSE_API_SECRET=your_api_secret
-OPNSENSE_API_HOST=your.opnsense.host
+OPNSENSE_FIREWALL_HOST=your.opnsense.host
 MCP_SECRET_KEY=your_jwt_secret_key
 ```
 
@@ -46,6 +46,39 @@ python main.py
 cp examples/.opnsense-env ~/.opnsense-env
 vi ~/.opnsense-env
 ```
+
+## Example Configuration for IDE Integration
+
+A sample configuration file for IDE integration and development is provided at:
+- `examples/mcp.json`
+
+> **Global Configuration:**
+> Cursor IDE looks for a global MCP configuration file at `~/.cursor/mcp.json` (in your home directory). This allows you to use the same tool configuration across multiple projects. **However, on some platforms (especially Linux), the global config may not always be picked up. For maximum reliability, place `mcp.json` in your project root and reference it explicitly in your launch configuration.**
+
+To use it:
+1. Copy `examples/mcp.json` to your global config location (`~/.cursor/mcp.json`) or to your project root as `mcp.json` (and reference it directly).
+2. Edit the file to match your environment and credentials.
+3. Reference this file in your IDE's launch configuration or when starting the server, if not using the default global location.
+
+### Example Launch Configuration (Cursor/VS Code)
+
+```json
+{
+  "name": "Run MCP Server",
+  "type": "python",
+  "request": "launch",
+  "program": "${workspaceFolder}/main.py",
+  "args": [
+    "--config",
+    "${workspaceFolder}/mcp.json"
+  ],
+  "justMyCode": false
+}
+```
+
+> **Note:** The `args` list should be one argument per line, as required by some IDEs and Pydantic-style launchers.
+
+See `examples/README.md` for more details.
 
 ## Tool Discovery and Invocation
 
@@ -173,6 +206,5 @@ No LLDP neighbors detected.
 - The server communicates via MCP protocol (JSON-RPC over stdio), not HTTP
   REST endpoints
 - Podman is the preferred container runtime
-- Use vi/vim for editing; VS Code is supported as an IDE only
-- Always clean up temporary and test files (use `tmp_` or `test_` prefixes)
-- Store all secrets in `.env` or a secure store, never in code
+- You may use any editor or IDE you prefer; VS Code, vim, and others are all supported.
+- Always clean up temporary and test files (use `tmp_`

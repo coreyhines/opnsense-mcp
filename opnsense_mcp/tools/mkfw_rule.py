@@ -28,14 +28,16 @@ class FirewallRuleSpec(BaseModel):
 
     @field_validator("action")
     @classmethod
-    def validate_action(cls, v: str) -> str:
+    def validate_action(cls: type, v: str) -> str:
         """
         Validate the action field value.
 
         Args:
+        ----
             v: Action value to validate.
 
         Returns:
+        -------
             Validated action value.
 
         """
@@ -47,14 +49,16 @@ class FirewallRuleSpec(BaseModel):
 
     @field_validator("direction")
     @classmethod
-    def validate_direction(cls, v: str) -> str:
+    def validate_direction(cls: type, v: str) -> str:
         """
         Validate the direction field value.
 
         Args:
+        ----
             v: Direction value to validate.
 
         Returns:
+        -------
             Validated direction value.
 
         """
@@ -66,14 +70,16 @@ class FirewallRuleSpec(BaseModel):
 
     @field_validator("ipprotocol")
     @classmethod
-    def validate_ipprotocol(cls, v: str) -> str:
+    def validate_ipprotocol(cls: type, v: str) -> str:
         """
         Validate the IP protocol field value.
 
         Args:
+        ----
             v: IP protocol value to validate.
 
         Returns:
+        -------
             Validated IP protocol value.
 
         """
@@ -109,24 +115,29 @@ class MkfwRuleTool:
         "required": ["description"],
     }
 
-    def __init__(self, client: OPNsenseClient | None) -> None:
+    def __init__(self: "MkfwRuleTool", client: OPNsenseClient | None) -> None:
         """
         Initialize the firewall rule creation tool.
 
         Args:
+        ----
             client: OPNsense client instance for API communication.
 
         """
         self.client = client
 
-    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def execute(
+        self: "MkfwRuleTool", params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Create a new firewall rule and optionally apply changes.
 
         Args:
+        ----
             params: Rule creation parameters including description, interface, etc.
 
         Returns:
+        -------
             Dictionary containing rule creation results.
 
         """
@@ -144,7 +155,8 @@ class MkfwRuleTool:
             apply_changes = params.get("apply", True)
 
             # Create the rule using the client
-            rule_uuid = await self.client.create_firewall_rule(rule_spec.model_dump())
+            result = await self.client.add_firewall_rule(rule_spec.model_dump())
+            rule_uuid = result.get("uuid")
 
             if apply_changes:
                 await self.client.apply_firewall_changes()
@@ -157,6 +169,10 @@ class MkfwRuleTool:
                     "status": "success",
                 }
 
+        except Exception as e:
+            logger.exception("Failed to create firewall rule")
+            return {"status": "error", "error": str(e)}
+        else:
             return {
                 "rule_uuid": rule_uuid,
                 "description": rule_spec.description,
@@ -169,7 +185,3 @@ class MkfwRuleTool:
                     "apply_firewall_changes() to activate."
                 ),
             }
-
-        except Exception as e:
-            logger.exception("Failed to create firewall rule")
-            return {"status": "error", "error": str(e)}

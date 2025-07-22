@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 
 from opnsense_mcp.tools.arp import ARPTool
 from opnsense_mcp.tools.dhcp import DHCPTool
-from opnsense_mcp.tools.firewall_logs import FirewallLogsTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
+from opnsense_mcp.tools.get_logs import GetLogsTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
 from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
@@ -26,10 +26,10 @@ from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 logger = logging.getLogger(__name__)
 
 # Load environment variables from ~/.opnsense-env by default
-load_dotenv(os.path.expanduser("~/.opnsense-env"))
+load_dotenv(str(Path("~/.opnsense-env").expanduser()))
 
 
-def get_opnsense_client(config: dict[str, Any]) -> Any:
+def get_opnsense_client(config: dict[str, Any]) -> OPNsenseClient:
     """Get an OPNsense client instance based on environment variables."""
     host = os.getenv("OPNSENSE_FIREWALL_HOST")  # Use correct env var name
     api_key = os.getenv("OPNSENSE_API_KEY")
@@ -53,7 +53,7 @@ def get_opnsense_client(config: dict[str, Any]) -> Any:
     return MockOPNsenseClient(config)
 
 
-def format_log_response(logs: list) -> dict[str, Any]:
+def format_log_response(logs: list, msg_id: int | None = None) -> dict[str, Any]:
     """Format logs into an MCP protocol response."""
     log_entries = []
     for log in logs:
@@ -79,16 +79,14 @@ def format_log_response(logs: list) -> dict[str, Any]:
 
     return {
         "jsonrpc": "2.0",
-        "result": {
-            "type": "log_entries",
-            "entries": log_entries,
-        },
+        "id": msg_id,
+        "result": {"content": log_entries},
     }
 
 
 async def handle_message(
     message: dict[str, Any],
-    firewall_logs: FirewallLogsTool,
+    firewall_logs: GetLogsTool,
     arp_tool: ARPTool,
     dhcp_tool: DHCPTool,
     lldp_tool: LLDPTool,
@@ -118,10 +116,9 @@ async def handle_message(
         }
 
     # Handle notifications/initialized to prevent red indicator
-    if method == "notifications/initialized":
+    if method == "notifications/initialized" and msg_id is None:
         # Do not respond to notifications (no id)
-        if msg_id is None:
-            return None
+        return None
 
     # Support both tools/list and ListOfferings
     if method in ("tools/list", "ListOfferings"):
@@ -381,11 +378,7 @@ async def handle_message(
                 dst_ip=arguments.get("dst_ip"),
                 protocol=arguments.get("protocol"),
             )
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(logs)}]},
-            }
+            return format_log_response(logs, msg_id)
         if tool_name == "lldp":
             result = await lldp_tool.execute(arguments)
             return {
@@ -455,7 +448,7 @@ def error_response(
 
 
 def main() -> None:
-    """Main entry point for the MCP server."""
+    """Run the MCP server main entry point."""
     print("SERVER STARTED", file=sys.stderr)
     # Configure logging
     log_level = os.environ.get("LOG_LEVEL", "INFO")
@@ -469,7 +462,7 @@ def main() -> None:
     client = get_opnsense_client({})
 
     # Initialize tools
-    firewall_logs = FirewallLogsTool(client)
+    firewall_logs = GetLogsTool(client)
     arp_tool = ARPTool(client)
     dhcp_tool = DHCPTool(client)
     lldp_tool = LLDPTool(client)
@@ -561,7 +554,7 @@ def main() -> None:
                 sys.stdout.write(json.dumps(err) + "\n")
                 sys.stdout.flush()
             except Exception as e:
-                logger.error(f"Error handling message: {e}", exc_info=True)
+                logger.exception("Error handling message")
                 err_msg = f"Internal error: {str(e)}"
                 err = error_response(-32603, err_msg, msg_id)
                 sys.stdout.write(json.dumps(err) + "\n")

@@ -1,5 +1,7 @@
 # OPNsense MCP Server Configuration Examples
 
+**Note:** Some instructions below reference legacy modules (e.g., `mcp_server.server_new`) or config files that may not exist in the current codebase. The main entry point for the server is typically `main.py`. Please adjust commands as needed for your setup.
+
 This directory contains example configuration files for the OPNsense MCP Server
 in both JSON and YAML formats, optimized for development and IDE usage.
 
@@ -50,6 +52,7 @@ PyCharm, or other development environments.
 ```bash
 # From project root directory
 uv run python -m mcp_server.server_new --config ./examples/mcp.json
+## WARNING: The above references a legacy module. Use `python main.py` for the current server unless otherwise noted.
 ```
 
 #### Using YAML Configuration
@@ -57,6 +60,7 @@ uv run python -m mcp_server.server_new --config ./examples/mcp.json
 ```bash
 # From project root directory
 uv run python -m mcp_server.server_new --config ./examples/mcp.yaml
+## WARNING: The above references a legacy module. Use `python main.py` for the current server unless otherwise noted.
 ```
 
 ### IDE Integration
@@ -73,7 +77,7 @@ uv run python -m mcp_server.server_new --config ./examples/mcp.yaml
           "name": "Run MCP Server",
           "type": "python",
           "request": "launch",
-          "module": "mcp_server.server_new",
+          "module": "main.py",
           "args": ["--config", "${workspaceFolder}/examples/mcp.json"],
           "justMyCode": false,
           "env": {
@@ -84,7 +88,7 @@ uv run python -m mcp_server.server_new --config ./examples/mcp.yaml
           "name": "Debug MCP Server",
           "type": "python",
           "request": "launch",
-          "module": "mcp_server.server_new",
+          "module": "main.py",
           "args": ["--config", "${workspaceFolder}/examples/mcp.json"],
           "justMyCode": false,
           "stopOnEntry": true,
@@ -104,7 +108,7 @@ uv run python -m mcp_server.server_new --config ./examples/mcp.yaml
 1. Go to Run → Edit Configurations
 2. Click the '+' button to add a new configuration and select "Python"
 3. Set the following:
-   - Script path: Select your `server_new.py` file
+   - Script path: Use `main.py` unless you have a custom entry point.
    - Parameters: `--config ./examples/mcp.json`
    - Working directory: Your project root
 4. Click "OK" to save the configuration

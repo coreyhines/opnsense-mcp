@@ -43,11 +43,12 @@ class FirewallLogSummary(BaseModel):
 class GetLogsTool:
     """Tool for retrieving and analyzing firewall logs."""
 
-    def __init__(self, client: OPNsenseClient | None) -> None:
+    def __init__(self: "GetLogsTool", client: OPNsenseClient | None) -> None:
         """
         Initialize tool with API client.
 
         Args:
+        ----
             client: OPNsense client instance for API communication.
 
         """
@@ -57,7 +58,7 @@ class GetLogsTool:
         self._log_cache_ttl = 30  # seconds
 
     async def get_logs(
-        self,
+        self: "GetLogsTool",
         limit: int = 500,
         action: str | None = None,
         src_ip: str | None = None,
@@ -65,7 +66,23 @@ class GetLogsTool:
         protocol: str | None = None,
         filter: str | None = None,
     ) -> list[FirewallLogEntry]:
-        """Retrieve and parse firewall logs with optional filtering."""
+        """
+        Retrieve and parse firewall logs with optional filtering.
+
+        Args:
+        ----
+            limit: Maximum number of logs to return
+            action: Filter by action (pass, block, reject)
+            src_ip: Filter by source IP
+            dst_ip: Filter by destination IP
+            protocol: Filter by protocol (tcp, udp, icmp)
+            filter: Generic keyword filter
+
+        Returns:
+        -------
+            List of parsed firewall log entries.
+
+        """
         logger.info(
             f"GetLogsTool: Getting logs with limit={limit}, "
             f"action={action}, src_ip={src_ip}, dst_ip={dst_ip}, "
@@ -92,15 +109,28 @@ class GetLogsTool:
             for i, log in enumerate(raw_logs):
                 try:
                     entry = FirewallLogEntry(
-                        timestamp=datetime.fromisoformat(log["timestamp"]),
-                        interface=log["interface"],
-                        action=log["action"].lower(),
-                        protocol=log["protocol"].lower(),
-                        src_ip=log["src_ip"],
-                        src_port=log.get("src_port"),
-                        dst_ip=log["dst_ip"],
-                        dst_port=log.get("dst_port"),
-                        description=log.get("description"),
+                        timestamp=datetime.fromisoformat(
+                            log.get("__timestamp__") or log.get("timestamp")
+                        ),
+                        interface=log.get("interface", "unknown"),
+                        action=log.get("action", "unknown").lower(),
+                        protocol=log.get(
+                            "protoname", log.get("protocol", "unknown")
+                        ).lower(),
+                        src_ip=log.get("src", log.get("src_ip", "")),
+                        src_port=(
+                            int(log["srcport"])
+                            if "srcport" in log and log["srcport"]
+                            else None
+                        ),
+                        dst_ip=log.get("dst", log.get("dst_ip", "")),
+                        dst_port=(
+                            int(log["dstport"])
+                            if "dstport" in log and log["dstport"]
+                            else None
+                        ),
+                        description=log.get("label") or log.get("description"),
+                        rule_id=log.get("rulenr") or log.get("rule_id"),
                     )
                     logger.debug(f"Successfully parsed JSON log {i}")
 
@@ -155,7 +185,7 @@ class GetLogsTool:
         logger.info(f"GetLogsTool: Returning {filtered_count} parsed logs")
         return parsed_logs
 
-    def _parse_log_line(self, line: str) -> FirewallLogEntry | None:
+    def _parse_log_line(self: "GetLogsTool", line: str) -> FirewallLogEntry | None:
         """Parse a single firewall log line into a structured format."""
         # Example log line format:
         # 2025-05-22T10:15:30 WAN block in tcp 192.168.1.100:12345 ->
@@ -205,14 +235,16 @@ class GetLogsTool:
         except Exception:
             return None
 
-    def _split_ip_port(self, address: str) -> tuple[str, int | None]:
+    def _split_ip_port(self: "GetLogsTool", address: str) -> tuple[str, int | None]:
         """Split an address:port string into separate values."""
         if ":" in address:
             ip, port = address.rsplit(":", 1)
             return ip, int(port)
         return address, None
 
-    async def get_log_summary(self, logs: list[FirewallLogEntry]) -> FirewallLogSummary:
+    async def get_log_summary(
+        self: "GetLogsTool", logs: list[FirewallLogEntry]
+    ) -> FirewallLogSummary:
         """Generate a summary of firewall log activity."""
         if not logs:
             return FirewallLogSummary(
@@ -251,11 +283,14 @@ class GetLogsTool:
             time_range=time_range,
         )
 
-    async def execute(self, params: dict[str, Any] = None) -> dict[str, Any]:
+    async def execute(
+        self: "GetLogsTool", params: dict[str, Any] = None
+    ) -> dict[str, Any]:
         """
         Execute the firewall logs tool with optional parameters.
 
         Args:
+        ----
             params: Optional parameters for filtering logs
                 - limit: Maximum number of logs to return
                 - action: Filter by action (pass, block, reject)
@@ -263,6 +298,10 @@ class GetLogsTool:
                 - dst_ip: Filter by destination IP
                 - protocol: Filter by protocol (tcp, udp, icmp)
                 - filter: Generic keyword filter
+
+        Returns:
+        -------
+            A dictionary containing the parsed logs and a summary.
 
         """
         if params is None:

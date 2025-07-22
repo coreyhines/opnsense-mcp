@@ -12,11 +12,14 @@ logger = logging.getLogger(__name__)
 class OPNsenseClient:
     """Client for interacting with OPNsense API."""
 
-    def __init__(self, mock: bool = False, mock_data_path: str | None = None) -> None:
+    def __init__(
+        self: "OPNsenseClient", mock: bool = False, mock_data_path: str | None = None
+    ) -> None:
         """
         Initialize the OPNsense client.
 
         Args:
+        ----
             mock: Whether to use mock data instead of real API calls
             mock_data_path: Path to mock data directory
 
@@ -30,17 +33,21 @@ class OPNsenseClient:
             f"mock_data_path={mock_data_path})"
         )
 
-    async def get_arp_table(self, params: dict[str, Any] = None) -> dict:
+    async def get_arp_table(
+        self: "OPNsenseClient", params: dict[str, Any] = None
+    ) -> dict:
         """
         Get ARP/NDP table information.
 
         Args:
+        ----
             params: Optional query parameters
                 - ip: Filter by IP address
                 - mac: Filter by MAC address
                 - limit: Maximum number of entries to return
 
         Returns:
+        -------
             dict: ARP table information
 
         """
@@ -50,16 +57,18 @@ class OPNsenseClient:
         raise NotImplementedError("Real API calls not implemented yet")
 
     async def _get_mock_data(
-        self, filename: str, params: dict[str, Any] = None
+        self: "OPNsenseClient", filename: str, params: dict[str, Any] = None
     ) -> dict:
         """
         Get mock data from a JSON file.
 
         Args:
+        ----
             filename: Name of the mock data file
             params: Optional query parameters to filter the data
 
         Returns:
+        -------
             dict: Mock data
 
         """
@@ -68,7 +77,7 @@ class OPNsenseClient:
         logger.debug(f"Loading mock data from {file_path}")
 
         try:
-            with open(file_path) as f:
+            with Path(file_path).open() as f:
                 data = json.load(f)
         except FileNotFoundError:
             logger.exception(f"Mock data file not found: {file_path}")

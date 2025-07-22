@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Mock data script for MCP server development testing.
+
 Creates example data files for development mode.
 """
 
@@ -217,7 +218,7 @@ mock_files = {
 # Write mock data files
 for filename, data in mock_files.items():
     file_path = mock_data_dir / filename
-    with open(file_path, "w") as f:
+    with Path(file_path).open("w") as f:
         json.dump(data, f, indent=2)
     print(f"Created mock data file: {file_path}")
 
