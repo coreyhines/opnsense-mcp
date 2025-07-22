@@ -1,5 +1,25 @@
+[project]
+name = "opnsense_mcp"
+version = "0.1.0"
+description = "OPNsense MCP Server"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.24.0",
+    "pyopnsense>=0.1.0",
+    "ruamel.yaml>=0.17.0",
+    "pydantic>=2.0.0",
+    "requests>=2.31.0",
+    "python-multipart>=0.0.6",
+    "typing-extensions>=4.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "httpx>=0.24.0",
+    "python-dotenv>=1.0.0",
+    "fastmcp>=0.1.0",
+    "pyyaml>=6.0.0"
+]
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
