@@ -12,18 +12,19 @@ logger = logging.getLogger(__name__)
 class FirewallLogsTool:
     """Tool for retrieving and analyzing firewall logs."""
 
-    def __init__(self, client: OPNsenseClient | None) -> None:
+    def __init__(self: "FirewallLogsTool", client: OPNsenseClient | None) -> None:
         """
         Initialize tool with API client.
 
         Args:
+        ----
             client: OPNsense client instance for API communication.
 
         """
         self.client = client
 
     async def get_firewall_logs(
-        self,
+        self: "FirewallLogsTool",
         limit: int = 50,
         src_ip: str | None = None,
         dst_ip: str | None = None,
@@ -34,6 +35,7 @@ class FirewallLogsTool:
         Retrieve firewall logs with optional filtering.
 
         Args:
+        ----
             limit: Maximum number of logs to return.
             src_ip: Filter by source IP address.
             dst_ip: Filter by destination IP address.
@@ -41,6 +43,7 @@ class FirewallLogsTool:
             action: Filter by action (block, pass, etc.).
 
         Returns:
+        -------
             List of firewall log entries.
 
         """
@@ -49,29 +52,58 @@ class FirewallLogsTool:
                 logger.warning("No client available")
                 return []
 
-            # Get logs from the API
-            logs = await self.client.get_firewall_logs(
-                limit=limit,
-                src_ip=src_ip,
-                dst_ip=dst_ip,
-                protocol=protocol,
-                action=action,
-            )
+            # Only pass limit to the client
+            logs = await self.client.get_firewall_logs(limit=limit)
+
+            def match(log: dict[str, Any]) -> bool:
+                if src_ip and log.get("src") != src_ip and log.get("src_ip") != src_ip:
+                    return False
+                if dst_ip and log.get("dst") != dst_ip and log.get("dst_ip") != dst_ip:
+                    return False
+                if (
+                    protocol
+                    and (log.get("protocol") or log.get("protoname")).lower()
+                    != protocol.lower()
+                ):
+                    return False
+                return not (action and log.get("action", "").lower() != action.lower())
 
         except Exception:
             logger.exception("Failed to get firewall logs")
             return []
         else:
-            return logs if logs else []
+            return [log for log in logs if match(log)]
 
-    async def analyze_logs(self, logs: list[dict[str, Any]]) -> dict[str, Any]:
+    async def get_logs(
+        self: "FirewallLogsTool", *args: object, **kwargs: object
+    ) -> list[dict[str, object]]:
+        """
+        Alias for get_firewall_logs for compatibility with tool registry/server.
+
+        Args:
+        ----
+            *args: Positional arguments passed to get_firewall_logs.
+            **kwargs: Keyword arguments passed to get_firewall_logs.
+
+        Returns:
+        -------
+            List of firewall log entries.
+
+        """
+        return await self.get_firewall_logs(*args, **kwargs)
+
+    async def analyze_logs(
+        self: "FirewallLogsTool", logs: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Analyze firewall logs and provide statistics.
 
         Args:
+        ----
             logs: List of log entries to analyze.
 
         Returns:
+        -------
             Dictionary containing analysis results.
 
         """
@@ -127,14 +159,18 @@ class FirewallLogsTool:
             "blocked_attempts": blocked_count,
         }
 
-    async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
+    async def execute(
+        self: "FirewallLogsTool", params: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Execute firewall logs retrieval and analysis.
 
         Args:
+        ----
             params: Parameters including limit, src_ip, dst_ip, protocol, action.
 
         Returns:
+        -------
             Dictionary containing logs and analysis results.
 
         """

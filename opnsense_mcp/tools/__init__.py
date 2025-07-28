@@ -9,6 +9,7 @@ from .interface import InterfaceTool
 from .interface_list import InterfaceListTool
 from .lldp import LLDPTool
 from .mkfw_rule import MkfwRuleTool
+from .packet_capture import PacketCaptureTool2
 from .rmfw_rule import RmfwRuleTool
 from .system import SystemTool
 
@@ -25,6 +26,7 @@ TOOL_CLASSES = {
     "get_logs": GetLogsTool,
     "mkfw_rule": MkfwRuleTool,
     "rmfw_rule": RmfwRuleTool,
+    "packet_capture": PacketCaptureTool2,
 }
 
 
@@ -53,4 +55,5 @@ __all__ = [
     "MkfwRuleTool",
     "RmfwRuleTool",
     "SystemTool",
+    "PacketCaptureTool2",
 ] + list(TOOL_CLASSES.keys())

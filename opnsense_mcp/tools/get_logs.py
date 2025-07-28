@@ -48,6 +48,7 @@ class GetLogsTool:
         Initialize tool with API client.
 
         Args:
+        ----
             client: OPNsense client instance for API communication.
 
         """
@@ -65,12 +66,39 @@ class GetLogsTool:
         protocol: str | None = None,
         filter: str | None = None,
     ) -> list[FirewallLogEntry]:
-        """Retrieve and parse firewall logs with optional filtering."""
+        """
+        Retrieve and parse firewall logs with optional filtering.
+
+        Args:
+        ----
+            limit: Maximum number of logs to return.
+            action: Filter by action (pass, block, reject).
+            src_ip: Filter by source IP.
+            dst_ip: Filter by destination IP.
+            protocol: Filter by protocol (tcp, udp, icmp).
+            filter: Generic keyword filter.
+
+        """
         logger.info(
             f"GetLogsTool: Getting logs with limit={limit}, "
             f"action={action}, src_ip={src_ip}, dst_ip={dst_ip}, "
             f"protocol={protocol}, filter={filter}"
         )
+
+        def normalize_log(log: dict[str, Any]) -> dict[str, Any]:
+            """Map API log fields to expected model fields."""
+            return {
+                "timestamp": log.get("timestamp") or log.get("__timestamp__"),
+                "interface": log.get("interface"),
+                "action": log.get("action"),
+                "protocol": log.get("protocol") or log.get("protoname"),
+                "src_ip": log.get("src_ip") or log.get("src"),
+                "src_port": log.get("src_port") or log.get("srcport"),
+                "dst_ip": log.get("dst_ip") or log.get("dst"),
+                "dst_port": log.get("dst_port") or log.get("dstport"),
+                "rule_id": log.get("rule_id") or log.get("rid"),
+                "description": log.get("description") or log.get("label"),
+            }
 
         parsed_logs = []
         try:
@@ -91,16 +119,18 @@ class GetLogsTool:
             # Parse logs into structured format
             for i, log in enumerate(raw_logs):
                 try:
+                    norm = normalize_log(log)
                     entry = FirewallLogEntry(
-                        timestamp=datetime.fromisoformat(log["timestamp"]),
-                        interface=log["interface"],
-                        action=log["action"].lower(),
-                        protocol=log["protocol"].lower(),
-                        src_ip=log["src_ip"],
-                        src_port=log.get("src_port"),
-                        dst_ip=log["dst_ip"],
-                        dst_port=log.get("dst_port"),
-                        description=log.get("description"),
+                        timestamp=datetime.fromisoformat(norm["timestamp"]),
+                        interface=norm["interface"],
+                        action=norm["action"].lower() if norm["action"] else "",
+                        protocol=norm["protocol"].lower() if norm["protocol"] else "",
+                        src_ip=norm["src_ip"],
+                        src_port=int(norm["src_port"]) if norm["src_port"] else None,
+                        dst_ip=norm["dst_ip"],
+                        dst_port=int(norm["dst_port"]) if norm["dst_port"] else None,
+                        rule_id=norm["rule_id"],
+                        description=norm["description"],
                     )
                     logger.debug(f"Successfully parsed JSON log {i}")
 
@@ -213,7 +243,14 @@ class GetLogsTool:
         return address, None
 
     async def get_log_summary(self, logs: list[FirewallLogEntry]) -> FirewallLogSummary:
-        """Generate a summary of firewall log activity."""
+        """
+        Generate a summary of firewall log activity.
+
+        Args:
+        ----
+            logs: List of FirewallLogEntry objects to summarize.
+
+        """
         if not logs:
             return FirewallLogSummary(
                 total_entries=0,
@@ -256,6 +293,7 @@ class GetLogsTool:
         Execute the firewall logs tool with optional parameters.
 
         Args:
+        ----
             params: Optional parameters for filtering logs
                 - limit: Maximum number of logs to return
                 - action: Filter by action (pass, block, reject)

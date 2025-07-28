@@ -18,6 +18,7 @@ from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
 from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
+from opnsense_mcp.tools.packet_capture import PacketCaptureTool2 as PacketCaptureTool
 from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.utils.api import OPNsenseClient
@@ -97,6 +98,7 @@ async def handle_message(
     mkfw_rule_tool: MkfwRuleTool,
     rmfw_rule_tool: RmfwRuleTool,
     interface_list_tool: InterfaceListTool,
+    packet_capture_tool: PacketCaptureTool,
 ) -> dict[str, Any] | None:
     """Handle incoming MCP messages and route them to appropriate tools."""
     method = message.get("method")
@@ -348,6 +350,61 @@ async def handle_message(
                     "required": [],
                 },
             },
+            {
+                "name": "packet_capture",
+                "description": "Start, stop, or fetch a packet capture file",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "description": "start, stop, or fetch (default: start)",
+                            "optional": True,
+                        },
+                        "interface": {
+                            "type": "string",
+                            "description": "Interface to capture on (default: wan)",
+                            "optional": True,
+                        },
+                        "filter": {
+                            "type": "string",
+                            "description": "BPF filter expression (optional)",
+                            "optional": True,
+                        },
+                        "duration": {
+                            "type": "number",
+                            "description": "Duration in seconds (default: 30)",
+                            "optional": True,
+                        },
+                        "count": {
+                            "type": "number",
+                            "description": "Packet count limit (optional)",
+                            "optional": True,
+                        },
+                        "local_path": {
+                            "type": "string",
+                            "description": "Local path to save PCAP (optional)",
+                            "optional": True,
+                        },
+                        "raw": {
+                            "type": "boolean",
+                            "description": "Return raw PCAP file if true (default: false)",
+                            "optional": True,
+                        },
+                        "stream": {
+                            "type": "boolean",
+                            "description": "If true, stream pcap data to chat (hex preview)",
+                            "optional": True,
+                        },
+                        "preview_bytes": {
+                            "type": "number",
+                            "description": "Number of bytes to preview (default: 1000)",
+                            "optional": True,
+                        },
+                    },
+                    "required": [],
+                },
+            },
         ]
         return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}}
 
@@ -428,6 +485,28 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if tool_name == "packet_capture":
+            result = await packet_capture_tool.execute(arguments)
+            # Limit raw output if requested
+            if arguments.get("raw"):
+                # Only return first 1000 bytes of file if raw
+                if (
+                    arguments.get("action") == "fetch"
+                    and result.get("status") == "success"
+                ):
+                    try:
+                        with open(result["local_file"], "rb") as f:
+                            raw_bytes = f.read(1000)
+                        result["raw_preview"] = raw_bytes.hex()
+                    except Exception as e:
+                        result["raw_preview_error"] = str(e)
+            # Otherwise, return summary/statistics placeholder
+            # (Real analysis would be implemented here)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
@@ -478,6 +557,7 @@ def main() -> None:
     mkfw_rule_tool = MkfwRuleTool(client)
     rmfw_rule_tool = RmfwRuleTool(client)
     interface_list_tool = InterfaceListTool(client)
+    packet_capture_tool = PacketCaptureTool()
 
     # Handle stdin/stdout communication
     async def process_messages() -> None:
@@ -533,6 +613,7 @@ def main() -> None:
                     mkfw_rule_tool,
                     rmfw_rule_tool,
                     interface_list_tool,
+                    packet_capture_tool,
                 )
                 if response is not None:
                     print(
