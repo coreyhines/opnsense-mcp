@@ -2,6 +2,12 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "opnsense-mcp"
+version = "1.0.0"
+description = "OPNsense MCP Server for network and firewall management"
+requires-python = ">=3.12,<3.13"
+
 [tool.setuptools]
 packages = ["opnsense_mcp"]
 
