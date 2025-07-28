@@ -21,9 +21,14 @@ export PYTHONIOENCODING=utf-8
 export DEBUG=${DEBUG:-1}
 
 # Check if virtual environment exists and activate it
-if [ -d "venv" ]; then
-    echo "Activating virtual environment"
+if [ -d ".venv" ]; then
+    echo "Activating virtual environment (.venv)"
+    source .venv/bin/activate
+elif [ -d "venv" ]; then
+    echo "Activating virtual environment (venv)"
     source venv/bin/activate
+else
+    echo "Warning: No virtual environment found (.venv or venv)"
 fi
 
 # Check if required environment variables are set
@@ -41,4 +46,14 @@ fi
 
 # Start the MCP server
 echo "Starting OPNsense MCP Server..."
-exec python3 opnsense_mcp/server.py 
+
+# Use the virtual environment's Python if available
+if [ -n "$VIRTUAL_ENV" ]; then
+    echo "Using virtual environment Python: $VIRTUAL_ENV/bin/python3"
+    export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
+    exec "$VIRTUAL_ENV/bin/python3" opnsense_mcp/server.py
+else
+    echo "Using system Python"
+    export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
+    exec python3 opnsense_mcp/server.py
+fi 
