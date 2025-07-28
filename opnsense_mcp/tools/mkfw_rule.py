@@ -144,7 +144,8 @@ class MkfwRuleTool:
             apply_changes = params.get("apply", True)
 
             # Create the rule using the client
-            rule_uuid = await self.client.create_firewall_rule(rule_spec.model_dump())
+            result = await self.client.add_firewall_rule(rule_spec.model_dump())
+            rule_uuid = result.get("uuid")
 
             if apply_changes:
                 await self.client.apply_firewall_changes()

@@ -52,20 +52,27 @@ class FirewallLogsTool:
                 logger.warning("No client available")
                 return []
 
-            # Get logs from the API
-            logs = await self.client.get_firewall_logs(
-                limit=limit,
-                src_ip=src_ip,
-                dst_ip=dst_ip,
-                protocol=protocol,
-                action=action,
-            )
+            # Only pass limit to the client
+            logs = await self.client.get_firewall_logs(limit=limit)
+
+            def match(log: dict[str, Any]) -> bool:
+                if src_ip and log.get("src") != src_ip and log.get("src_ip") != src_ip:
+                    return False
+                if dst_ip and log.get("dst") != dst_ip and log.get("dst_ip") != dst_ip:
+                    return False
+                if (
+                    protocol
+                    and (log.get("protocol") or log.get("protoname")).lower()
+                    != protocol.lower()
+                ):
+                    return False
+                return not (action and log.get("action", "").lower() != action.lower())
 
         except Exception:
             logger.exception("Failed to get firewall logs")
             return []
         else:
-            return logs if logs else []
+            return [log for log in logs if match(log)]
 
     async def get_logs(
         self: "FirewallLogsTool", *args: object, **kwargs: object

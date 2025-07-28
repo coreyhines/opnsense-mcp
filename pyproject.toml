@@ -40,6 +40,7 @@ ignore = [
     "G004",  # Allow f-string in logging (will be gradually fixed)
     "TRY003", # Allow long messages in exception classes
     "ERA001", # Don't remove commented code automatically
+    "ANN101", # Allow annotations
 ]
 
 [tool.ruff.lint.per-file-ignores]
