@@ -30,6 +30,7 @@
 ### Documentation
 - ✅ **Main README** (`README.md`) - Project overview and setup
 - ✅ **Project Guide** (`docs/PROJECT_GUIDE.md`) - Development guidelines
+- ✅ **LM Studio Integration Guide** (`docs/LM_STUDIO_INTEGRATION.md`) - Complete LM Studio setup and configuration
 - ✅ **Standalone Tools Guide** (`STANDALONE_TOOLS.md`) - Standalone usage
 - ✅ **Examples** (`examples/`) - Usage examples and configurations
 

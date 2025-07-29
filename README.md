@@ -47,6 +47,35 @@ cp examples/.opnsense-env ~/.opnsense-env
 vi ~/.opnsense-env
 ```
 
+## LM Studio Integration
+
+The OPNsense MCP Server is fully compatible with LM Studio for enhanced AI-powered network management. 
+
+### Quick Setup
+
+1. Create `~/.lmstudio/mcp.json` with the OPNsense MCP server configuration
+2. Configure your OPNsense credentials in `~/.opnsense-env`
+3. Restart LM Studio to load the MCP tools
+
+### Available Tools in LM Studio
+
+Once integrated, you can use natural language to interact with your OPNsense firewall:
+
+- **Network Analysis**: "Show me all devices on the network"
+- **System Monitoring**: "What's the current system status?"
+- **Firewall Management**: "Create a rule to block traffic from 192.168.1.100"
+- **Traffic Analysis**: "Capture traffic on the WAN interface for 30 seconds"
+
+### Detailed Documentation
+
+For comprehensive LM Studio integration instructions, including:
+- Complete configuration examples (with redacted tokens)
+- Multi-server setup (OPNsense, CVP, Home Assistant, Grafana)
+- Troubleshooting guide
+- Security best practices
+
+See: [LM Studio Integration Guide](docs/LM_STUDIO_INTEGRATION.md)
+
 ## Tool Discovery and Invocation
 
 - Tools are discovered and invoked via the MCP protocol (JSON-RPC over stdio),
