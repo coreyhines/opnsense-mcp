@@ -59,7 +59,7 @@ class LLDPTool:
                     "error": "No client available",
                 }
 
-            neighbors = await self.client.get_lldp_neighbors()
+            neighbors = await self.client.get_lldp_table()
             return {"neighbors": neighbors, "status": "success"}
         except Exception as e:
             logger.exception("Failed to get LLDP neighbors")
