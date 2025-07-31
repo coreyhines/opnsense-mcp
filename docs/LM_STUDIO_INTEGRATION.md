@@ -97,28 +97,106 @@ Once integrated, the following OPNsense MCP tools will be available in LM Studio
 
 ### Basic Network Queries
 
+**User**: "Show me all devices on the network"
+
+**Assistant**: I'll check the ARP table to show you all devices currently connected to your network.
+
 ```
-User: "Show me all devices on the network"
-Assistant: [Uses arp and dhcp tools to provide comprehensive device list]
+ARP Table Results:
+- 192.168.1.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0 - Permanent
+- 192.168.1.33 (11:22:33:44:55:66) - Mojo Networks, Inc. - Interface: ax0 - Expires: 1200s
+- 192.168.1.64 (aa:bb:cc:dd:ee:ff) - Mojo Networks, Inc. - Interface: ax0 - Expires: 875s
+- 192.168.1.69 (30:86:2d:c9:14:6f) - Arista Network, Inc. - Interface: ax0 - Expires: 928s
+- 192.168.1.36 (aa:bb:cc:dd:ee:ff) - Mojo Networks, Inc. - Interface: ax0 - Expires: 895s
+- 192.168.1.4 (bc:99:11:a6:08:0f) - Zyxel Communications Corporation - Hostname: poesw01 - Expires: 1174s
 
-User: "What's the system status of the firewall?"
-Assistant: [Uses system tool to show CPU, memory, and uptime]
+VLAN 2 Devices:
+- 10.0.2.10 (aa:bb:cc:dd:ee:ff) - Raspberry Pi Trading Ltd - Interface: ax0_vlan2 - Expires: 1195s
+- 10.0.2.175 (80:6d:97:5e:a4:10) - Private - Hostname: coreymbp - Expires: 1152s
+- 10.0.2.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0_vlan2 - Permanent
+```
 
-User: "Show me recent firewall logs"
-Assistant: [Uses get_logs tool to display recent firewall activity]
+**User**: "What's the system status of the firewall?"
+
+**Assistant**: Let me check the current system status of your OPNsense firewall.
+
+```
+System Status:
+- Hostname: fw.example.com
+- OPNsense Version: OPNsense 25.7-amd64
+- Kernel: FreeBSD 14.3-RELEASE-p1
+- Status: Online and operational
+```
+
+**User**: "Show me recent firewall logs"
+
+**Assistant**: I'll retrieve the most recent firewall logs to show you current network activity.
+
+```
+Recent Firewall Logs (Last 5 entries):
+1. 2025-07-31T08:26:01-05:00 - BLOCK - UDP - 10.0.7.3:123 → 10.0.2.3:123 - Interface: ax0_vlan7 - Rule: Default deny / state violation rule
+2. 2025-07-31T08:25:58-05:00 - BLOCK - TCP - 203.0.113.148:53497 → 203.0.113.91:56539 - Interface: ax1 - Rule: Default deny / state violation rule
+3. 2025-07-31T08:25:57-05:00 - BLOCK - TCP - 203.0.113.58:40462 → 203.0.113.91:795 - Interface: ax1 - Rule: Default deny / state violation rule
+4. 2025-07-31T08:25:53-05:00 - BLOCK - TCP - 203.0.113.148:53497 → 203.0.113.91:56506 - Interface: ax1 - Rule: Default deny / state violation rule
+5. 2025-07-31T08:25:52-05:00 - BLOCK - UDP - 10.0.7.4:123 → 10.0.2.3:123 - Interface: ax0_vlan7 - Rule: Default deny / state violation rule
 ```
 
 ### Advanced Network Analysis
 
+**User**: "Capture traffic on the WAN interface for 30 seconds"
+
+**Assistant**: I'll start a packet capture on the WAN interface for 30 seconds to analyze network traffic.
+
 ```
-User: "Capture traffic on the WAN interface for 30 seconds"
-Assistant: [Uses packet_capture tool with appropriate parameters]
+Packet Capture Started:
+- Interface: ax1 (WAN)
+- Duration: 30 seconds
+- Filter: None (capturing all traffic)
+- Status: Running...
 
-User: "Create a firewall rule to block traffic from 192.168.1.100"
-Assistant: [Uses mkfw_rule tool to create the blocking rule]
+[After 30 seconds]
+Packet Capture Complete:
+- Captured 1,247 packets
+- File saved as: wan_capture_20250731_082600.pcap
+- Analysis shows normal internet traffic with some blocked connection attempts
+```
 
-User: "Show me LLDP neighbors to understand network topology"
-Assistant: [Uses lldp tool to display network device connections]
+**User**: "Create a firewall rule to block traffic from 192.168.1.100"
+
+**Assistant**: I'll create a firewall rule to block all traffic from the specified IP address.
+
+```
+Firewall Rule Created:
+- Description: Block traffic from 192.168.1.100
+- Action: Block
+- Interface: LAN
+- Protocol: Any
+- Source: 192.168.1.100
+- Destination: Any
+- Direction: In
+- Status: Enabled and applied
+- Rule UUID: 12345678-1234-1234-1234-123456789abc
+```
+
+**User**: "Show me LLDP neighbors to understand network topology"
+
+**Assistant**: I'll check the LLDP neighbor table to show you the network topology and connected devices.
+
+```
+LLDP Neighbor Table:
+- Interface: igb3
+  - Neighbor: Arista Networks Switch
+  - MAC: aa:bb:cc:dd:ee:ff
+  - IP: 10.0.9.246
+  - Port: Ethernet1/1
+  - System: Arista-DCS-7050S-64
+
+- Interface: ax0
+  - Neighbor: Mojo Networks AP
+  - MAC: 11:22:33:44:55:66
+  - IP: 192.168.1.33
+  - Port: eth0
+  - System: Mojo-AP-1234
 ```
 
 ## Troubleshooting
