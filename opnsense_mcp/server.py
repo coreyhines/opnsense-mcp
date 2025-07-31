@@ -20,6 +20,7 @@ from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
 from opnsense_mcp.tools.packet_capture import PacketCaptureTool2 as PacketCaptureTool
 from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.utils.api import OPNsenseClient
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
@@ -37,9 +38,14 @@ def get_opnsense_client(config: dict[str, Any]) -> Any:
     api_secret = os.getenv("OPNSENSE_API_SECRET")
     ssl_verify = os.getenv("OPNSENSE_SSL_VERIFY", "false").lower() == "true"
 
+    # SSH configuration
+    ssh_host = os.getenv("OPNSENSE_SSH_HOST", host)  # Default to firewall host
+    ssh_user = os.getenv("OPNSENSE_SSH_USER", "root")
+    ssh_key = os.getenv("OPNSENSE_SSH_KEY")
+
     if host and api_key and api_secret:
         logger.info("Using real OPNsense client")
-        return OPNsenseClient(
+        client = OPNsenseClient(
             {
                 "firewall_host": host,
                 "api_key": api_key,
@@ -47,6 +53,18 @@ def get_opnsense_client(config: dict[str, Any]) -> Any:
                 "verify_ssl": ssl_verify,
             }
         )
+
+        # Add SSH configuration to the client
+        client.ssh_config = {
+            "host": ssh_host,
+            "user": ssh_user,
+            "key": ssh_key,
+        }
+
+        logger.info(f"SSH Config: host={ssh_host}, user={ssh_user}, key={ssh_key}")
+
+        return client
+
     logger.warning("No OPNsense credentials found, using mock client")
     workspace_root = Path(__file__).parent.parent
     mock_data_path = workspace_root / "examples" / "mock_data"
@@ -99,6 +117,7 @@ async def handle_message(
     rmfw_rule_tool: RmfwRuleTool,
     interface_list_tool: InterfaceListTool,
     packet_capture_tool: PacketCaptureTool,
+    ssh_fw_rule_tool: SSHFirewallRuleTool,
 ) -> dict[str, Any] | None:
     """Handle incoming MCP messages and route them to appropriate tools."""
     method = message.get("method")
@@ -124,6 +143,13 @@ async def handle_message(
         # Do not respond to notifications (no id)
         if msg_id is None:
             return None
+
+    # Handle initialized notification properly
+    if method == "initialized":
+        # This is a notification, not a request, so no response needed
+        # Just log it and continue
+        logger.info("Received initialized notification")
+        return None
 
     # Support both tools/list and ListOfferings
     if method in ("tools/list", "ListOfferings"):
@@ -342,6 +368,28 @@ async def handle_message(
                 },
             },
             {
+                "name": "ssh_fw_rule",
+                "description": "Create firewall rules via SSH (bypasses API issues)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "description": {"type": "string"},
+                        "interface": {"type": "string", "default": "lan"},
+                        "action": {"type": "string", "default": "block"},
+                        "protocol": {"type": "string", "default": "any"},
+                        "source_net": {"type": "string", "default": "any"},
+                        "source_port": {"type": "string", "default": "any"},
+                        "destination_net": {"type": "string", "default": "any"},
+                        "destination_port": {"type": "string", "default": "any"},
+                        "direction": {"type": "string", "default": "in"},
+                        "ipprotocol": {"type": "string", "default": "inet"},
+                        "enabled": {"type": "boolean", "default": True},
+                        "apply": {"type": "boolean", "default": True},
+                    },
+                    "required": ["description"],
+                },
+            },
+            {
                 "name": "interface_list",
                 "description": "Get available interface names for firewall rules",
                 "inputSchema": {
@@ -478,6 +526,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if tool_name == "ssh_fw_rule":
+            result = await ssh_fw_rule_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         if tool_name == "interface_list":
             result = await interface_list_tool.execute(arguments)
             return {
@@ -486,27 +541,49 @@ async def handle_message(
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
         if tool_name == "packet_capture":
-            result = await packet_capture_tool.execute(arguments)
-            # Limit raw output if requested
-            if arguments.get("raw"):
-                # Only return first 1000 bytes of file if raw
-                if (
-                    arguments.get("action") == "fetch"
-                    and result.get("status") == "success"
-                ):
-                    try:
-                        with open(result["local_file"], "rb") as f:
-                            raw_bytes = f.read(1000)
-                        result["raw_preview"] = raw_bytes.hex()
-                    except Exception as e:
-                        result["raw_preview_error"] = str(e)
-            # Otherwise, return summary/statistics placeholder
-            # (Real analysis would be implemented here)
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"content": [{"type": "text", "text": str(result)}]},
-            }
+            try:
+                result = await packet_capture_tool.execute(arguments)
+                # Ensure we always have a result
+                if result is None:
+                    result = {
+                        "status": "error",
+                        "error": "Tool returned no response",
+                        "guidance": "The packet capture tool failed to return a response. This may indicate an internal error.",
+                    }
+
+                # Limit raw output if requested
+                if arguments.get("raw"):
+                    # Only return first 1000 bytes of file if raw
+                    if (
+                        arguments.get("action") == "fetch"
+                        and result.get("status") == "success"
+                    ):
+                        try:
+                            with open(result["local_file"], "rb") as f:
+                                raw_bytes = f.read(1000)
+                            result["raw_preview"] = raw_bytes.hex()
+                        except Exception as e:
+                            result["raw_preview_error"] = str(e)
+
+                return {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {"content": [{"type": "text", "text": str(result)}]},
+                }
+            except Exception as e:
+                # Catch any exceptions from the tool and return a proper error response
+                error_result = {
+                    "status": "error",
+                    "error": f"Packet capture tool failed: {str(e)}",
+                    "guidance": "The packet capture tool encountered an unexpected error. Check the firewall connectivity and SSH configuration.",
+                }
+                return {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {
+                        "content": [{"type": "text", "text": str(error_result)}]
+                    },
+                }
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
@@ -558,6 +635,7 @@ def main() -> None:
     rmfw_rule_tool = RmfwRuleTool(client)
     interface_list_tool = InterfaceListTool(client)
     packet_capture_tool = PacketCaptureTool()
+    ssh_fw_rule_tool = SSHFirewallRuleTool(client)
 
     # Handle stdin/stdout communication
     async def process_messages() -> None:
@@ -614,6 +692,7 @@ def main() -> None:
                     rmfw_rule_tool,
                     interface_list_tool,
                     packet_capture_tool,
+                    ssh_fw_rule_tool,
                 )
                 if response is not None:
                     print(

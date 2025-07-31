@@ -49,7 +49,7 @@ vi ~/.opnsense-env
 
 ## LM Studio Integration
 
-The OPNsense MCP Server is fully compatible with LM Studio for enhanced AI-powered network management. 
+The OPNsense MCP Server is fully compatible with LM Studio for enhanced AI-powered network management.
 
 ### Quick Setup
 
@@ -76,6 +76,43 @@ For comprehensive LM Studio integration instructions, including:
 
 See: [LM Studio Integration Guide](docs/LM_STUDIO_INTEGRATION.md)
 
+## Multi-Application Integration
+
+The OPNsense MCP Server supports integration with multiple desktop applications for comprehensive AI-powered network management across different workflows.
+
+### Supported Applications
+
+- **Cursor IDE**: Development integration with network-aware coding
+- **LM Studio**: AI chat interface for natural language management
+- **Continue**: AI coding assistant with network context
+- **Ollama**: Local LLM interface for offline management
+- **Jan**: Open-source AI chat alternative
+- **Web Search**: AI-powered search with network tools
+
+### Quick Setup
+
+1. Install your preferred applications
+2. Create the appropriate configuration file (e.g., `~/.cursor/mcp.json`)
+3. Configure your OPNsense credentials in `~/.opnsense-env`
+4. Restart the application to load MCP tools
+
+### Use Cases by Application
+
+- **Development**: Cursor IDE + Continue for network-aware coding
+- **Management**: LM Studio + Jan for natural language control
+- **Offline**: Ollama for local network management
+- **Research**: Web Search for troubleshooting and best practices
+
+### Detailed Documentation
+
+For comprehensive multi-application integration instructions, including:
+- Complete configuration examples for all applications
+- Application-specific use cases and workflows
+- Troubleshooting guides for each application
+- Integration workflows and best practices
+
+See: [Multi-Application Integration Guide](docs/MULTI_APP_INTEGRATION.md)
+
 ## Tool Discovery and Invocation
 
 - Tools are discovered and invoked via the MCP protocol (JSON-RPC over stdio),
@@ -90,99 +127,185 @@ See: [LM Studio Integration Guide](docs/LM_STUDIO_INTEGRATION.md)
 - The server uses JWT-based authentication for internal operations. All secrets
   and keys must be stored in `.env` or a secure store.
 
-## Available Tools
+## Available Functions
 
-The following tools are typically available via the MCP server (actual
-availability may depend on your OPNsense configuration):
+The OPNsense MCP Server provides comprehensive network management capabilities through 12 main function categories:
 
-- **arp**: Retrieves both IPv4 ARP and IPv6 NDP tables from OPNsense.
-- **dhcp**: Shows DHCPv4 and DHCPv6 lease tables.
-- **system**: Gets system status information including CPU, memory, and
-  filesystem usage.
-- **firewall**: Lists firewall rules on OPNsense.
-- **lldp**: Shows LLDP neighbor table (if supported by the OPNsense API).
+### 🔍 **Network Discovery & Device Identification**
+- **`arp`** - ARP/NDP table for IP-to-MAC address mapping
+- **`dhcp`** - DHCP lease information and hostname resolution  
+- **`lldp`** - Network topology discovery via LLDP neighbors
 
-> **Note:** Tool names and availability may change based on your OPNsense version
-> and configuration. Use your IDE's tool discovery feature to see the current list.
+### 📊 **System Monitoring & Health**
+- **`system`** - Firewall CPU, memory, disk usage, and diagnostics
+- **`get_logs`** - Firewall log analysis with advanced filtering
+- **`packet_capture`** - Live network traffic capture and analysis
 
-## Example MCP Tool Output
+### 🛡️ **Firewall Management**
+- **`fw_rules`** - Current firewall rule inspection and analysis
+- **`mkfw_rule`** - Create new firewall rules with full parameter control
+- **`rmfw_rule`** - Delete existing firewall rules
+- **`ssh_fw_rule`** - SSH-based rule creation (bypasses API limitations)
 
-Here are some example queries and anonymized responses you might see when
-interacting with the MCP server via a chat interface:
+### ⚙️ **Network Configuration**
+- **`interface_list`** - Available network interfaces for rules and monitoring
 
----
+### 🤖 **AI-Powered Complex Queries**
 
-**User:** Tell me about hostA.
+The server excels at handling multi-step queries that combine multiple functions:
 
-**MCP Response:**
-Host: `hostA`
-IP Address: `192.168.1.42`
-MAC Address: `AA:BB:CC:DD:EE:01`
-DHCP Lease: Active (expires in 2 hours)
-ARP Entry: Present
-LLDP Neighbor: Not detected
+- **"What is [device] doing on the network?"** → Automatic device identification, traffic analysis, and security assessment
+- **"Is there suspicious traffic?"** → Comprehensive security analysis across logs, rules, and live traffic
+- **"Why can't [device] reach [service]?"** → Full troubleshooting workflow with actionable recommendations
 
----
+### 📚 **Comprehensive Documentation**
 
-**User:** What is the hostname for this MAC address: `AA:BB:CC:DD:EE:02`?
+- **[Complete Function Reference](docs/FUNCTION_REFERENCE.md)** - Detailed documentation for every function with parameters, examples, and use cases
+- **[Complex Query Examples](docs/COMPLEX_QUERY_EXAMPLES.md)** - Real-world scenarios showing how the AI agent combines multiple functions to answer sophisticated questions like "What is morpheus doing on the network?"
 
-**MCP Response:**
-MAC Address: `AA:BB:CC:DD:EE:02`
-Hostname: `printer-01`
-IP Address: `192.168.1.55`
-DHCP Lease: Active (expires in 1 day)
-ARP Entry: Present
+> **Note:** All functions include built-in parameter validation, error handling, and usage guidance. The AI agent automatically selects and combines the appropriate functions based on your natural language queries.
 
----
+## Quick Start Examples
 
-**User:** List all devices currently on the network.
-
-**MCP Response:**
-
-1. Hostname: `hostA`, IP: `192.168.1.42`, MAC: `AA:BB:CC:DD:EE:01`
-2. Hostname: `printer-01`, IP: `192.168.1.55`, MAC: `AA:BB:CC:DD:EE:02`
-3. Hostname: `laptop-guest`, IP: `192.168.1.77`, MAC: `AA:BB:CC:DD:EE:03`
+Here are some example conversations showing how users interact with the OPNsense MCP Server through AI chat interfaces:
 
 ---
 
-**User:** Show me the current system status.
+**User:** "What devices are on my network?"
 
-**MCP Response:**
-CPU Usage: 12%
-Memory Usage: 1.2 GB / 8 GB
-Filesystem Usage: 40% used
-Uptime: 5 days, 3 hours
+**AI Assistant:** I'll check your network for active devices.
 
----
+*[AI automatically runs DHCP and ARP queries]*
 
-**User:** Who is using IP address `192.168.1.77`?
+I found 12 active devices across your network:
 
-**MCP Response:**
-IP Address: `192.168.1.77`
-Hostname: `laptop-guest`
-MAC Address: `AA:BB:CC:DD:EE:03`
-DHCP Lease: Expired
-ARP Entry: Present
+**Wired LAN (VLAN2):**
+- **morpheus** (10.0.2.150) - Development workstation, active SSH session
+- **trogdor** (10.0.2.180) - Server, running web services
+- **printer-office** (10.0.2.25) - Network printer
 
----
+**Guest WiFi (VLAN4):**
+- **guest-phone-1** (10.0.4.45) - Mobile device, streaming video
+- **guest-laptop** (10.0.4.67) - Laptop, web browsing
 
-**User:** Show me recent firewall logs for host `hostA`.
+**IoT Network (VLAN100):**
+- **thermostat-living** (192.168.100.15) - Smart thermostat
+- **camera-front** (192.168.100.22) - Security camera
 
-**MCP Response:**
-Recent firewall log entries for `hostA` (`192.168.1.42`):
-
-| Time       | Action | Source IP    | Dest IP     | Protocol | Port |
-|------------|--------|--------------|-------------|----------|------|
-| 2024-06-20 | Block  | 192.168.1.42 | 8.8.8.8     | UDP      | 53   |
-| 2024-06-20 | Pass   | 192.168.1.42 | 192.168.1.1 | TCP      | 443  |
-| 2024-06-20 | Pass   | 192.168.1.42 | 10.0.0.5    | TCP      | 22   |
+All devices appear to be legitimate and within expected usage patterns.
 
 ---
 
-**User:** Show LLDP neighbors.
+**User:** "Is trogdor being blocked from anything?"
 
-**MCP Response:**
-No LLDP neighbors detected.
+**AI Assistant:** Let me check trogdor's network activity and firewall status.
+
+*[AI runs system check, firewall logs, and traffic analysis]*
+
+**trogdor Network Status:**
+- ✅ **Online and active** (10.0.2.180)
+- ✅ **All normal services working** (SSH, HTTPS, internal services)
+
+**Recent Security Events:**
+- 🚫 **3 blocked attempts** to reach external SMTP (port 25) - this is expected security policy
+- ✅ **No other blocks** - all other traffic flowing normally
+
+**Current Activity:**
+- Web server responding to requests
+- SSH sessions active
+- Normal background traffic
+
+The SMTP blocking is intentional - your firewall is preventing trogdor from sending email directly, which is good security practice. Everything else is working normally.
+
+---
+
+**User:** "The guest WiFi seems slow today. Can you check what's happening?"
+
+**AI Assistant:** I'll investigate the guest network performance for you.
+
+*[AI checks guest network devices, captures traffic, and analyzes patterns]*
+
+**Guest Network Analysis:**
+
+**Current Status:**
+- **8 active devices** on guest WiFi
+- **Total traffic**: ~20 MB/min (higher than usual)
+- **Firewall performance**: Normal (8% CPU usage)
+
+**Performance Issue Identified:**
+- 📱 **Device 10.0.4.23** is consuming 75% of guest bandwidth
+- 🎬 **Activity**: Heavy video streaming (YouTube/Netflix)
+- ⚠️ **Impact**: Other guests experiencing reduced speeds
+
+**Quality of Service:**
+- ✅ **Rate limiting active**: 10 Mbps per device
+- ✅ **Traffic prioritization**: Guest traffic correctly deprioritized
+
+**Recommendation:**
+The guest network is working as designed, but one user is using most of the bandwidth. You could reduce the per-device limit to 5 Mbps for more fair sharing, or this will resolve itself when the streaming session ends.
+
+---
+
+**User:** "Why can't my smart thermostat connect to the internet?"
+
+**AI Assistant:** Let me investigate your thermostat's connectivity issue.
+
+*[AI searches for the device, checks network configuration, and analyzes traffic]*
+
+**Device Found:**
+- **Location**: IoT VLAN (192.168.100.15)
+- **MAC Address**: aa:bb:cc:dd:ee:10
+- **DHCP Status**: ⚠️ No hostname lease (may be using static IP)
+
+**Root Cause Identified:**
+- 🚫 **Firewall rule "Block IoT Internet Access"** is preventing HTTPS connections
+- ✅ **DNS and NTP work** (device can resolve names and sync time)
+- 🚫 **HTTPS to api.nest.com blocked** by security policy
+
+**The Problem:**
+Your IoT security policy is blocking all internet access except DNS and NTP. The thermostat can't reach Nest's cloud services.
+
+**Solution:**
+I can create a specific rule to allow your thermostat to reach Nest's API. Would you like me to:
+
+1. Allow access to nest.com API endpoints, or
+2. Show you how to modify the existing IoT policy?
+
+---
+
+**User:** "Show me any suspicious traffic on the network"
+
+**AI Assistant:** I'll perform a comprehensive security analysis of your network.
+
+*[AI runs system health check, analyzes firewall logs, checks device inventory, and captures traffic patterns]*
+
+**Security Assessment Results:**
+
+**🔒 Overall Status: GOOD**
+
+**Threat Activity:**
+- 🚫 **23 SSH brute-force attempts** from external IPs (all blocked ✅)
+- ✅ **No internal threats detected**
+- ✅ **No unauthorized devices** found on trusted networks
+
+**Privacy Protection:**
+- ✅ **DNS over HTTPS active** on all internal VLANs
+- ✅ **No DNS leaks detected** in guest/solar networks
+- ✅ **Normal encrypted traffic patterns** observed
+
+**Traffic Analysis:**
+- **WAN Traffic**: Normal web browsing patterns, no bulk data transfers
+- **DNS Traffic**: All queries properly using configured DoH servers
+- **Security**: No port scans, DDoS attempts, or data exfiltration detected
+
+**Recommendations:**
+- SSH brute-force activity is normal and being blocked effectively
+- Consider fail2ban for repeat offenders
+- Current security posture is effective
+
+Your network security is working well - all threats are being blocked and privacy protections are active.
+
+For more detailed examples, see [Complex Query Examples](docs/COMPLEX_QUERY_EXAMPLES.md).
 
 ## Troubleshooting
 

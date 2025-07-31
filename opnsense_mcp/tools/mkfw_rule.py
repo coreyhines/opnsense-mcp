@@ -13,15 +13,15 @@ logger = logging.getLogger(__name__)
 class FirewallRuleSpec(BaseModel):
     """Specification for creating a firewall rule."""
 
+    id: str = ""
+    sequence: int = 0
     description: str
     interface: str = "lan"
     direction: str = "in"
     ipprotocol: str = "inet"
     protocol: str = "any"
-    source_net: str = "any"
-    source_port: str = "any"
-    destination_net: str = "any"
-    destination_port: str = "any"
+    source: dict[str, str] | None = None
+    destination: dict[str, str] | None = None
     action: str = "pass"
     enabled: bool = True
     gateway: str = ""
@@ -40,10 +40,9 @@ class FirewallRuleSpec(BaseModel):
 
         """
         allowed = ["pass", "block", "reject"]
-        if v.lower() not in allowed:
-            msg = f"Action must be one of {allowed}"
-            raise ValueError(msg)
-        return v.lower()
+        if v not in allowed:
+            raise ValueError(f"Action must be one of {allowed}")
+        return v
 
     @field_validator("direction")
     @classmethod
@@ -59,10 +58,9 @@ class FirewallRuleSpec(BaseModel):
 
         """
         allowed = ["in", "out"]
-        if v.lower() not in allowed:
-            msg = f"Direction must be one of {allowed}"
-            raise ValueError(msg)
-        return v.lower()
+        if v not in allowed:
+            raise ValueError(f"Direction must be one of {allowed}")
+        return v
 
     @field_validator("ipprotocol")
     @classmethod
@@ -78,10 +76,21 @@ class FirewallRuleSpec(BaseModel):
 
         """
         allowed = ["inet", "inet6"]
-        if v.lower() not in allowed:
-            msg = f"IP protocol must be one of {allowed}"
-            raise ValueError(msg)
-        return v.lower()
+        if v not in allowed:
+            raise ValueError(f"IP protocol must be one of {allowed}")
+        return v
+
+    def model_dump(self, **kwargs):
+        """Override model_dump to handle None values for source/destination."""
+        data = super().model_dump(**kwargs)
+
+        # Set default values for source and destination if they're None
+        if data.get("source") is None:
+            data["source"] = {"net": "any", "port": "any"}
+        if data.get("destination") is None:
+            data["destination"] = {"net": "any", "port": "any"}
+
+        return data
 
 
 class MkfwRuleTool:
@@ -137,8 +146,25 @@ class MkfwRuleTool:
             return {"status": "error", "error": "No client available"}
 
         try:
+            # Convert flat parameters to nested format for OPNsense API
+            api_params = params.copy()
+
+            # Convert source parameters
+            if "source_net" in api_params or "source_port" in api_params:
+                api_params["source"] = {
+                    "net": api_params.pop("source_net", "any"),
+                    "port": api_params.pop("source_port", "any"),
+                }
+
+            # Convert destination parameters
+            if "destination_net" in api_params or "destination_port" in api_params:
+                api_params["destination"] = {
+                    "net": api_params.pop("destination_net", "any"),
+                    "port": api_params.pop("destination_port", "any"),
+                }
+
             # Create rule specification
-            rule_spec = FirewallRuleSpec(**params)
+            rule_spec = FirewallRuleSpec(**api_params)
 
             # Get apply setting
             apply_changes = params.get("apply", True)
