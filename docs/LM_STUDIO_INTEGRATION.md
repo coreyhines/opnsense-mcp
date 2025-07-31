@@ -104,10 +104,10 @@ Once integrated, the following OPNsense MCP tools will be available in LM Studio
 ```
 ARP Table Results:
 - 192.168.1.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0 - Permanent
-- 192.168.1.33 (11:22:33:44:55:66) - Mojo Networks, Inc. - Interface: ax0 - Expires: 1200s
-- 192.168.1.64 (aa:bb:cc:dd:ee:ff) - Mojo Networks, Inc. - Interface: ax0 - Expires: 875s
-- 192.168.1.69 (d5:5c:e3:36:87:0e) - Arista Network, Inc. - Interface: ax0 - Expires: 928s
-- 192.168.1.36 (aa:bb:cc:dd:ee:ff) - Mojo Networks, Inc. - Interface: ax0 - Expires: 895s
+- 192.168.1.33 (11:22:33:44:55:66) - iBerg Networks, Inc. - Interface: ax0 - Expires: 1200s
+- 192.168.1.64 (aa:bb:cc:dd:ee:ff) - iBerg Networks, Inc. - Interface: ax0 - Expires: 875s
+- 192.168.1.69 (d5:5c:e3:36:87:0e) - iBerg Networks, Inc. - Interface: ax0 - Expires: 928s
+- 192.168.1.36 (aa:bb:cc:dd:ee:ff) - iBerg Networks, Inc. - Interface: ax0 - Expires: 895s
 - 192.168.1.4 (55:40:c7:b6:de:a1) - Zyxel Communications Corporation - Hostname: poesw01 - Expires: 1174s
 
 VLAN 2 Devices:
@@ -185,14 +185,14 @@ Firewall Rule Created:
 ```
 LLDP Neighbor Table:
 - Interface: igb3
-  - Neighbor: Arista Networks Switch
+  - Neighbor: iBerg Networks Switch
   - MAC: aa:bb:cc:dd:ee:ff
   - IP: 10.0.9.246
   - Port: Ethernet1/1
   - System: Arista-DCS-7050S-64
 
 - Interface: ax0
-  - Neighbor: Mojo Networks AP
+  - Neighbor: iBerg Networks AP
   - MAC: 11:22:33:44:55:66
   - IP: 192.168.1.33
   - Port: eth0
