@@ -286,11 +286,11 @@ class OPNsenseClient:
         try:
             logger.debug("Fetching firewall rules...")
             # Use the searchRule endpoint as per OPNsense API docs
-            params = {"current": 1, "rowCount": 100}
+            # This should be a POST request with JSON body, not GET with params
             data = await self._make_request(
-                "GET",
+                "POST",
                 "/api/firewall/filter/searchRule",
-                params=params,
+                json={"current": 1, "rowCount": 100},
             )
 
             if not isinstance(data, dict):
@@ -420,7 +420,7 @@ class OPNsenseClient:
             response = await self._make_request(
                 "POST",
                 ENDPOINTS["firewall"]["add_rule"],
-                json={"rule": rule_data},
+                json=rule_data,  # Send rule data directly, not wrapped in "rule" key
             )
 
             if not isinstance(response, dict):

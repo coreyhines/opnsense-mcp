@@ -15,7 +15,7 @@ variables:
 ruff:
   stage: lint
   before_script:
-    - python --version
+    - python3 --version
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export PATH="$HOME/.local/bin:$PATH"
     - export UV_LINK_MODE="copy"
@@ -31,7 +31,7 @@ ruff:
 bandit:
   stage: security
   before_script:
-    - python --version
+    - python3 --version
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export PATH="$HOME/.local/bin:$PATH"
     - export UV_LINK_MODE="copy"
@@ -50,7 +50,7 @@ bandit:
 detect_secrets:
   stage: security
   before_script:
-    - python --version
+    - python3 --version
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export PATH="$HOME/.local/bin:$PATH"
     - export UV_LINK_MODE="copy"
@@ -65,7 +65,7 @@ detect_secrets:
 pip_audit:
   stage: security
   before_script:
-    - python --version
+    - python3 --version
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export PATH="$HOME/.local/bin:$PATH"
     - export UV_LINK_MODE="copy"
@@ -109,18 +109,29 @@ collect_reports:
   stage: deploy
   script:
     - mkdir -p public
-    - cp bandit-report.html public/ || true
-    - cp pip-audit-report.json public/ || true
-    - cp trivy-fs-report.json public/ || true
-    - cp trivy-image-report.json public/ || true
-    # Convert pip-audit JSON to HTML
-    - python3 opnsense_mcp/tools/convert_pip_audit_to_html.py pip-audit-report.json public/pip-audit-report.html || true
-    # Convert Trivy JSONs to HTML
-    - python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-fs-report.json public/trivy-fs-report.html || true
-    - python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-image-report.json public/trivy-image-report.html || true
+    # Copy available reports (some may not exist due to allow_failure: true)
+    - cp bandit-report.html public/ 2>/dev/null || echo "bandit-report.html not found"
+    - cp pip-audit-report.json public/ 2>/dev/null || echo "pip-audit-report.json not found"
+    - cp trivy-fs-report.json public/ 2>/dev/null || echo "trivy-fs-report.json not found"
+    - cp trivy-image-report.json public/ 2>/dev/null || echo "trivy-image-report.json not found"
+    # Convert pip-audit JSON to HTML (only if file exists)
+    - if [ -f pip-audit-report.json ]; then python3 opnsense_mcp/tools/convert_pip_audit_to_html.py pip-audit-report.json public/pip-audit-report.html; else echo "pip-audit-report.json not found, skipping conversion"; fi
+    # Convert Trivy JSONs to HTML (only if files exist)
+    - if [ -f trivy-fs-report.json ]; then python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-fs-report.json public/trivy-fs-report.html; else echo "trivy-fs-report.json not found, skipping conversion"; fi
+    - if [ -f trivy-image-report.json ]; then python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-image-report.json public/trivy-image-report.html; else echo "trivy-image-report.json not found, skipping conversion"; fi
     # Generate index.html with links to all files in public
     - |
-      python3 -c "import os\nfiles = os.listdir('public')\nwith open('public/index.html', 'w') as f:\n    f.write('<h1>Reports</h1>')\n    for file in files:\n        if file != 'index.html':\n            f.write(f'<a href=\"{file}\">{file}</a><br>')\n"
+      python3 -c "
+      import os
+      files = os.listdir('public')
+      with open('public/index.html', 'w') as f:
+          f.write('<html><head><title>Security Reports</title></head><body>')
+          f.write('<h1>Security Reports</h1>')
+          for file in files:
+              if file != 'index.html':
+                  f.write(f'<a href=\"{file}\">{file}</a><br>')
+          f.write('</body></html>')
+      "
   dependencies:
     - bandit
     - pip_audit

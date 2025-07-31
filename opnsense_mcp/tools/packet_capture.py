@@ -1,5 +1,8 @@
 import logging
 import os
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class PacketCaptureTool2:
-    """Tool for running packet captures on OPNsense via SSH."""
+    """Tool for running packet captures on OPNsense via SSH with automatic error detection and correction."""
 
     def __init__(
         self,
@@ -69,6 +72,125 @@ class PacketCaptureTool2:
             port=self.ssh_port,
         )
         return client
+
+    def _detect_mcp_server_issues(self) -> dict[str, Any]:
+        """Detect common MCP server issues and provide solutions."""
+        issues = []
+        solutions = []
+
+        # Check if MCP server process is running
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", "opnsense_mcp/server.py"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                issues.append("OPNsense MCP server is not running")
+                solutions.append("Restart the MCP server using: ./mcp_start.sh")
+        except Exception as e:
+            issues.append(f"Could not check MCP server status: {e}")
+            solutions.append("Manually check if the MCP server is running")
+
+        # Check if virtual environment exists
+        venv_path = Path.cwd() / ".venv"
+        if not venv_path.exists():
+            issues.append("Virtual environment (.venv) is missing")
+            solutions.append(
+                "Recreate virtual environment: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
+            )
+
+        # Check if required dependencies are installed
+        try:
+            import dotenv
+            import paramiko
+        except ImportError as e:
+            issues.append(f"Missing dependency: {e}")
+            solutions.append("Install dependencies: pip install -r requirements.txt")
+
+        # Check SSH connectivity
+        try:
+            client = self._get_client()
+            client.close()
+        except Exception as e:
+            issues.append(f"SSH connection failed: {e}")
+            solutions.append("Check SSH configuration and firewall connectivity")
+
+        return {
+            "has_issues": len(issues) > 0,
+            "issues": issues,
+            "solutions": solutions,
+            "status": "healthy" if len(issues) == 0 else "needs_attention",
+        }
+
+    def _auto_correct_issues(self) -> dict[str, Any]:
+        """Attempt to automatically correct detected issues."""
+        corrections = []
+        errors = []
+
+        # Try to restart MCP server if not running
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", "opnsense_mcp/server.py"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                # Try to start the MCP server
+                try:
+                    subprocess.run(
+                        ["./mcp_start.sh"],
+                        cwd=Path.cwd(),
+                        timeout=10,
+                        capture_output=True,
+                    )
+                    corrections.append("Attempted to restart MCP server")
+                    time.sleep(2)  # Give it time to start
+                except Exception as e:
+                    errors.append(f"Failed to restart MCP server: {e}")
+        except Exception as e:
+            errors.append(f"Could not check MCP server status: {e}")
+
+        # Try to recreate virtual environment if missing
+        venv_path = Path.cwd() / ".venv"
+        if not venv_path.exists():
+            try:
+                subprocess.run(
+                    ["python3", "-m", "venv", ".venv"],
+                    cwd=Path.cwd(),
+                    timeout=30,
+                    capture_output=True,
+                )
+                corrections.append("Recreated virtual environment")
+
+                # Try to install dependencies
+                try:
+                    subprocess.run(
+                        [
+                            "source",
+                            ".venv/bin/activate",
+                            "&&",
+                            "pip",
+                            "install",
+                            "-r",
+                            "requirements.txt",
+                        ],
+                        cwd=Path.cwd(),
+                        shell=True,
+                        timeout=60,
+                        capture_output=True,
+                    )
+                    corrections.append("Installed dependencies")
+                except Exception as e:
+                    errors.append(f"Failed to install dependencies: {e}")
+            except Exception as e:
+                errors.append(f"Failed to recreate virtual environment: {e}")
+
+        return {
+            "corrections_applied": corrections,
+            "errors": errors,
+            "success": len(errors) == 0,
+        }
 
     async def _resolve_interface(self, iface: str) -> str:
         """
@@ -327,6 +449,7 @@ class PacketCaptureTool2:
                         "requested_interface": requested_iface,
                         "resolved_interface": resolved_iface,
                         "command": cmd,
+                        "guidance": "Raw mode capture failed. Try 'text' mode for human-readable output, or check if the interface is active and has traffic.",
                     }
         elif mode == "text":
             # Human-readable tcpdump output (-nnevvv)
@@ -414,6 +537,7 @@ class PacketCaptureTool2:
                         "requested_interface": requested_iface,
                         "resolved_interface": resolved_iface,
                         "command": cmd,
+                        "guidance": "Text mode capture failed. Check if the interface is active, try a different interface, or verify SSH permissions.",
                     }
         else:
             return {
@@ -421,6 +545,7 @@ class PacketCaptureTool2:
                 "error": f"Unknown mode: {mode}",
                 "requested_interface": requested_iface,
                 "resolved_interface": resolved_iface,
+                "guidance": "Valid modes are 'raw' (binary data) or 'text' (human-readable output).",
             }
 
     def stop_capture(self) -> dict[str, Any]:
@@ -431,10 +556,17 @@ class PacketCaptureTool2:
             stdin, stdout, stderr = client.exec_command(cmd)
             stdout.channel.recv_exit_status()
             client.close()
-            return {"status": "success"}
+            return {
+                "status": "success",
+                "message": "Packet capture stopped successfully",
+            }
         except Exception as e:
             logger.exception("Failed to stop packet capture")
-            return {"status": "error", "error": str(e)}
+            return {
+                "status": "error",
+                "error": str(e),
+                "guidance": "Failed to stop packet capture. This may be normal if no capture was running.",
+            }
 
     def fetch_pcap(self, local_path: str = None) -> dict[str, Any]:
         """Download the pcap file from the OPNsense host."""
@@ -445,13 +577,158 @@ class PacketCaptureTool2:
             sftp.get(self.capture_file, local_path)
             sftp.close()
             client.close()
-            return {"status": "success", "local_file": local_path}
+            return {
+                "status": "success",
+                "local_file": local_path,
+                "message": f"PCAP file downloaded to {local_path}",
+            }
         except Exception as e:
             logger.exception("Failed to fetch pcap file")
-            return {"status": "error", "error": str(e)}
+            return {
+                "status": "error",
+                "error": str(e),
+                "guidance": "Failed to download PCAP file. Make sure a capture was running and completed successfully first.",
+            }
 
     async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Execute packet capture operations with automatic error detection and correction."""
         action = params.get("action", "start")
+
+        # Add debugging
+        print(f"DEBUG: execute called with params: {params}", file=sys.stderr)
+
+        # Special action for diagnostics
+        if action == "diagnose":
+            return await self._diagnose_and_fix()
+
+        # Validate parameters and provide guidance
+        if action == "start":
+            # First, detect any issues
+            issues = self._detect_mcp_server_issues()
+            if issues["has_issues"]:
+                # Try to auto-correct issues
+                corrections = self._auto_correct_issues()
+
+                # If auto-correction failed, return diagnostic information
+                if not corrections["success"]:
+                    return {
+                        "status": "error",
+                        "error": "MCP server issues detected and auto-correction failed",
+                        "detected_issues": issues["issues"],
+                        "suggested_solutions": issues["solutions"],
+                        "auto_correction_attempts": corrections["corrections_applied"],
+                        "auto_correction_errors": corrections["errors"],
+                        "guidance": "Please manually fix the issues above, then try again. You can also use action='diagnose' for detailed diagnostics.",
+                    }
+
+                # If auto-correction succeeded, retry the operation
+                return await self._retry_after_correction(params)
+
+            # Validate required parameters for start action
+            interface = params.get("interface", "wan")
+            duration = params.get("duration", 30)
+            count = params.get("count")
+            mode = params.get(
+                "mode", "text"
+            )  # Default to text mode for better user experience
+            stream = params.get(
+                "stream", True
+            )  # Default to stream for immediate results
+
+            # Add debugging for duration
+            print(
+                f"DEBUG: duration = {duration}, type = {type(duration)}",
+                file=sys.stderr,
+            )
+
+            # Validate duration
+            if duration <= 0 or duration > 3600:
+                print(f"DEBUG: duration validation failed: {duration}", file=sys.stderr)
+                return {
+                    "status": "error",
+                    "error": f"Invalid duration: {duration}. Must be between 1 and 3600 seconds.",
+                    "guidance": "Try a duration between 10-300 seconds for best results.",
+                }
+
+            # Validate count if provided
+            if count is not None and (count <= 0 or count > 10000):
+                return {
+                    "status": "error",
+                    "error": f"Invalid count: {count}. Must be between 1 and 10000 packets.",
+                    "guidance": "Try a count between 50-1000 packets for best results.",
+                }
+
+            # Validate mode
+            if mode not in ["raw", "text"]:
+                return {
+                    "status": "error",
+                    "error": f"Invalid mode: {mode}. Must be 'raw' or 'text'.",
+                    "guidance": "Use 'text' mode for human-readable output, 'raw' for binary data.",
+                }
+
+            # Test SSH connection first
+            try:
+                client = self._get_client()
+                client.close()
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "error": f"SSH connection failed: {str(e)}",
+                    "guidance": "Please check your SSH configuration and ensure the firewall is accessible.",
+                }
+
+            # Test tcpdump availability
+            try:
+                client = self._get_client()
+                stdin, stdout, stderr = client.exec_command("which tcpdump")
+                if stdout.read().decode().strip() == "":
+                    client.close()
+                    return {
+                        "status": "error",
+                        "error": "tcpdump not found on the firewall.",
+                        "guidance": "tcpdump may not be installed. Try installing it via the OPNsense package manager.",
+                    }
+                client.close()
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "error": f"Failed to check tcpdump availability: {str(e)}",
+                    "guidance": "There may be an SSH or permission issue.",
+                }
+
+            # Test interface availability
+            try:
+                client = self._get_client()
+                stdin, stdout, stderr = client.exec_command(f"ifconfig {interface}")
+                if (
+                    "not found" in stderr.read().decode()
+                    or "No such interface" in stderr.read().decode()
+                ):
+                    client.close()
+                    return {
+                        "status": "error",
+                        "error": f"Interface '{interface}' not found.",
+                        "guidance": "Available interfaces: wan, lan, wifi, guest, lab, mgmt, or specific device names like ax1, ax0_vlan81. Try 'interface_list' tool to see all available interfaces.",
+                    }
+                client.close()
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "error": f"Failed to check interface '{interface}': {str(e)}",
+                    "guidance": "There may be an SSH or permission issue.",
+                }
+
+            # If all validations pass, proceed with capture
+            return await self.start_capture(
+                interface,
+                params.get("filter", ""),
+                duration,
+                count,
+                stream,
+                params.get("preview_bytes", 1000),
+                mode,
+            )
+
         if action == "test":
             # Run a simple SSH command for debugging
             cmd = "ls /tmp"
@@ -468,7 +745,13 @@ class PacketCaptureTool2:
                     "stderr": err,
                 }
             except Exception as e:
-                return {"status": "error", "error": str(e), "command": cmd}
+                return {
+                    "status": "error",
+                    "error": str(e),
+                    "command": cmd,
+                    "guidance": "SSH connection test failed. Check your SSH configuration and firewall connectivity.",
+                }
+
         elif action == "test_tcpdump":
             # Test tcpdump availability and basic functionality
             cmd = "which tcpdump && tcpdump --version | head -1"
@@ -478,6 +761,12 @@ class PacketCaptureTool2:
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
+                if not out.strip():
+                    return {
+                        "status": "error",
+                        "error": "tcpdump not found",
+                        "guidance": "tcpdump may not be installed on the firewall. Install it via the OPNsense package manager.",
+                    }
                 return {
                     "status": "success",
                     "command": cmd,
@@ -485,7 +774,13 @@ class PacketCaptureTool2:
                     "stderr": err,
                 }
             except Exception as e:
-                return {"status": "error", "error": str(e), "command": cmd}
+                return {
+                    "status": "error",
+                    "error": str(e),
+                    "command": cmd,
+                    "guidance": "Failed to test tcpdump. Check SSH connectivity and permissions.",
+                }
+
         elif action == "test_interface":
             # Test interface availability directly
             interface = params.get("interface", "ax1")
@@ -496,6 +791,12 @@ class PacketCaptureTool2:
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
+                if "not found" in err or "No such interface" in err:
+                    return {
+                        "status": "error",
+                        "error": f"Interface '{interface}' not found",
+                        "guidance": "Use 'interface_list' tool to see available interfaces, or try common names like 'wan', 'lan', 'wifi'.",
+                    }
                 return {
                     "status": "success",
                     "command": cmd,
@@ -503,20 +804,67 @@ class PacketCaptureTool2:
                     "stderr": err,
                 }
             except Exception as e:
-                return {"status": "error", "error": str(e), "command": cmd}
-        elif action == "start":
-            return await self.start_capture(
-                params.get("interface", "wan"),
-                params.get("filter", ""),
-                params.get("duration", 5),
-                params.get("count"),
-                params.get("stream", False),
-                params.get("preview_bytes", 1000),
-                params.get("mode", "raw"),
-            )
+                return {
+                    "status": "error",
+                    "error": str(e),
+                    "command": cmd,
+                    "guidance": "Failed to test interface. Check SSH connectivity and permissions.",
+                }
+
         elif action == "stop":
             return self.stop_capture()
+
         elif action == "fetch":
-            return self.fetch_pcap(params.get("local_path"))
+            local_path = params.get("local_path")
+            return self.fetch_pcap(local_path)
+
         else:
-            return {"status": "error", "error": f"Unknown action: {action}"}
+            return {
+                "status": "error",
+                "error": f"Unknown action: {action}",
+                "guidance": "Valid actions are: 'start', 'stop', 'fetch', 'test', 'test_tcpdump', 'test_interface', 'diagnose'",
+            }
+
+    async def _diagnose_and_fix(self) -> dict[str, Any]:
+        """Comprehensive diagnostics and automatic fixing."""
+        # Detect issues
+        issues = self._detect_mcp_server_issues()
+
+        # Attempt auto-correction
+        corrections = self._auto_correct_issues()
+
+        # Re-detect after corrections
+        issues_after = self._detect_mcp_server_issues()
+
+        return {
+            "status": (
+                "success" if not issues_after["has_issues"] else "partial_success"
+            ),
+            "initial_issues": issues,
+            "auto_corrections": corrections,
+            "issues_after_correction": issues_after,
+            "summary": f"Found {len(issues['issues'])} initial issues, applied {len(corrections['corrections_applied'])} corrections, {len(issues_after['issues'])} issues remain",
+            "recommendation": (
+                "Try your packet capture again"
+                if not issues_after["has_issues"]
+                else "Manual intervention may be required"
+            ),
+        }
+
+    async def _retry_after_correction(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Retry the original operation after auto-correction."""
+        # Wait a moment for corrections to take effect
+        time.sleep(2)
+
+        # Re-detect issues
+        issues = self._detect_mcp_server_issues()
+        if issues["has_issues"]:
+            return {
+                "status": "error",
+                "error": "Auto-correction applied but issues persist",
+                "remaining_issues": issues["issues"],
+                "guidance": "Please manually resolve the remaining issues and try again.",
+            }
+
+        # If no issues remain, retry the original operation
+        return await self.execute(params)
