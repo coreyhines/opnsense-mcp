@@ -143,9 +143,10 @@ collect_reports:
 
 pages:
   stage: deploy
+  dependencies:
+    - collect_reports
   script:
-    - mkdir -p public
-    # - echo "Publishing reports via GitLab Pages" > public.index.html
+    - echo "Deploying to GitLab Pages"
   artifacts:
     paths:
       - public
