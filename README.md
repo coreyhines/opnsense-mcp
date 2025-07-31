@@ -139,12 +139,12 @@ Network automation and script generation with firewall context.
 ```
 ARP Table Results:
 - 192.168.1.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0 - Permanent
-- 192.168.1.33 (11:22:33:44:55:66) - Mojo Networks, Inc. - Interface: ax0 - Expires: 1200s
-- 192.168.1.64 (aa:bb:cc:dd:ee:ff) - Mojo Networks, Inc. - Interface: ax0 - Expires: 875s
+- 192.168.1.33 (11:22:33:44:55:66) - iBerg Networks, Inc. - Interface: ax0 - Expires: 1200s
+- 192.168.1.64 (aa:bb:cc:dd:ee:ff) - iBerg Networks, Inc. - Interface: ax0 - Expires: 875s
 
 VLAN 2 Devices:
 - 10.0.2.10 (aa:bb:cc:dd:ee:ff) - Raspberry Pi Trading Ltd - Interface: ax0_vlan2 - Expires: 1195s
-- 10.0.2.175 (80:6d:97:5e:a4:10) - Private - Hostname: coreymbp - Expires: 1152s
+- 10.0.2.175 (ad:2e:b5:d9:75:c8) - Private - Hostname: coreymbp - Expires: 1152s
 ```
 
 ### **Security Analysis**
