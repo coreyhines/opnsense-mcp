@@ -144,7 +144,7 @@ ARP Table Results:
 
 VLAN 2 Devices:
 - 10.0.2.10 (aa:bb:cc:dd:ee:ff) - Raspberry Pi Trading Ltd - Interface: ax0_vlan2 - Expires: 1195s
-- 10.0.2.175 (80:6d:97:5e:a4:10) - Private - Hostname: coreymbp - Expires: 1152s
+- 10.0.2.175 (ad:2e:b5:d9:75:c8) - Private - Hostname: coreymbp - Expires: 1152s
 ```
 
 ### **Security Analysis**

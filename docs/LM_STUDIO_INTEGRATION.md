@@ -106,13 +106,13 @@ ARP Table Results:
 - 192.168.1.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0 - Permanent
 - 192.168.1.33 (11:22:33:44:55:66) - Mojo Networks, Inc. - Interface: ax0 - Expires: 1200s
 - 192.168.1.64 (aa:bb:cc:dd:ee:ff) - Mojo Networks, Inc. - Interface: ax0 - Expires: 875s
-- 192.168.1.69 (30:86:2d:c9:14:6f) - Arista Network, Inc. - Interface: ax0 - Expires: 928s
+- 192.168.1.69 (d5:5c:e3:36:87:0e) - Arista Network, Inc. - Interface: ax0 - Expires: 928s
 - 192.168.1.36 (aa:bb:cc:dd:ee:ff) - Mojo Networks, Inc. - Interface: ax0 - Expires: 895s
-- 192.168.1.4 (bc:99:11:a6:08:0f) - Zyxel Communications Corporation - Hostname: poesw01 - Expires: 1174s
+- 192.168.1.4 (55:40:c7:b6:de:a1) - Zyxel Communications Corporation - Hostname: poesw01 - Expires: 1174s
 
 VLAN 2 Devices:
 - 10.0.2.10 (aa:bb:cc:dd:ee:ff) - Raspberry Pi Trading Ltd - Interface: ax0_vlan2 - Expires: 1195s
-- 10.0.2.175 (80:6d:97:5e:a4:10) - Private - Hostname: coreymbp - Expires: 1152s
+- 10.0.2.175 (ad:2e:b5:d9:75:c8) - Private - Hostname: coreymbp - Expires: 1152s
 - 10.0.2.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0_vlan2 - Permanent
 ```
 
