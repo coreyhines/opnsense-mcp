@@ -86,8 +86,18 @@ class PacketCaptureTool2:
                 text=True,
             )
             if result.returncode != 0:
-                issues.append("OPNsense MCP server is not running")
-                solutions.append("Restart the MCP server using: ./mcp_start.sh")
+                # Try alternative process detection
+                result2 = subprocess.run(
+                    ["ps", "aux"],
+                    capture_output=True,
+                    text=True,
+                )
+                if "opnsense_mcp/server.py" in result2.stdout:
+                    # Process is running but pgrep didn't find it
+                    pass
+                else:
+                    issues.append("OPNsense MCP server is not running")
+                    solutions.append("Restart the MCP server using: ./mcp_start.sh")
         except Exception as e:
             issues.append(f"Could not check MCP server status: {e}")
             solutions.append("Manually check if the MCP server is running")
@@ -136,18 +146,28 @@ class PacketCaptureTool2:
                 text=True,
             )
             if result.returncode != 0:
-                # Try to start the MCP server
-                try:
-                    subprocess.run(
-                        ["./mcp_start.sh"],
-                        cwd=Path.cwd(),
-                        timeout=10,
-                        capture_output=True,
-                    )
-                    corrections.append("Attempted to restart MCP server")
-                    time.sleep(2)  # Give it time to start
-                except Exception as e:
-                    errors.append(f"Failed to restart MCP server: {e}")
+                # Try alternative process detection
+                result2 = subprocess.run(
+                    ["ps", "aux"],
+                    capture_output=True,
+                    text=True,
+                )
+                if "opnsense_mcp/server.py" in result2.stdout:
+                    # Process is running but pgrep didn't find it
+                    pass
+                else:
+                    # Try to start the MCP server
+                    try:
+                        subprocess.run(
+                            ["./mcp_start.sh"],
+                            cwd=Path.cwd(),
+                            timeout=10,
+                            capture_output=True,
+                        )
+                        corrections.append("Attempted to restart MCP server")
+                        time.sleep(2)  # Give it time to start
+                    except Exception as e:
+                        errors.append(f"Failed to restart MCP server: {e}")
         except Exception as e:
             errors.append(f"Could not check MCP server status: {e}")
 
