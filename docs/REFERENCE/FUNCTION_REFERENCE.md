@@ -51,6 +51,34 @@ dhcp search="morpheus"
 
 ---
 
+### `dhcp_lease_delete` - DHCP Lease Deletion
+**Purpose**: Deletes DHCP leases from OPNsense by hostname, IP address, or MAC address.
+
+**Use Case**: Remove stale leases, force devices to request new IP addresses, manage network access.
+
+**Parameters**:
+- `hostname` (optional): Hostname to search for and delete
+- `ip` (optional): IP address to delete directly
+- `mac` (optional): MAC address to search for and delete
+
+**Note**: You must provide exactly one of these parameters.
+
+**Quick Example**:
+```bash
+# Delete lease by IP address
+dhcp_lease_delete ip="192.168.1.100"
+
+# Delete lease by hostname
+dhcp_lease_delete hostname="my-device"
+
+# Delete lease by MAC address
+dhcp_lease_delete mac="aa:bb:cc:dd:ee:ff"
+```
+
+**What it returns**: Deletion results with status, list of deleted leases, and any errors encountered.
+
+---
+
 ### `lldp` - Link Layer Discovery Protocol
 **Purpose**: Shows LLDP neighbor information - what network devices are directly connected to each interface.
 

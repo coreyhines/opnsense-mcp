@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from opnsense_mcp.tools.arp import ARPTool
 from opnsense_mcp.tools.dhcp import DHCPTool
+from opnsense_mcp.tools.dhcp_lease_delete import DHCPLeaseDeleteTool
 from opnsense_mcp.tools.firewall_logs import FirewallLogsTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
@@ -110,6 +111,7 @@ async def handle_message(
     firewall_logs: FirewallLogsTool,
     arp_tool: ARPTool,
     dhcp_tool: DHCPTool,
+    dhcp_lease_delete_tool: DHCPLeaseDeleteTool,
     lldp_tool: LLDPTool,
     system_tool: SystemTool,
     fw_rules_tool: FwRulesTool,
@@ -207,6 +209,35 @@ async def handle_message(
                         },
                     },
                     "required": [],
+                },
+            },
+            {
+                "name": "dhcp_lease_delete",
+                "description": "Delete DHCP leases by hostname, IP, or MAC address",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "hostname": {
+                            "type": "string",
+                            "description": "Hostname to search for",
+                            "optional": True,
+                        },
+                        "ip": {
+                            "type": "string",
+                            "description": "IP address to delete",
+                            "optional": True,
+                        },
+                        "mac": {
+                            "type": "string",
+                            "description": "MAC address to search for",
+                            "optional": True,
+                        },
+                    },
+                    "anyOf": [
+                        {"required": ["hostname"]},
+                        {"required": ["ip"]},
+                        {"required": ["mac"]},
+                    ],
                 },
             },
             {
@@ -478,6 +509,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if tool_name == "dhcp_lease_delete":
+            result = await dhcp_lease_delete_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         if tool_name == "get_logs":
             logs = await firewall_logs.get_logs(
                 limit=arguments.get("limit", 500),
@@ -628,6 +666,7 @@ def main() -> None:
     firewall_logs = FirewallLogsTool(client)
     arp_tool = ARPTool(client)
     dhcp_tool = DHCPTool(client)
+    dhcp_lease_delete_tool = DHCPLeaseDeleteTool(client)
     lldp_tool = LLDPTool(client)
     system_tool = SystemTool(client)
     fw_rules_tool = FwRulesTool(client)
@@ -685,6 +724,7 @@ def main() -> None:
                     firewall_logs,
                     arp_tool,
                     dhcp_tool,
+                    dhcp_lease_delete_tool,
                     lldp_tool,
                     system_tool,
                     fw_rules_tool,
