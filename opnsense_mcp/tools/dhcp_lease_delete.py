@@ -155,7 +155,7 @@ class DHCPLeaseDeleteTool:
                     try:
                         # Delete IPv4 lease
                         response = await self.client._make_request(
-                            "POST", "/api/dhcpv4/leases/del_lease", ip=lease_ip
+                            "POST", f"/api/dhcpv4/leases/del_lease/{lease_ip}"
                         )
                         deleted_leases.append(
                             {
@@ -179,7 +179,7 @@ class DHCPLeaseDeleteTool:
                     try:
                         # Delete IPv6 lease
                         response = await self.client._make_request(
-                            "POST", "/api/dhcpv6/leases/del_lease", ip=lease_ip
+                            "POST", f"/api/dhcpv6/leases/del_lease/{lease_ip}"
                         )
                         deleted_leases.append(
                             {
