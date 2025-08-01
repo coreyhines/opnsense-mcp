@@ -2,6 +2,7 @@
 
 from .arp import ARPTool
 from .dhcp import DHCPTool
+from .dhcp_lease_delete import DHCPLeaseDeleteTool
 from .firewall import FirewallTool
 from .fw_rules import FwRulesTool
 from .get_logs import FirewallLogsTool, GetLogsTool
@@ -18,6 +19,7 @@ TOOL_CLASSES = {
     "arp": ARPTool,
     "system": SystemTool,
     "dhcp": DHCPTool,
+    "dhcp_lease_delete": DHCPLeaseDeleteTool,
     "lldp": LLDPTool,
     "interface": InterfaceTool,
     "interface_list": InterfaceListTool,
@@ -45,6 +47,7 @@ __all__ = [
     "execute_tool",
     "ARPTool",
     "DHCPTool",
+    "DHCPLeaseDeleteTool",
     "FirewallTool",
     "FwRulesTool",
     "GetLogsTool",
