@@ -67,23 +67,59 @@ class OPNsenseSSHClient:
 
     def get_ssh_client(self) -> paramiko.SSHClient:
         """
-        Get a configured SSH client exactly like packet capture tool.
+        Get a configured SSH client with secure host key verification.
 
         Returns:
             Configured paramiko SSH client.
 
         Raises:
-            Exception: If SSH connection fails.
+            Exception: If SSH connection fails or host key verification fails.
+
+        Note:
+            This method uses RejectPolicy by default for security.
+            If you need to accept unknown hosts, set OPNSENSE_SSH_ACCEPT_UNKNOWN_HOSTS=true
+            in your environment, but be aware this is insecure and should only be used
+            in trusted networks or for initial setup.
         """
         client = paramiko.SSHClient()
+        
+        # Load known host keys from the system
         client.load_system_host_keys()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(
-            hostname=self.ssh_host,
-            username=self.ssh_user,
-            key_filename=self.ssh_key,
-            port=self.ssh_port,
-        )
+        
+        # Check if user explicitly wants to accept unknown hosts (insecure)
+        accept_unknown = os.getenv("OPNSENSE_SSH_ACCEPT_UNKNOWN_HOSTS", "false").lower() == "true"
+        
+        if accept_unknown:
+            # Log warning about insecure configuration
+            logger.warning(
+                "⚠️  SSH configured to accept unknown hosts (INSECURE). "
+                "This should only be used in trusted networks or for initial setup. "
+                "Consider adding the host key to ~/.ssh/known_hosts for production use."
+            )
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
+        else:
+            # Use secure RejectPolicy - will fail if host key is not known
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+            
+        try:
+            client.connect(
+                hostname=self.ssh_host,
+                username=self.ssh_user,
+                key_filename=self.ssh_key,
+                port=self.ssh_port,
+            )
+        except paramiko.ssh_exception.SSHException as e:
+            if "not found in known_hosts" in str(e) or "Unknown server" in str(e):
+                logger.error(
+                    f"Host key verification failed for {self.ssh_host}. "
+                    "To fix this:\n"
+                    "1. (Recommended) Add the host key to ~/.ssh/known_hosts by running:\n"
+                    f"   ssh-keyscan -H {self.ssh_host} >> ~/.ssh/known_hosts\n"
+                    "2. (Insecure) Set OPNSENSE_SSH_ACCEPT_UNKNOWN_HOSTS=true in your environment\n"
+                    "   WARNING: Option 2 is insecure and should only be used in trusted networks."
+                )
+            raise
+            
         return client
 
     def execute_command(self, command: str) -> dict[str, Any]:

@@ -43,7 +43,11 @@ class PacketCaptureTool2:
         self.ssh_host = config_host
         self.ssh_user = ssh_user or self._get_ssh_config("user", config_host) or "root"
         self.ssh_key = ssh_key or self._get_ssh_config("identityfile", config_host)
-        self.capture_file = "/tmp/mcp_capture.pcap"
+        
+        # Use secure temp file - this is on the remote OPNsense firewall, not local
+        # The /tmp directory is standard on OPNsense/FreeBSD and is appropriate here
+        # as it's controlled by the firewall admin
+        self.capture_file = "/tmp/mcp_capture.pcap"  # nosec B108
         self.ssh_port = 22
 
         # Debug SSH configuration
@@ -62,15 +66,49 @@ class PacketCaptureTool2:
             return host.get(key)
 
     def _get_client(self) -> paramiko.SSHClient:
+        """
+        Get SSH client with secure host key verification.
+
+        Returns:
+            Configured paramiko SSH client.
+
+        Raises:
+            SSHException: If host key verification fails.
+
+        Note:
+            Uses RejectPolicy by default. Set OPNSENSE_SSH_ACCEPT_UNKNOWN_HOSTS=true
+            to accept unknown hosts (insecure, for initial setup only).
+        """
         client = paramiko.SSHClient()
         client.load_system_host_keys()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(
-            hostname=self.ssh_host,
-            username=self.ssh_user,
-            key_filename=self.ssh_key,
-            port=self.ssh_port,
-        )
+        
+        # Check if user explicitly wants to accept unknown hosts (insecure)
+        accept_unknown = os.getenv("OPNSENSE_SSH_ACCEPT_UNKNOWN_HOSTS", "false").lower() == "true"
+        
+        if accept_unknown:
+            logger.warning(
+                "⚠️  SSH configured to accept unknown hosts (INSECURE). "
+                "This should only be used in trusted networks or for initial setup."
+            )
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
+        else:
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+            
+        try:
+            client.connect(
+                hostname=self.ssh_host,
+                username=self.ssh_user,
+                key_filename=self.ssh_key,
+                port=self.ssh_port,
+            )
+        except paramiko.ssh_exception.SSHException as e:
+            if "not found in known_hosts" in str(e) or "Unknown server" in str(e):
+                logger.error(
+                    f"Host key verification failed for {self.ssh_host}. "
+                    "To fix: ssh-keyscan -H {self.ssh_host} >> ~/.ssh/known_hosts"
+                )
+            raise
+            
         return client
 
     def _detect_mcp_server_issues(self) -> dict[str, Any]:
