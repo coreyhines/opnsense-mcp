@@ -3,7 +3,8 @@ vars/
 .opnsense-env
 .venv/
 tmp_.*
-.github/copilot*
+# Don't ignore copilot-instructions.md
+!.github/copilot-instructions.md
 **/__pycache__
 **/__pycache__/**
 *.pyc
