@@ -82,9 +82,9 @@ class TestDHCPLeaseDeleteTool:
         assert result["deleted_leases"][0]["ip"] == "192.168.1.100"
         assert result["total_deleted"] == 1
 
-        # Verify API calls
+        # Verify API calls - IP is part of the URL path, not a parameter
         mock_client._make_request.assert_called_once_with(
-            "POST", "/api/dhcpv4/leases/del_lease", ip="192.168.1.100"
+            "POST", "/api/dhcpv4/leases/del_lease/192.168.1.100"
         )
 
     @pytest.mark.asyncio

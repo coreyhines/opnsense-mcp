@@ -96,3 +96,48 @@ target-version = ["py312"]
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "venv"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=opnsense_mcp",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=json",
+]
+markers = [
+    "asyncio: mark test as an async test",
+    "integration: mark test as an integration test",
+    "unit: mark test as a unit test",
+]
+
+[tool.coverage.run]
+source = ["opnsense_mcp"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+    "*/.venv/*",
+    "*/venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

@@ -15,3 +15,27 @@ tmp_.*
 opnsense_mcp/__pycache__/server.cpython-313.pyc
 opnsense_mcp/tools/__pycache__/lldp.cpython-313.pyc
 uv.lock
+
+# Test coverage
+.coverage
+.coverage.*
+coverage.json
+htmlcov/
+.pytest_cache/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.*
+!.env.example
