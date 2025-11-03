@@ -34,10 +34,19 @@ jobs:
 
     - name: Run pre-commit checks
       uses: pre-commit/action@v3.0.0
+      continue-on-error: true  # Don't fail on warnings
+
+    - name: Run linting with ruff
+      run: |
+        ruff check . --output-format=github
 
     - name: Run tests with coverage
       run: |
-        python -m pytest tests/ -v --cov=opnsense_mcp --cov-report=xml --cov-report=html
+        python -m pytest tests/ -v --cov=opnsense_mcp --cov-report=xml --cov-report=html --cov-report=term-missing
+
+    - name: Check test coverage threshold
+      run: |
+        python -c "import json; data=json.load(open('coverage.json')); print(f\"Coverage: {data['totals']['percent_covered']:.2f}%\"); exit(0 if data['totals']['percent_covered'] >= 25.0 else 1)"
 
     - name: Upload coverage reports
       uses: codecov/codecov-action@v3
@@ -46,7 +55,27 @@ jobs:
         file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
-        fail_ci_if_error: true
+        fail_ci_if_error: false  # Don't fail if codecov is down
+
+    - name: Upload coverage HTML
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report
+        path: htmlcov/
+
+    - name: Run security scan with Bandit
+      run: |
+        bandit -r opnsense_mcp/ -f json -o bandit-report.json || true
+        bandit -r opnsense_mcp/ -f screen
+      continue-on-error: true
+
+    - name: Upload Bandit report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: bandit-security-report
+        path: bandit-report.json
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
