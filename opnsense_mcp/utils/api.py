@@ -3,8 +3,11 @@
 
 import asyncio
 import base64
+import ipaddress
 import logging
 import os
+import re
+import socket
 import ssl
 from typing import Any
 
@@ -13,6 +16,17 @@ from urllib3.exceptions import InsecureRequestWarning
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 logger = logging.getLogger(__name__)
+_MAC_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.IGNORECASE)
+
+
+def _reverse_name_matches_query(reverse_name: str, query: str) -> bool:
+    """Return True when PTR reverse name confirms a hostname query."""
+    q = query.lower().strip(".")
+    n = reverse_name.lower().strip(".")
+    if not q or not n:
+        return False
+    return n == q or n.startswith(f"{q}.") or n.split(".", 1)[0] == q
+
 
 ENDPOINTS = {
     "system": {
@@ -575,7 +589,37 @@ class OPNsenseClient:
             logger.exception("Failed to search ARP table")
             return []
         else:
-            return response.get("data", []) if isinstance(response, dict) else []
+            data = response.get("data", []) if isinstance(response, dict) else []
+            if data:
+                return data
+
+            # Some OPNsense versions return empty for valid queries; fall back
+            # to local filtering over the full table for reliability.
+            full_table = await self._get_arp_table()
+            query_lc = query.lower()
+            is_ip_query = False
+            try:
+                ipaddress.ip_address(query_lc)
+                is_ip_query = True
+            except ValueError:
+                is_ip_query = False
+            is_mac_query = bool(_MAC_RE.match(query_lc))
+            return [
+                entry
+                for entry in full_table
+                if (
+                    str(entry.get("ip", "")).lower() == query_lc
+                    if is_ip_query
+                    else query_lc in str(entry.get("ip", "")).lower()
+                )
+                or (
+                    str(entry.get("mac", "")).lower().replace("-", ":")
+                    == query_lc.replace("-", ":")
+                    if is_mac_query
+                    else query_lc in str(entry.get("mac", "")).lower()
+                )
+                or query_lc in str(entry.get("hostname", "")).lower()
+            ]
 
     async def search_ndp_table(self: "OPNsenseClient", query: str) -> list[dict]:
         """
@@ -597,7 +641,37 @@ class OPNsenseClient:
             logger.exception("Failed to search NDP table")
             return []
         else:
-            return response.get("data", []) if isinstance(response, dict) else []
+            data = response.get("data", []) if isinstance(response, dict) else []
+            if data:
+                return data
+
+            # Some OPNsense versions return empty for valid queries; fall back
+            # to local filtering over the full table for reliability.
+            full_table = await self._get_ndp_table()
+            query_lc = query.lower()
+            is_ip_query = False
+            try:
+                ipaddress.ip_address(query_lc)
+                is_ip_query = True
+            except ValueError:
+                is_ip_query = False
+            is_mac_query = bool(_MAC_RE.match(query_lc))
+            return [
+                entry
+                for entry in full_table
+                if (
+                    str(entry.get("ip", "")).lower() == query_lc
+                    if is_ip_query
+                    else query_lc in str(entry.get("ip", "")).lower()
+                )
+                or (
+                    str(entry.get("mac", "")).lower().replace("-", ":")
+                    == query_lc.replace("-", ":")
+                    if is_mac_query
+                    else query_lc in str(entry.get("mac", "")).lower()
+                )
+                or query_lc in str(entry.get("hostname", "")).lower()
+            ]
 
     def _detect_endpoint(
         self: "OPNsenseClient", name: str, endpoints: list[str | None]
@@ -743,9 +817,15 @@ class OPNsenseClient:
         return filtered[:row_count]
 
     async def resolve_host_info(self: "OPNsenseClient", query: str) -> dict:
-        """Recursively resolve all available info for a hostname, IP, or MAC."""
+        """Resolve all available info for a hostname, IP, or MAC query."""
         # Normalize input
         query_lc = query.lower() if query else ""
+        is_ip_query = False
+        try:
+            ipaddress.ip_address(query_lc)
+            is_ip_query = True
+        except ValueError:
+            is_ip_query = False
         result = {
             "input": query,
             "hostname": None,
@@ -755,15 +835,32 @@ class OPNsenseClient:
             "dhcpv6": None,
             "arp": None,
             "ndp": None,
+            "dns_forward_ips": [],
+            "dns_reverse_names": [],
+            "dns_verified": False,
         }
 
-        # Run all four lookups in parallel
-        arp_entries, ndp_entries, dhcpv4_leases, dhcpv6_leases = await asyncio.gather(
+        # Run lookups in parallel so hostname resolution can chain quickly.
+        (
+            arp_entries,
+            ndp_entries,
+            dhcpv4_leases,
+            dhcpv6_leases,
+            host_overrides,
+            dns_forward_ips,
+        ) = await asyncio.gather(
             self.search_arp_table(query_lc),
             self.search_ndp_table(query_lc),
             self.get_dhcpv4_leases(),
             self.get_dhcpv6_leases(),
+            self.search_host_overrides(query),
+            (
+                self.resolve_dns_forward(query)
+                if not is_ip_query
+                else asyncio.sleep(0, [])
+            ),
         )
+        result["dns_forward_ips"] = dns_forward_ips
 
         # Step 1: Populate from ARP/NDP results
         if arp_entries:
@@ -783,9 +880,10 @@ class OPNsenseClient:
 
         # Helper to match any field
         def match_lease(lease: dict[str, Any]) -> bool:
+            lease_ip = lease.get("ip") or lease.get("address", "")
             return (
                 query_lc in str(lease.get("hostname", "")).lower()
-                or query_lc in str(lease.get("ip", "")).lower()
+                or query_lc in str(lease_ip).lower()
                 or query_lc in str(lease.get("mac", "")).lower()
             )
 
@@ -810,11 +908,105 @@ class OPNsenseClient:
             if not result["hostname"]:
                 result["hostname"] = lease.get("hostname")
 
-        # Step 3: If still missing, try to infer from other fields
-        # (e.g., if input is IP, look for matching MAC in ARP/DHCP, etc.)
-        # Already handled above by matching all fields
+        # Step 3: Use DNS host overrides as a hostname -> IP fallback.
+        if host_overrides and not result["ip"]:
+            override = host_overrides[0]
+            result["ip"] = override.get("server")
+            if not result["hostname"]:
+                host = str(override.get("hostname", "")).strip()
+                domain = str(override.get("domain", "")).strip()
+                if host and domain:
+                    result["hostname"] = f"{host}.{domain}"
+                elif host:
+                    result["hostname"] = host
+
+        # Step 4: Reverse DNS verification is mandatory for hostname queries.
+        if dns_forward_ips and not is_ip_query:
+            verified_forward_ips: list[str] = []
+            reverse_name_union: list[str] = []
+            for ip in dns_forward_ips:
+                reverse_names = await self.resolve_dns_reverse(str(ip))
+                reverse_name_union.extend(reverse_names)
+                if any(
+                    _reverse_name_matches_query(name, query_lc)
+                    for name in reverse_names
+                ):
+                    verified_forward_ips.append(ip)
+
+            result["dns_reverse_names"] = list(dict.fromkeys(reverse_name_union))
+            result["dns_verified"] = bool(verified_forward_ips)
+            result["dns_forward_ips"] = verified_forward_ips
+
+            if verified_forward_ips and not result["ip"]:
+                result["ip"] = verified_forward_ips[0]
+
+        # Step 5: If DNS/other lookup gave us an IP, re-hydrate ARP/NDP by address.
+        if result["ip"] and not result["arp"]:
+            arp_by_ip = await self.search_arp_table(str(result["ip"]))
+            if arp_by_ip:
+                result["arp"] = arp_by_ip[0]
+                if not result["mac"]:
+                    result["mac"] = result["arp"].get("mac")
+                if not result["hostname"]:
+                    result["hostname"] = result["arp"].get("hostname")
+
+        if result["ip"] and not result["ndp"]:
+            ndp_by_ip = await self.search_ndp_table(str(result["ip"]))
+            if ndp_by_ip:
+                result["ndp"] = ndp_by_ip[0]
+                if not result["mac"]:
+                    result["mac"] = result["ndp"].get("mac")
+                if not result["hostname"]:
+                    result["hostname"] = result["ndp"].get("hostname")
+
+        # Step 6: Reverse lookup for confidence on final IP.
+        if result["ip"]:
+            reverse_names = await self.resolve_dns_reverse(str(result["ip"]))
+            if not result["dns_reverse_names"]:
+                result["dns_reverse_names"] = reverse_names
+            if not result["dns_verified"]:
+                result["dns_verified"] = any(
+                    _reverse_name_matches_query(name, query_lc)
+                    for name in reverse_names
+                )
 
         return result
+
+    async def resolve_dns_forward(self, hostname: str) -> list[str]:
+        """Resolve hostname to IP addresses via local resolver."""
+
+        def _resolve() -> list[str]:
+            try:
+                infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+            except OSError:
+                return []
+            ips = {info[4][0] for info in infos if info and len(info) > 4 and info[4]}
+            return sorted(ips)
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _resolve)
+
+    async def resolve_dns_reverse(self, ip: str) -> list[str]:
+        """Resolve reverse DNS PTR names for an IP address."""
+
+        def _reverse() -> list[str]:
+            try:
+                host, aliases, _ = socket.gethostbyaddr(ip)
+            except OSError:
+                return []
+            names = [host, *aliases]
+            # Deduplicate while preserving order.
+            seen: set[str] = set()
+            unique_names: list[str] = []
+            for name in names:
+                key = name.lower().strip(".")
+                if key and key not in seen:
+                    seen.add(key)
+                    unique_names.append(name)
+            return unique_names
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _reverse)
 
     async def search_host_overrides(self, search: str = "") -> list[dict[str, Any]]:
         """List Unbound DNS host overrides, optionally filtered by hostname/IP/description."""
