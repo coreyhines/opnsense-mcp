@@ -1,5 +1,6 @@
 """DHCP lease management tool for OPNsense."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -8,6 +9,20 @@ from pydantic import BaseModel
 from opnsense_mcp.utils.api import OPNsenseClient
 
 logger = logging.getLogger(__name__)
+
+# Fields that are internal DHCP protocol details rarely useful in LLM context.
+_NOISY_FIELDS = frozenset(
+    {
+        "uid",
+        "iaid",
+        "iaid_duid",
+        "duid",
+        "cltt",
+        "binding",
+        "lease_type",
+        "client-hostname",
+    }
+)
 
 
 class DHCPLease(BaseModel):
@@ -26,7 +41,16 @@ class DHCPTool:
 
     name = "dhcp"
     description = "Show DHCPv4 and DHCPv6 lease tables"
-    input_schema = {"type": "object", "properties": {}, "required": []}
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "search": {
+                "type": "string",
+                "description": "Filter leases by hostname, IP, or MAC address. Omit for full table.",
+            }
+        },
+        "required": [],
+    }
 
     def __init__(self, client: OPNsenseClient | None) -> None:
         """
@@ -39,27 +63,20 @@ class DHCPTool:
         self.client = client
 
     def _normalize_lease_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
-        """
-        Normalize lease entry to standard format.
-
-        Args:
-            entry: Raw lease entry from API.
-
-        Returns:
-            Normalized lease entry.
-
-        """
+        """Normalize and trim a lease entry for LLM-friendly output."""
         # Map 'address' to 'ip' if present
         if "address" in entry and "ip" not in entry:
             entry["ip"] = entry["address"]
-        return entry
+        # Drop noisy internal protocol fields
+        return {k: v for k, v in entry.items() if k not in _NOISY_FIELDS}
 
     async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         Execute DHCP lease table lookup for both IPv4 and IPv6.
 
         Args:
-            params: Execution parameters (unused for DHCP).
+            params: Execution parameters. Optional 'search' key filters by
+                hostname, IP, MAC, or interface description.
 
         Returns:
             Dictionary containing DHCP lease results.
@@ -74,13 +91,21 @@ class DHCPTool:
                     "error": "No client available",
                 }
 
-            # Get DHCPv4 leases
-            dhcpv4_leases = await self.client.get_dhcpv4_leases()
+            search = (params or {}).get("search", "").strip()
 
-            # Get DHCPv6 leases
-            dhcpv6_leases = await self.client.get_dhcpv6_leases()
+            if search:
+                # Server-side search — avoids fetching full lease table
+                dhcpv4_leases, dhcpv6_leases = await asyncio.gather(
+                    self.client.search_dhcpv4_leases(search),
+                    self.client.search_dhcpv6_leases(search),
+                )
+            else:
+                # Full table fetch — used when no search filter is given
+                dhcpv4_leases, dhcpv6_leases = await asyncio.gather(
+                    self.client.get_dhcpv4_leases(),
+                    self.client.get_dhcpv6_leases(),
+                )
 
-            # Normalize entries
             normalized_v4 = [
                 self._normalize_lease_entry(lease) for lease in dhcpv4_leases
             ]
@@ -88,7 +113,6 @@ class DHCPTool:
                 self._normalize_lease_entry(lease) for lease in dhcpv6_leases
             ]
 
-            # Combine results
             return {
                 "dhcpv4": normalized_v4,
                 "dhcpv6": normalized_v6,

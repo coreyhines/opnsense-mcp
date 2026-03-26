@@ -1,5 +1,7 @@
 """ARP/NDP table management tool for OPNsense."""
 
+import asyncio
+import ipaddress
 import logging
 from typing import Any
 
@@ -44,7 +46,14 @@ class ARPTool:
         """
         Execute ARP/NDP table lookup with optional filtering by MAC,
         IPv4, or IPv6 address, or using targeted search if 'search'
-        is provided. If 'search' is a hostname, resolve to IP(s) first.
+        is provided.
+
+        For human-style lookups like hostnames, this will first resolve
+        the query via OPNsenseClient.resolve_host_info to obtain the best
+        matching IP / MAC, then perform a targeted ARP/NDP search for those
+        concrete values. This restores the older "is host on the network?"
+        behavior while keeping the fast server-side search path for direct
+        IP/MAC queries.
         """
         try:
             if self.client is None:
@@ -53,89 +62,101 @@ class ARPTool:
 
             search_query = params.get("search") if params else None
             if search_query:
-                # If wildcard or empty, use canonical endpoint for full table
-                if search_query.strip() == "*" or not search_query.strip():
-                    arp_data = await self.client.get_arp_table()
-                    ndp_data = await self.client.get_ndp_table()
-                    arp_entries = [
-                        self._fill_manufacturer(ARPEntry(**entry).model_dump())
-                        for entry in arp_data
-                    ]
-                    ndp_entries = [
-                        self._fill_manufacturer(ARPEntry(**entry).model_dump())
-                        for entry in ndp_data
-                    ]
+                search_query = search_query.strip()
+
+                # Wildcard or empty → full table (parallel fetch)
+                if search_query == "*" or not search_query:
+                    arp_data, ndp_data = await asyncio.gather(
+                        self.client.get_arp_table(),
+                        self.client.get_ndp_table(),
+                    )
                     return {
-                        "arp": arp_entries,
-                        "ndp": ndp_entries,
+                        "arp": [
+                            self._fill_manufacturer(ARPEntry(**e).model_dump())
+                            for e in arp_data
+                        ],
+                        "ndp": [
+                            self._fill_manufacturer(ARPEntry(**e).model_dump())
+                            for e in ndp_data
+                        ],
                         "status": "success",
                     }
-                # Otherwise, fetch full tables and match in Python
-                resolved_ips = set()
-                resolved_macs = set()
-                resolved_hostnames = set()
-                resolved_queries = set()
-                if hasattr(self.client, "resolve_host_info"):
-                    info = await self.client.resolve_host_info(search_query)
-                    logger.debug(
-                        f"[ARPTool] resolve_host_info({search_query!r}) -> {info}"
-                    )
-                    if info.get("ip"):
-                        resolved_ips.add(info["ip"])
-                    if info.get("mac"):
-                        resolved_macs.add(info["mac"])
-                    if info.get("hostname"):
-                        resolved_hostnames.add(info["hostname"])
-                    if info.get("dhcpv4"):
-                        dhcp = info["dhcpv4"]
-                        if dhcp.get("ip") or dhcp.get("address"):
-                            resolved_ips.add(dhcp.get("ip") or dhcp.get("address"))
-                        if dhcp.get("mac"):
-                            resolved_macs.add(dhcp["mac"])
-                        if dhcp.get("hostname") or dhcp.get("client-hostname"):
-                            resolved_hostnames.add(
-                                dhcp.get("hostname") or dhcp.get("client-hostname")
-                            )
-                    resolved_queries.add(search_query)
+
+                # Decide whether this looks like an IP/MAC or a hostname-ish query.
+                looks_like_ip = False
+                looks_like_mac = False
+                try:
+                    ipaddress.ip_address(search_query)
+                    looks_like_ip = True
+                except ValueError:
+                    looks_like_ip = False
+
+                q_lc = search_query.lower()
+                if (":" in q_lc or "-" in q_lc) and len(
+                    q_lc.replace("-", ":").split(":")
+                ) == 6:
+                    # Cheap MAC heuristic; exact validation happens later anyway.
+                    looks_like_mac = True
+
+                # For hostnames / free-form queries, resolve to concrete identifiers first.
+                if not looks_like_ip and not looks_like_mac:
+                    try:
+                        host_info = await self.client.resolve_host_info(search_query)
+                    except Exception:
+                        logger.exception(
+                            "resolve_host_info failed for query '%s'", search_query
+                        )
+                        host_info = {}
+
+                    resolved_ip = (host_info or {}).get("ip")
+                    resolved_mac = (host_info or {}).get("mac")
+                    resolved_ipv6 = None
+                    # resolve_host_info currently focuses on v4; keep hook for v6.
+                    if host_info and host_info.get("ndp"):
+                        resolved_ipv6 = host_info["ndp"].get("ip")
+
+                    # If we got something concrete, search by those; otherwise fall
+                    # back to the raw server-side search endpoints.
+                    if resolved_ip or resolved_mac or resolved_ipv6:
+                        arp_filters: dict[str, Any] = {}
+                        ndp_filters: dict[str, Any] = {}
+                        if resolved_mac:
+                            arp_filters["mac"] = resolved_mac
+                            ndp_filters["mac"] = resolved_mac
+                        if resolved_ip:
+                            arp_filters["ip"] = resolved_ip
+                        if resolved_ipv6:
+                            ndp_filters["ipv6"] = resolved_ipv6
+
+                        arp_raw, ndp_raw = await asyncio.gather(
+                            self.client.search_arp_table(
+                                arp_filters.get("ip") or arp_filters.get("mac") or ""
+                            ),
+                            self.client.search_ndp_table(
+                                ndp_filters.get("ipv6") or ndp_filters.get("mac") or ""
+                            ),
+                        )
+                    else:
+                        arp_raw, ndp_raw = await asyncio.gather(
+                            self.client.search_arp_table(search_query),
+                            self.client.search_ndp_table(search_query),
+                        )
                 else:
-                    resolved_queries.add(search_query)
-                all_queries = {
-                    q.lower()
-                    for q in (
-                        resolved_queries
-                        | resolved_ips
-                        | resolved_macs
-                        | resolved_hostnames
-                    )
-                    if q
-                }
-                logger.debug(
-                    f"[ARPTool] In-memory ARP/NDP search queries: {all_queries}"
-                )
-                arp_data = await self.client.get_arp_table()
-                ndp_data = await self.client.get_ndp_table()
-
-                def match_any(entry):
-                    return any(
-                        q in str(entry.get("ip", "")).lower()
-                        or q in str(entry.get("mac", "")).lower()
-                        or q in str(entry.get("hostname", "")).lower()
-                        for q in all_queries
+                    # Direct IP/MAC queries stay on the fast path.
+                    arp_raw, ndp_raw = await asyncio.gather(
+                        self.client.search_arp_table(search_query),
+                        self.client.search_ndp_table(search_query),
                     )
 
-                arp_entries = [
-                    self._fill_manufacturer(ARPEntry(**entry).model_dump())
-                    for entry in arp_data
-                    if match_any(entry)
-                ]
-                ndp_entries = [
-                    self._fill_manufacturer(ARPEntry(**entry).model_dump())
-                    for entry in ndp_data
-                    if match_any(entry)
-                ]
                 return {
-                    "arp": arp_entries,
-                    "ndp": ndp_entries,
+                    "arp": [
+                        self._fill_manufacturer(ARPEntry(**e).model_dump())
+                        for e in arp_raw
+                    ],
+                    "ndp": [
+                        self._fill_manufacturer(ARPEntry(**e).model_dump())
+                        for e in ndp_raw
+                    ],
                     "status": "success",
                 }
 

@@ -1,5 +1,6 @@
 """Firewall rules management tool for OPNsense."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -49,6 +50,7 @@ class FwRulesTool:
         """
         self.client = client
         self._interface_groups_cache = None
+        self._interface_aliases_cache = None
 
     async def _get_interface_groups(self) -> list[dict[str, Any]]:
         """
@@ -94,6 +96,9 @@ class FwRulesTool:
             List of interface alias dictionaries.
 
         """
+        if self._interface_aliases_cache is not None:
+            return self._interface_aliases_cache
+
         try:
             # Try to get interface aliases
             response = await self.client._make_request(
@@ -110,6 +115,8 @@ class FwRulesTool:
                             "device": value.get("device", ""),
                         }
                     )
+
+            self._interface_aliases_cache = aliases
 
         except Exception as e:
             logger.warning(f"Failed to get interface aliases: {e}")
@@ -139,14 +146,16 @@ class FwRulesTool:
 
         resolved = []
 
-        # Check interface groups
-        groups = await self._get_interface_groups()
+        # Fetch groups and aliases in parallel
+        groups, aliases = await asyncio.gather(
+            self._get_interface_groups(),
+            self._get_interface_aliases(),
+        )
+
         for group in groups:
             if iface_query.lower() in group["name"].lower():
                 resolved.extend(group["members"])
 
-        # Check interface aliases
-        aliases = await self._get_interface_aliases()
         for alias in aliases:
             if iface_query.lower() in alias["name"].lower():
                 resolved.append(alias["name"])

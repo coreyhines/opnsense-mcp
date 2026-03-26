@@ -1,13 +1,14 @@
 import logging
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
 
 import paramiko
 from paramiko.config import SSHConfig
+
+from opnsense_mcp.utils.env import load_opnsense_env
 
 logger = logging.getLogger(__name__)
 
@@ -24,31 +25,33 @@ class PacketCaptureTool2:
     ):
         self.client = client
 
-        # Load environment variables from .opnsense-env file
-        env_file = Path.home() / ".opnsense-env"
-        if env_file.exists():
-            try:
-                with open(env_file) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            if "=" in line:
-                                key, value = line.split("=", 1)
-                                os.environ[key] = value
-            except Exception as e:
-                logger.warning(f"Failed to load .opnsense-env: {e}")
+        # Load environment variables from ~/.opnsense-env or .env
+        load_opnsense_env()
 
         env_host = os.getenv("OPNSENSE_FIREWALL_HOST")
+        env_user = os.getenv("OPNSENSE_SSH_USER")
+        env_key = os.getenv("OPNSENSE_SSH_KEY")
         config_host = ssh_host or env_host or "opnsense"
         self.ssh_host = config_host
-        self.ssh_user = ssh_user or self._get_ssh_config("user", config_host) or "root"
-        self.ssh_key = ssh_key or self._get_ssh_config("identityfile", config_host)
+        self.ssh_user = (
+            ssh_user
+            or env_user
+            or self._get_ssh_config("user", config_host)
+            or os.getenv("USER")
+            or "root"
+        )
+        self.ssh_key = (
+            ssh_key or env_key or self._get_ssh_config("identityfile", config_host)
+        )
         self.capture_file = "/tmp/mcp_capture.pcap"
         self.ssh_port = 22
 
-        # Debug SSH configuration
-        print(
-            f"SSH Config: host={self.ssh_host}, user={self.ssh_user}, key={self.ssh_key}"
+        # Keep connection details on logger, never stdout in MCP mode.
+        logger.info(
+            "SSH Config: host=%s, user=%s, key=%s",
+            self.ssh_host,
+            self.ssh_user,
+            self.ssh_key,
         )
 
     def _get_ssh_config(self, key: str, config_host: str) -> str | None:
@@ -221,11 +224,9 @@ class PacketCaptureTool2:
         import os
 
         try:
-            from dotenv import load_dotenv
-
             from opnsense_mcp.utils.api import OPNsenseClient
 
-            load_dotenv(os.path.expanduser("~/.opnsense-env"))
+            load_opnsense_env()
             host = os.getenv("OPNSENSE_FIREWALL_HOST")
             api_key = os.getenv("OPNSENSE_API_KEY")
             api_secret = os.getenv("OPNSENSE_API_SECRET")
@@ -614,8 +615,7 @@ class PacketCaptureTool2:
         """Execute packet capture operations with automatic error detection and correction."""
         action = params.get("action", "start")
 
-        # Add debugging
-        print(f"DEBUG: execute called with params: {params}", file=sys.stderr)
+        logger.debug("Packet capture execute called with params: %s", params)
 
         # Special action for diagnostics
         if action == "diagnose":
@@ -623,28 +623,7 @@ class PacketCaptureTool2:
 
         # Validate parameters and provide guidance
         if action == "start":
-            # First, detect any issues
-            issues = self._detect_mcp_server_issues()
-            if issues["has_issues"]:
-                # Try to auto-correct issues
-                corrections = self._auto_correct_issues()
-
-                # If auto-correction failed, return diagnostic information
-                if not corrections["success"]:
-                    return {
-                        "status": "error",
-                        "error": "MCP server issues detected and auto-correction failed",
-                        "detected_issues": issues["issues"],
-                        "suggested_solutions": issues["solutions"],
-                        "auto_correction_attempts": corrections["corrections_applied"],
-                        "auto_correction_errors": corrections["errors"],
-                        "guidance": "Please manually fix the issues above, then try again. You can also use action='diagnose' for detailed diagnostics.",
-                    }
-
-                # If auto-correction succeeded, retry the operation
-                return await self._retry_after_correction(params)
-
-            # Validate required parameters for start action
+            # Validate required parameters before any issue detection
             interface = params.get("interface", "wan")
             duration = params.get("duration", 30)
             count = params.get("count")
@@ -655,15 +634,11 @@ class PacketCaptureTool2:
                 "stream", True
             )  # Default to stream for immediate results
 
-            # Add debugging for duration
-            print(
-                f"DEBUG: duration = {duration}, type = {type(duration)}",
-                file=sys.stderr,
-            )
+            logger.debug("Packet capture duration=%s type=%s", duration, type(duration))
 
             # Validate duration
             if duration <= 0 or duration > 3600:
-                print(f"DEBUG: duration validation failed: {duration}", file=sys.stderr)
+                logger.debug("Duration validation failed: %s", duration)
                 return {
                     "status": "error",
                     "error": f"Invalid duration: {duration}. Must be between 1 and 3600 seconds.",
@@ -685,6 +660,27 @@ class PacketCaptureTool2:
                     "error": f"Invalid mode: {mode}. Must be 'raw' or 'text'.",
                     "guidance": "Use 'text' mode for human-readable output, 'raw' for binary data.",
                 }
+
+            # Detect and auto-correct any infrastructure issues
+            issues = self._detect_mcp_server_issues()
+            if issues["has_issues"]:
+                # Try to auto-correct issues
+                corrections = self._auto_correct_issues()
+
+                # If auto-correction failed, return diagnostic information
+                if not corrections["success"]:
+                    return {
+                        "status": "error",
+                        "error": "MCP server issues detected and auto-correction failed",
+                        "detected_issues": issues["issues"],
+                        "suggested_solutions": issues["solutions"],
+                        "auto_correction_attempts": corrections["corrections_applied"],
+                        "auto_correction_errors": corrections["errors"],
+                        "guidance": "Please manually fix the issues above, then try again. You can also use action='diagnose' for detailed diagnostics.",
+                    }
+
+                # If auto-correction succeeded, retry the operation
+                return await self._retry_after_correction(params)
 
             # Test SSH connection first
             try:

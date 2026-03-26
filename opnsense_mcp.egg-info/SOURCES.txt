@@ -6,6 +6,8 @@ opnsense_mcp.egg-info/SOURCES.txt
 opnsense_mcp.egg-info/dependency_links.txt
 opnsense_mcp.egg-info/top_level.txt
 tests/test_all_tools.py
+tests/test_dhcp_lease_delete.py
+tests/test_dhcp_tool.py
 tests/test_integration.py
 tests/test_integration_clean.py
 tests/test_jwt_helper.py

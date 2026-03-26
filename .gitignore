@@ -1,8 +1,12 @@
 vars/
 .cursor/
 .opnsense-env
+.env
+.env.*
+.envrc
 .venv/
-tmp_.*
+tmp_*
+**/tmp_*
 .github/copilot*
 **/__pycache__
 **/__pycache__/**
@@ -15,3 +19,29 @@ tmp_.*
 opnsense_mcp/__pycache__/server.cpython-313.pyc
 opnsense_mcp/tools/__pycache__/lldp.cpython-313.pyc
 uv.lock
+
+# Local/generated files
+.DS_Store
+.mcp.json
+.vscode/
+opnsense-mcp.code-workspace
+mcp_server.log
+*.log
+=*
+
+# Internal planning docs
+docs/superpowers/
+docs/CI_CD_IMPROVEMENT_PLAN.md
+
+# Scratch/debug scripts
+debug_test.py
+demo_all_tools.py
+demonstrate_tools.py
+minimal_test.py
+quick_test_logs.py
+simple_demo.py
+simple_test.py
+test_direct_api.py
+test_fixes.py
+working_demo.py
+config.py
