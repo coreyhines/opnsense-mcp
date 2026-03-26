@@ -3,6 +3,7 @@
 
 import logging
 import re
+import time
 from collections import Counter
 from datetime import datetime
 from typing import Any
@@ -59,7 +60,7 @@ class GetLogsTool:
 
     async def get_logs(
         self,
-        limit: int = 500,
+        limit: int = 100,
         action: str | None = None,
         src_ip: str | None = None,
         dst_ip: str | None = None,
@@ -102,6 +103,15 @@ class GetLogsTool:
 
         parsed_logs = []
         try:
+            # Serve from cache if fresh and no filters require re-fetch
+            now = time.monotonic()
+            if (
+                self._log_cache is not None
+                and (now - self._log_cache_time) < self._log_cache_ttl
+                and not any([action, src_ip, dst_ip, protocol, filter])
+            ):
+                return self._log_cache[:limit]
+
             # Get raw logs from OPNsense
             raw_logs = await self.client.get_firewall_logs(limit)
             log_count = len(raw_logs) if raw_logs else 0
@@ -180,6 +190,11 @@ class GetLogsTool:
         except Exception:
             logger.exception("Failed to get firewall logs")
             return []
+
+        # Cache unfiltered results for subsequent calls within TTL
+        if not any([action, src_ip, dst_ip, protocol, filter]):
+            self._log_cache = parsed_logs
+            self._log_cache_time = time.monotonic()
 
         filtered_count = len(parsed_logs)
         logger.info(f"GetLogsTool: Returning {filtered_count} parsed logs")
@@ -309,7 +324,7 @@ class GetLogsTool:
         try:
             # Get logs with specified filters
             logs = await self.get_logs(
-                limit=params.get("limit", 500),
+                limit=params.get("limit", 100),
                 action=params.get("action"),
                 src_ip=params.get("src_ip"),
                 dst_ip=params.get("dst_ip"),

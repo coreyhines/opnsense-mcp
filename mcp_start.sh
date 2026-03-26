@@ -14,9 +14,59 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Load environment variables if .opnsense-env exists
+# 1) Load from ~/.env first (preferred)
+if [ -f ~/.env ]; then
+    echo "Loading environment from ~/.env" >&2
+    set -a
+    # shellcheck disable=SC1090
+    source ~/.env
+    set +a
+fi
+
+# 2) Map common OPNSENSE_* aliases from ~/.env (if present)
+#    (Your mcp server expects OPNSENSE_API_KEY / OPNSENSE_API_SECRET / OPNSENSE_FIREWALL_HOST.)
+if [ -z "${OPNSENSE_API_KEY:-}" ] && [ -n "${OPNSENSE_KEY:-}" ]; then
+    export OPNSENSE_API_KEY="${OPNSENSE_KEY}"
+fi
+if [ -z "${OPNSENSE_API_SECRET:-}" ] && [ -n "${OPNSENSE_SECRET:-}" ]; then
+    export OPNSENSE_API_SECRET="${OPNSENSE_SECRET}"
+fi
+if [ -z "${OPNSENSE_FIREWALL_HOST:-}" ] && [ -n "${OPNSENSE_URL:-}" ]; then
+    # Extract host from URLs like https://host.domain/path
+    host="${OPNSENSE_URL#http://}"
+    host="${host#https://}"
+    host="${host%%/*}"
+    if [ -n "$host" ]; then
+        export OPNSENSE_FIREWALL_HOST="$host"
+    fi
+fi
+
+# 3) Load from ~/.opnsense-env only for missing OPNSENSE_* variables
 if [ -f ~/.opnsense-env ]; then
-    echo "Loading environment from ~/.opnsense-env" >&2
-    export $(grep -v '^#' ~/.opnsense-env | xargs)
+    echo "Loading environment from ~/.opnsense-env (missing OPNSENSE_* only)" >&2
+    while IFS= read -r line || [ -n "$line" ]; do
+        s="${line#"${line%%[![:space:]]*}"}" # trim leading whitespace
+        if [ -z "$s" ] || [ "${s:0:1}" = "#" ]; then
+            continue
+        fi
+        if [[ "$s" == export\ * ]]; then
+            s="${s#export }"
+        fi
+        if [[ "$s" != *"="* ]]; then
+            continue
+        fi
+        key="${s%%=*}"
+        val="${s#*=}"
+
+        # Remove surrounding quotes
+        if [[ "$val" =~ ^\".*\"$ ]] || [[ "$val" =~ ^\'.*\'$ ]]; then
+            val="${val:1:${#val}-2}"
+        fi
+
+        if [ -z "${!key:-}" ]; then
+            export "$key=$val"
+        fi
+    done < ~/.opnsense-env
 fi
 
 # Set default environment variables

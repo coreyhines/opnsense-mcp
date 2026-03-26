@@ -4,11 +4,12 @@ import asyncio
 import json
 import logging
 import os
-from pathlib import Path
 from typing import Any
 
 import paramiko
 from paramiko.config import SSHConfig
+
+from opnsense_mcp.utils.env import load_opnsense_env
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +41,8 @@ class SSHFirewallRuleTool:
     def __init__(self, client: Any) -> None:
         self.client = client
 
-        # Load environment variables from .opnsense-env file
-        env_file = Path.home() / ".opnsense-env"
-        if env_file.exists():
-            try:
-                with open(env_file) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            if "=" in line:
-                                key, value = line.split("=", 1)
-                                os.environ[key] = value
-            except Exception as e:
-                logger.warning(f"Failed to load .opnsense-env: {e}")
+        # Load environment variables from ~/.opnsense-env or .env
+        load_opnsense_env()
 
         # Get SSH configuration exactly like packet capture tool
         env_host = os.getenv("OPNSENSE_FIREWALL_HOST")

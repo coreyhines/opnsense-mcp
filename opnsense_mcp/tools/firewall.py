@@ -7,11 +7,13 @@ rule retrieval, log filtering, and network analysis.
 """
 
 import ipaddress
-import sys
+import logging
 import time
 from typing import Any
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class FirewallEndpoint(BaseModel):
@@ -156,34 +158,39 @@ class FirewallTool:
                                     if src_ip:
                                         src_match = ipaddress.ip_address(src_ip) in net
                                 except Exception as e:
-                                    print(
-                                        f"[DEBUG] Subnet filter: src_ip parse error: "
-                                        f"{src_ip} ({e})",
-                                        file=sys.stderr,
+                                    logger.debug(
+                                        "Subnet filter src_ip parse error: %s (%s)",
+                                        src_ip,
+                                        e,
                                     )
                                 try:
                                     if dst_ip:
                                         dst_match = ipaddress.ip_address(dst_ip) in net
                                 except Exception as e:
-                                    print(
-                                        f"[DEBUG] Subnet filter: dst_ip parse "
-                                        f"error: {dst_ip} ({e})",
-                                        file=sys.stderr,
+                                    logger.debug(
+                                        "Subnet filter dst_ip parse error: %s (%s)",
+                                        dst_ip,
+                                        e,
                                     )
                                 if src_match or dst_match:
                                     match = True
-                                print(
-                                    f"[DEBUG] Subnet filter: src={src_ip}, "
-                                    f"dst={dst_ip}, subnet={net}, "
-                                    f"src_match={src_match}, "
-                                    f"dst_match={dst_match}, match={match}",
-                                    file=sys.stderr,
+                                logger.debug(
+                                    (
+                                        "Subnet filter src=%s dst=%s subnet=%s "
+                                        "src_match=%s dst_match=%s match=%s"
+                                    ),
+                                    src_ip,
+                                    dst_ip,
+                                    net,
+                                    src_match,
+                                    dst_match,
+                                    match,
                                 )
                             except Exception as e:
-                                print(
-                                    f"[DEBUG] Subnet filter: net parse error: "
-                                    f"{params['log_search_subnet']} ({e})",
-                                    file=sys.stderr,
+                                logger.debug(
+                                    "Subnet filter net parse error: %s (%s)",
+                                    params["log_search_subnet"],
+                                    e,
                                 )
                         # Interface match (resolved)
                         if iface_real and log.get("interface") == iface_real:

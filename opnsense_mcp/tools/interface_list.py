@@ -41,34 +41,28 @@ class InterfaceListTool:
             debug_lines.append(
                 f"[DEBUG] Interface key: {k}, identifier: {v.get('identifier')}, description: {v.get('description')}, enabled: {v.get('enabled')}, device: {v.get('device')}, name: {v.get('name')}"
             )
-        print("\n".join(debug_lines))
-        logger.warning("\n".join(debug_lines))
+        logger.debug("\n".join(debug_lines))
         # Prefer enabled interfaces
         candidates = [v for v in interfaces.values() if v.get("enabled")]
         # Match identifier
         for iface in candidates:
             if iface.get("identifier", "").lower() == logical_lc:
-                print(f"[DEBUG] Matched by identifier: {iface}")
-                logger.warning(f"[DEBUG] Matched by identifier: {iface}")
+                logger.debug("Matched by identifier: %s", iface)
                 return iface.get("device") or iface.get("name")
         # Match description
         for iface in candidates:
             if iface.get("description", "").lower() == logical_lc:
-                print(f"[DEBUG] Matched by description: {iface}")
-                logger.warning(f"[DEBUG] Matched by description: {iface}")
+                logger.debug("Matched by description: %s", iface)
                 return iface.get("device") or iface.get("name")
         # Fallback: match in all interfaces
         for iface in interfaces.values():
             if iface.get("identifier", "").lower() == logical_lc:
-                print(f"[DEBUG] Fallback matched by identifier: {iface}")
-                logger.warning(f"[DEBUG] Fallback matched by identifier: {iface}")
+                logger.debug("Fallback matched by identifier: %s", iface)
                 return iface.get("device") or iface.get("name")
             if iface.get("description", "").lower() == logical_lc:
-                print(f"[DEBUG] Fallback matched by description: {iface}")
-                logger.warning(f"[DEBUG] Fallback matched by description: {iface}")
+                logger.debug("Fallback matched by description: %s", iface)
                 return iface.get("device") or iface.get("name")
-        print(f"[DEBUG] No match found for logical name '{logical_name}'")
-        logger.warning(f"[DEBUG] No match found for logical name '{logical_name}'")
+        logger.debug("No match found for logical name '%s'", logical_name)
         return None
 
     async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -9,27 +9,33 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
-
+from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.arp import ARPTool
 from opnsense_mcp.tools.dhcp import DHCPTool
 from opnsense_mcp.tools.dhcp_lease_delete import DHCPLeaseDeleteTool
+from opnsense_mcp.tools.dns import DNSTool
 from opnsense_mcp.tools.firewall_logs import FirewallLogsTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
+from opnsense_mcp.tools.gateway_status import GatewayStatusTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
 from opnsense_mcp.tools.lldp import LLDPTool
+from opnsense_mcp.tools.mkdns import MkdnsTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
 from opnsense_mcp.tools.packet_capture import PacketCaptureTool2 as PacketCaptureTool
+from opnsense_mcp.tools.rmdns import RmdnsTool
 from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+from opnsense_mcp.tools.set_fw_rule import SetFwRuleTool
 from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
+from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
 from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.env import load_opnsense_env
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables from ~/.opnsense-env by default
-load_dotenv(os.path.expanduser("~/.opnsense-env"))
+# Load environment variables from ~/.opnsense-env or .env
+load_opnsense_env()
 
 
 def get_opnsense_client(config: dict[str, Any]) -> Any:
@@ -120,6 +126,13 @@ async def handle_message(
     interface_list_tool: InterfaceListTool,
     packet_capture_tool: PacketCaptureTool,
     ssh_fw_rule_tool: SSHFirewallRuleTool,
+    dns_tool: DNSTool,
+    mkdns_tool: MkdnsTool,
+    rmdns_tool: RmdnsTool,
+    toggle_fw_rule_tool: ToggleFwRuleTool,
+    set_fw_rule_tool: SetFwRuleTool,
+    aliases_tool: AliasesTool,
+    gateway_status_tool: GatewayStatusTool,
 ) -> dict[str, Any] | None:
     """Handle incoming MCP messages and route them to appropriate tools."""
     method = message.get("method")
@@ -484,6 +497,195 @@ async def handle_message(
                     "required": [],
                 },
             },
+            {
+                "name": "dns",
+                "description": "List Unbound DNS host overrides",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "search": {
+                            "type": "string",
+                            "description": "Filter by hostname, IP, or description",
+                            "optional": True,
+                        },
+                    },
+                    "required": [],
+                },
+            },
+            {
+                "name": "mkdns",
+                "description": "Add a DNS host override in Unbound",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "hostname": {
+                            "type": "string",
+                            "description": "Hostname (without domain, e.g. 'myserver')",
+                        },
+                        "domain": {
+                            "type": "string",
+                            "description": "Domain (e.g. 'local' or 'example.com')",
+                        },
+                        "server": {
+                            "type": "string",
+                            "description": "IP address this hostname resolves to",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional description",
+                            "optional": True,
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Whether the override is active (default: true)",
+                            "optional": True,
+                        },
+                    },
+                    "required": ["hostname", "domain", "server"],
+                },
+            },
+            {
+                "name": "rmdns",
+                "description": "Delete a DNS host override from Unbound",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "uuid": {
+                            "type": "string",
+                            "description": (
+                                "UUID of the host override to delete (from dns output)"
+                            ),
+                        },
+                    },
+                    "required": ["uuid"],
+                },
+            },
+            {
+                "name": "toggle_fw_rule",
+                "description": "Enable or disable a firewall rule",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "rule_uuid": {
+                            "type": "string",
+                            "description": "UUID of the rule to toggle (from fw_rules output)",
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "True to enable the rule, False to disable it",
+                        },
+                        "apply": {
+                            "type": "boolean",
+                            "description": "Apply changes immediately (default: true)",
+                            "optional": True,
+                        },
+                    },
+                    "required": ["rule_uuid", "enabled"],
+                },
+            },
+            {
+                "name": "set_fw_rule",
+                "description": "Edit fields of an existing firewall rule",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "rule_uuid": {
+                            "type": "string",
+                            "description": "UUID of the rule to edit (from fw_rules output)",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "New rule description",
+                            "optional": True,
+                        },
+                        "interface": {
+                            "type": "string",
+                            "description": "Network interface (e.g. 'lan', 'wan', 'opt1')",
+                            "optional": True,
+                        },
+                        "direction": {
+                            "type": "string",
+                            "description": "'in' or 'out'",
+                            "optional": True,
+                        },
+                        "ipprotocol": {
+                            "type": "string",
+                            "description": "'inet' (IPv4) or 'inet6' (IPv6)",
+                            "optional": True,
+                        },
+                        "protocol": {
+                            "type": "string",
+                            "description": "Protocol: 'any', 'tcp', 'udp', 'icmp', etc.",
+                            "optional": True,
+                        },
+                        "source_net": {
+                            "type": "string",
+                            "description": "Source network/IP (e.g. 'any', '192.168.1.0/24')",
+                            "optional": True,
+                        },
+                        "source_port": {
+                            "type": "string",
+                            "description": "Source port or 'any'",
+                            "optional": True,
+                        },
+                        "destination_net": {
+                            "type": "string",
+                            "description": "Destination network/IP",
+                            "optional": True,
+                        },
+                        "destination_port": {
+                            "type": "string",
+                            "description": "Destination port or 'any'",
+                            "optional": True,
+                        },
+                        "action": {
+                            "type": "string",
+                            "description": "'pass', 'block', or 'reject'",
+                            "optional": True,
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Enable or disable the rule",
+                            "optional": True,
+                        },
+                        "gateway": {
+                            "type": "string",
+                            "description": "Gateway for policy routing",
+                            "optional": True,
+                        },
+                        "apply": {
+                            "type": "boolean",
+                            "description": "Apply changes immediately (default: true)",
+                            "optional": True,
+                        },
+                    },
+                    "required": ["rule_uuid"],
+                },
+            },
+            {
+                "name": "aliases",
+                "description": "List firewall aliases (IP groups, port groups, etc)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "search": {
+                            "type": "string",
+                            "description": "Filter by alias name, type, or content",
+                            "optional": True,
+                        },
+                    },
+                    "required": [],
+                },
+            },
+            {
+                "name": "gateway_status",
+                "description": "Show WAN gateway health (latency, packet loss)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            },
         ]
         return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}}
 
@@ -622,6 +824,55 @@ async def handle_message(
                         "content": [{"type": "text", "text": str(error_result)}]
                     },
                 }
+        if tool_name == "dns":
+            result = await dns_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "mkdns":
+            result = await mkdns_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "rmdns":
+            result = await rmdns_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "toggle_fw_rule":
+            result = await toggle_fw_rule_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "set_fw_rule":
+            result = await set_fw_rule_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "aliases":
+            result = await aliases_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "gateway_status":
+            result = await gateway_status_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
@@ -650,7 +901,6 @@ def error_response(
 
 def main() -> None:
     """Main entry point for the MCP server."""
-    print("SERVER STARTED", file=sys.stderr)
     # Configure logging
     log_level = os.environ.get("LOG_LEVEL", "INFO")
     logging.basicConfig(
@@ -675,6 +925,13 @@ def main() -> None:
     interface_list_tool = InterfaceListTool(client)
     packet_capture_tool = PacketCaptureTool()
     ssh_fw_rule_tool = SSHFirewallRuleTool(client)
+    dns_tool = DNSTool(client)
+    mkdns_tool = MkdnsTool(client)
+    rmdns_tool = RmdnsTool(client)
+    toggle_fw_rule_tool = ToggleFwRuleTool(client)
+    set_fw_rule_tool = SetFwRuleTool(client)
+    aliases_tool = AliasesTool(client)
+    gateway_status_tool = GatewayStatusTool(client)
 
     # Handle stdin/stdout communication
     async def process_messages() -> None:
@@ -693,13 +950,11 @@ def main() -> None:
 
                 # Log raw input for debugging
                 logger.debug(f"Raw input line: {line!r}")
-                print(f"Received line: {line}", file=sys.stderr)
 
                 # Parse the JSON message
                 message = json.loads(line)
                 msg_id = message.get("id")
                 logger.debug(f"Parsed message: {message}")
-                print(f"Parsed message: {message}", file=sys.stderr)
 
                 # Validate required fields
                 if "jsonrpc" not in message or message["jsonrpc"] != "2.0":
@@ -733,12 +988,15 @@ def main() -> None:
                     interface_list_tool,
                     packet_capture_tool,
                     ssh_fw_rule_tool,
+                    dns_tool,
+                    mkdns_tool,
+                    rmdns_tool,
+                    toggle_fw_rule_tool,
+                    set_fw_rule_tool,
+                    aliases_tool,
+                    gateway_status_tool,
                 )
                 if response is not None:
-                    print(
-                        f"Writing to stdout: {json.dumps(response)}",
-                        file=sys.stderr,
-                    )
                     sys.stdout.write(json.dumps(response) + "\n")
                     sys.stdout.flush()
                     logger.debug(f"Sent response: {response}")
@@ -747,10 +1005,6 @@ def main() -> None:
                         -32601,
                         f"Method '{message.get('method')}' not found",
                         msg_id,
-                    )
-                    print(
-                        f"Writing to stdout: {json.dumps(err)}",
-                        file=sys.stderr,
                     )
                     sys.stdout.write(json.dumps(err) + "\n")
                     sys.stdout.flush()
@@ -767,7 +1021,6 @@ def main() -> None:
                 sys.stdout.write(json.dumps(err) + "\n")
                 sys.stdout.flush()
 
-    print("About to enter message loop", file=sys.stderr)
     asyncio.run(process_messages())
 
 

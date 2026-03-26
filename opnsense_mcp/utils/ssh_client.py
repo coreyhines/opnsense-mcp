@@ -2,11 +2,12 @@
 
 import logging
 import os
-from pathlib import Path
 from typing import Any
 
 import paramiko
 from paramiko.config import SSHConfig
+
+from opnsense_mcp.utils.env import load_opnsense_env
 
 logger = logging.getLogger(__name__)
 
@@ -23,26 +24,22 @@ class OPNsenseSSHClient:
         """
         self.client = client
 
-        # Load environment variables from .opnsense-env file
-        env_file = Path.home() / ".opnsense-env"
-        if env_file.exists():
-            try:
-                with open(env_file) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            if "=" in line:
-                                key, value = line.split("=", 1)
-                                os.environ[key] = value
-            except Exception as e:
-                logger.warning(f"Failed to load .opnsense-env: {e}")
+        # Load environment variables from ~/.opnsense-env or .env
+        load_opnsense_env()
 
         # Get SSH configuration exactly like packet capture tool
         env_host = os.getenv("OPNSENSE_FIREWALL_HOST")
+        env_user = os.getenv("OPNSENSE_SSH_USER")
+        env_key = os.getenv("OPNSENSE_SSH_KEY")
         config_host = env_host or "opnsense"
         self.ssh_host = config_host
-        self.ssh_user = self._get_ssh_config("user", config_host) or "root"
-        self.ssh_key = self._get_ssh_config("identityfile", config_host)
+        self.ssh_user = (
+            env_user
+            or self._get_ssh_config("user", config_host)
+            or os.getenv("USER")
+            or "root"
+        )
+        self.ssh_key = env_key or self._get_ssh_config("identityfile", config_host)
         self.ssh_port = 22
 
         # Debug SSH configuration
