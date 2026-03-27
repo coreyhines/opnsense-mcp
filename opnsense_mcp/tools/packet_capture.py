@@ -73,6 +73,7 @@ class PacketCaptureTool2:
             username=self.ssh_user,
             key_filename=self.ssh_key,
             port=self.ssh_port,
+            timeout=10,
         )
         return client
 

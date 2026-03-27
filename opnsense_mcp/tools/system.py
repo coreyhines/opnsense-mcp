@@ -167,8 +167,8 @@ class SystemTool:
 
         # Check SSH connectivity
         try:
-            client = self._get_client()
-            client.close()
+            if self.client is None:
+                raise RuntimeError("No OPNsense client available")
         except Exception as e:
             issues.append(f"SSH connection failed: {e}")
             solutions.append("Check SSH configuration and firewall connectivity")

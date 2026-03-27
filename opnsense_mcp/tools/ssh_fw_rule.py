@@ -138,7 +138,7 @@ class SSHFirewallRuleTool:
             apply_changes = params.get("apply", True)
 
             # Create the firewall rule using SSH
-            result = await self._create_rule_via_ssh(
+            return await self._create_rule_via_ssh(
                 description=description,
                 interface=interface,
                 action=action,

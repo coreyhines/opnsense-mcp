@@ -125,7 +125,7 @@ class InterfaceTool:
             overview_info = await self.get_interface_overview()
 
             return {
-                "status": status_info,
+                "status_info": status_info,
                 "statistics": statistics_info,
                 "configuration": configuration_info,
                 "overview": overview_info,

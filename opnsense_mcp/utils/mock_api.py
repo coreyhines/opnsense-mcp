@@ -139,3 +139,95 @@ class MockOPNsenseClient:
             },
             "status": "success",
         }
+
+    async def resolve_host_info(self, query: str) -> dict[str, Any]:
+        """Resolve host information from mock ARP/DHCP data."""
+        arp_matches = await self.search_arp_table(query)
+        ndp_matches = await self.search_ndp_table(query)
+        v4_matches = await self.search_dhcpv4_leases(query)
+        v6_matches = await self.search_dhcpv6_leases(query)
+
+        result: dict[str, Any] = {
+            "input": query,
+            "hostname": None,
+            "ip": None,
+            "mac": None,
+            "dhcpv4": v4_matches[0] if v4_matches else None,
+            "dhcpv6": v6_matches[0] if v6_matches else None,
+            "arp": arp_matches[0] if arp_matches else None,
+            "ndp": ndp_matches[0] if ndp_matches else None,
+            "dns_forward_ips": [],
+            "dns_reverse_names": [],
+            "dns_verified": False,
+        }
+
+        if arp_matches:
+            result["ip"] = arp_matches[0].get("ip")
+            result["mac"] = arp_matches[0].get("mac")
+            result["hostname"] = arp_matches[0].get("hostname")
+        elif v4_matches:
+            result["ip"] = v4_matches[0].get("ip") or v4_matches[0].get("address")
+            result["mac"] = v4_matches[0].get("mac")
+            result["hostname"] = v4_matches[0].get("hostname")
+
+        return result
+
+    async def search_host_overrides(self, search: str = "") -> list[dict[str, Any]]:
+        """Return mock DNS host overrides."""
+        data = self.mock_data.get("dns_overrides", {})
+        rows = data.get("rows", []) if isinstance(data, dict) else []
+        if not search:
+            return rows
+        search_lc = search.lower()
+        return [
+            row
+            for row in rows
+            if search_lc in str(row.get("hostname", "")).lower()
+            or search_lc in str(row.get("domain", "")).lower()
+            or search_lc in str(row.get("server", "")).lower()
+            or search_lc in str(row.get("description", "")).lower()
+        ]
+
+    async def search_aliases(self, search: str = "") -> list[dict[str, Any]]:
+        """Return mock firewall aliases."""
+        data = self.mock_data.get("aliases", {})
+        rows = data.get("rows", []) if isinstance(data, dict) else []
+        if not search:
+            return rows
+        search_lc = search.lower()
+        return [
+            row
+            for row in rows
+            if search_lc in str(row.get("name", "")).lower()
+            or search_lc in str(row.get("description", "")).lower()
+            or search_lc in str(row.get("content", "")).lower()
+        ]
+
+    async def get_lldp_table(self) -> list[dict[str, Any]]:
+        """Return mock LLDP neighbors."""
+        data = self.mock_data.get("lldp_neighbors", {})
+        return data.get("neighbors", []) if isinstance(data, dict) else []
+
+    async def search_dhcpv4_leases(self, query: str) -> list[dict[str, Any]]:
+        """Search mock DHCPv4 leases."""
+        query_lc = query.lower()
+        leases = await self.get_dhcpv4_leases()
+        return [
+            lease
+            for lease in leases
+            if query_lc in str(lease.get("hostname", "")).lower()
+            or query_lc in str(lease.get("ip", lease.get("address", ""))).lower()
+            or query_lc in str(lease.get("mac", "")).lower()
+        ]
+
+    async def search_dhcpv6_leases(self, query: str) -> list[dict[str, Any]]:
+        """Search mock DHCPv6 leases."""
+        query_lc = query.lower()
+        leases = await self.get_dhcpv6_leases()
+        return [
+            lease
+            for lease in leases
+            if query_lc in str(lease.get("hostname", "")).lower()
+            or query_lc in str(lease.get("ip", lease.get("address", ""))).lower()
+            or query_lc in str(lease.get("mac", "")).lower()
+        ]

@@ -1,7 +1,7 @@
 """Authentication utilities for the OPNsense MCP server."""
 
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel
@@ -9,8 +9,10 @@ from pydantic import BaseModel
 from opnsense_mcp.utils.jwt_helper import create_jwt
 from opnsense_mcp.utils.passlib_shim import pwd_context
 
-# Default secret key - should be overridden by environment variable
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
+# JWT secret key is mandatory for secure token signing.
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -127,11 +129,11 @@ def create_access_token(
     """
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": int(expire.timestamp())})
     return create_jwt(to_encode, SECRET_KEY, ALGORITHM)
 
 
