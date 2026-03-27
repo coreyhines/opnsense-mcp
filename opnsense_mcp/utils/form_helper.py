@@ -1,5 +1,7 @@
 """Simple form handling for environments where python-multipart isn't available."""
 
+from urllib.parse import unquote_plus
+
 from fastapi import Request
 
 
@@ -37,6 +39,8 @@ async def parse_form_data(request: Request) -> SimpleFormData:
         for pair in pairs:
             if "=" in pair:
                 key, value = pair.split("=", 1)
+                key = unquote_plus(key)
+                value = unquote_plus(value)
                 if key == "username":
                     form_data.username = value
                 elif key == "password":

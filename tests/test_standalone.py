@@ -5,6 +5,9 @@ Standalone command-line tool for testing OPNsense API functionality directly.
 This provides a simple interface for testing key API functions.
 """
 
+# This module is a CLI helper script, not a pytest test module.
+__test__ = False
+
 import argparse
 import base64
 import json

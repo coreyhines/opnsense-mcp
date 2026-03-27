@@ -93,12 +93,9 @@ class DHCPLeaseDeleteTool:
 
             # Check if lease matches any criteria
             if (
-                ip
-                and lease_ip == ip
-                or mac
-                and self._normalize_mac(lease_mac) == self._normalize_mac(mac)
-                or hostname
-                and lease_hostname == hostname.lower()
+                (ip and lease_ip == ip)
+                or (mac and self._normalize_mac(lease_mac) == self._normalize_mac(mac))
+                or (hostname and lease_hostname == hostname.lower())
             ):
                 matching_leases.append(lease)
 
