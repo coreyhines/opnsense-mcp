@@ -67,7 +67,15 @@ class ToggleFwRuleTool:
         if "enabled" not in params:
             return {"status": "error", "error": "enabled is required"}
 
-        enabled = bool(params["enabled"])
+        enabled_raw = params["enabled"]
+        if isinstance(enabled_raw, bool):
+            enabled = enabled_raw
+        elif isinstance(enabled_raw, str):
+            enabled = enabled_raw.strip().lower() in ("true", "1", "yes", "on")
+        elif isinstance(enabled_raw, (int, float)):
+            enabled = bool(enabled_raw)
+        else:
+            return {"status": "error", "error": "enabled must be a bool-like value"}
         apply_changes = params.get("apply", True)
 
         try:
