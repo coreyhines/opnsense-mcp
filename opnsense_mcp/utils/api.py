@@ -9,6 +9,7 @@ import os
 import re
 import socket
 import ssl
+import threading
 from typing import Any
 
 import requests
@@ -119,6 +120,7 @@ class OPNsenseClient:
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         self.session.verify = False
+        self._session_lock = threading.Lock()
 
         # Use official endpoints for DHCP leases
         self.dhcpv4_lease_endpoint = "/api/dhcpv4/leases/search_lease"
@@ -218,7 +220,8 @@ class OPNsenseClient:
 
         def _do_request() -> dict[str, Any]:
             try:
-                response = self.session.request(method, url, **kwargs)
+                with self._session_lock:
+                    response = self.session.request(method, url, **kwargs)
 
                 if response.status_code == 200:
                     try:
@@ -682,7 +685,8 @@ class OPNsenseClient:
             try:
                 url = f"{self.base_url}{ep}"
                 logger.debug(f"Probing {name} endpoint: {url}")
-                resp = self.session.get(url, timeout=5)
+                with self._session_lock:
+                    resp = self.session.get(url, timeout=5)
                 if resp.status_code == 200:
                     logger.info(f"Using {name} endpoint: {ep}")
                     return ep
@@ -698,6 +702,19 @@ class OPNsenseClient:
             f"No working endpoint found for {name}, will always return empty list.",
         )
         return None
+
+    def close(self) -> None:
+        """Close the underlying HTTP session."""
+        with self._session_lock:
+            self.session.close()
+
+    def __enter__(self) -> "OPNsenseClient":
+        """Enter context manager scope."""
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Exit context manager scope and close resources."""
+        self.close()
 
     async def get_dhcpv4_leases(self: "OPNsenseClient") -> list[dict[str, Any]]:
         """Get DHCPv4 lease table from OPNsense (official endpoint)."""
@@ -854,11 +871,7 @@ class OPNsenseClient:
             self.get_dhcpv4_leases(),
             self.get_dhcpv6_leases(),
             self.search_host_overrides(query),
-            (
-                self.resolve_dns_forward(query)
-                if not is_ip_query
-                else asyncio.sleep(0, [])
-            ),
+            self.resolve_dns_forward(query) if not is_ip_query else self._empty_list(),
         )
         result["dns_forward_ips"] = dns_forward_ips
 
@@ -920,7 +933,9 @@ class OPNsenseClient:
                 elif host:
                     result["hostname"] = host
 
-        # Step 4: Reverse DNS verification is mandatory for hostname queries.
+        candidate_dns_ips: list[str] = []
+
+        # Step 4: Always perform reverse DNS checks for forward-resolved names.
         if dns_forward_ips and not is_ip_query:
             verified_forward_ips: list[str] = []
             reverse_name_union: list[str] = []
@@ -935,12 +950,27 @@ class OPNsenseClient:
 
             result["dns_reverse_names"] = list(dict.fromkeys(reverse_name_union))
             result["dns_verified"] = bool(verified_forward_ips)
-            result["dns_forward_ips"] = verified_forward_ips
+            # Keep all forward results visible, but prioritize verified entries.
+            result["dns_forward_ips"] = dns_forward_ips
+            candidate_dns_ips = verified_forward_ips or dns_forward_ips
 
-            if verified_forward_ips and not result["ip"]:
-                result["ip"] = verified_forward_ips[0]
+            if candidate_dns_ips and not result["ip"]:
+                result["ip"] = candidate_dns_ips[0]
 
-        # Step 5: If DNS/other lookup gave us an IP, re-hydrate ARP/NDP by address.
+        # Step 5: If DNS/other lookup gave us candidate IPs, try each to hydrate ARP.
+        if candidate_dns_ips and not result["arp"]:
+            for ip in candidate_dns_ips:
+                arp_by_ip = await self.search_arp_table(str(ip))
+                if arp_by_ip:
+                    result["arp"] = arp_by_ip[0]
+                    result["ip"] = result["arp"].get("ip") or ip
+                    if not result["mac"]:
+                        result["mac"] = result["arp"].get("mac")
+                    if not result["hostname"]:
+                        result["hostname"] = result["arp"].get("hostname")
+                    break
+
+        # Step 5b: If DNS/other lookup gave us an IP, re-hydrate ARP/NDP by address.
         if result["ip"] and not result["arp"]:
             arp_by_ip = await self.search_arp_table(str(result["ip"]))
             if arp_by_ip:
@@ -971,6 +1001,10 @@ class OPNsenseClient:
                 )
 
         return result
+
+    async def _empty_list(self) -> list[Any]:
+        """Return an empty list for async gather branches."""
+        return []
 
     async def resolve_dns_forward(self, hostname: str) -> list[str]:
         """Resolve hostname to IP addresses via local resolver."""

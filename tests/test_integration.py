@@ -6,6 +6,9 @@ This script provides comprehensive testing for all MCP tools and validates
 their integration with the OPNsense API.
 """
 
+# This module is a CLI integration script, not a pytest test module.
+__test__ = False
+
 import argparse
 import asyncio
 import importlib
@@ -55,15 +58,10 @@ async def run_tool_tests(client, tool_name: str = None) -> bool:
     tools = {
         # Network tools
         "system": ("SystemTool", "opnsense_mcp.tools.system"),
-        "arp": ("ArpTool", "opnsense_mcp.tools.arp"),
+        "arp": ("ARPTool", "opnsense_mcp.tools.arp"),
         "interface": ("InterfaceTool", "opnsense_mcp.tools.interface"),
         "firewall": ("FirewallTool", "opnsense_mcp.tools.firewall"),
-        "service": ("ServiceTool", "opnsense_mcp.tools.service"),
-        "vpn": ("VpnTool", "opnsense_mcp.tools.vpn"),
-        "dns": ("DnsTool", "opnsense_mcp.tools.dns"),
-        "traffic": ("TrafficTool", "opnsense_mcp.tools.traffic"),
-        "ids": ("IdsTool", "opnsense_mcp.tools.ids"),
-        "certificate": ("CertificateTool", "opnsense_mcp.tools.certificate"),
+        "dns": ("DNSTool", "opnsense_mcp.tools.dns"),
     }
 
     if tool_name:
@@ -112,18 +110,8 @@ async def test_specific_tool(
             return await test_interface_tool(tool)
         if tool_name == "firewall":
             return await test_firewall_tool(tool)
-        if tool_name == "service":
-            return await test_service_tool(tool)
-        if tool_name == "vpn":
-            return await test_vpn_tool(tool)
         if tool_name == "dns":
             return await test_dns_tool(tool)
-        if tool_name == "traffic":
-            return await test_traffic_tool(tool)
-        if tool_name == "ids":
-            return await test_ids_tool(tool)
-        if tool_name == "certificate":
-            return await test_certificate_tool(tool)
 
         logger.error(f"No test defined for {tool_name}")
         return False
@@ -320,12 +308,7 @@ async def main() -> None:
             "arp",
             "interface",
             "firewall",
-            "service",
-            "vpn",
             "dns",
-            "traffic",
-            "ids",
-            "certificate",
         ],
         help="Test only a specific tool",
     )

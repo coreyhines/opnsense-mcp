@@ -50,13 +50,19 @@ class FirewallTool:
         self._log_cache_time = 0
         self._log_cache_ttl = 90  # seconds
 
-    async def _resolve_interface_name(self, iface_query: str) -> str:
+    async def _resolve_interface_name(self, iface_query: str, depth: int = 0) -> str:
         """
         Recursively resolve any user-supplied interface name.
 
         Resolve any user-supplied interface name, alias, or
         display name to the real interface name.
         """
+        if depth >= 10:
+            logger.warning(
+                "Interface resolution recursion limit reached for query: %s",
+                iface_query,
+            )
+            return iface_query
         try:
             iface_map = await self.client.get_interfaces()
             if not isinstance(iface_map, dict):
@@ -68,7 +74,7 @@ class FirewallTool:
             for real, display in iface_map.items():
                 if iface_query == display:
                     # Recurse in case display is itself an alias for another real name
-                    return await self._resolve_interface_name(real)
+                    return await self._resolve_interface_name(real, depth + 1)
         except Exception:
             return iface_query
         else:

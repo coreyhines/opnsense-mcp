@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class TestAllMCPTools:
     """Test suite for all MCP tools."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture(scope="function")
     def mock_client(self):
         """Create a mock OPNsense client for testing."""
         from opnsense_mcp.utils.mock_api import MockOPNsenseClient
@@ -35,7 +35,7 @@ class TestAllMCPTools:
         config = {"development": {"mock_data_path": str(mock_data_path)}}
         return MockOPNsenseClient(config)
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture(scope="function")
     def tool_definitions(self):
         """Define all available MCP tools."""
         return [
@@ -198,9 +198,10 @@ class TestAllMCPTools:
         assert "solutions" in issues, "Missing 'solutions' key"
         assert "status" in issues, "Missing 'status' key"
         assert isinstance(issues["issues"], list), "Expected 'issues' to be a list"
-        assert issues["status"] in ("healthy", "needs_attention"), (
-            "Unexpected status value"
-        )
+        assert issues["status"] in (
+            "healthy",
+            "needs_attention",
+        ), "Unexpected status value"
 
         logger.info("✅ Packet capture process detection logic working correctly")
 
@@ -222,42 +223,27 @@ class TestAllMCPTools:
 
         logger.info("✅ Packet capture diagnose action working correctly")
 
-    def test_packet_capture_parameter_validation(self) -> None:
+    @pytest.mark.asyncio
+    async def test_packet_capture_parameter_validation(self) -> None:
         """Test parameter validation in PacketCaptureTool2."""
-        import asyncio
-
         from opnsense_mcp.tools.packet_capture import PacketCaptureTool2
 
         tool = PacketCaptureTool2()
+        result = await tool.execute(
+            {"action": "start", "duration": -1, "interface": "wan"}
+        )
+        assert result["status"] == "error"
+        assert "Invalid duration" in result["error"]
 
-        # Test invalid duration
-        async def test_invalid_duration():
-            result = await tool.execute(
-                {"action": "start", "duration": -1, "interface": "wan"}
-            )
-            assert result["status"] == "error"
-            assert "Invalid duration" in result["error"]
+        result = await tool.execute({"action": "start", "count": 0, "interface": "wan"})
+        assert result["status"] == "error"
+        assert "Invalid count" in result["error"]
 
-        # Test invalid count
-        async def test_invalid_count():
-            result = await tool.execute(
-                {"action": "start", "count": 0, "interface": "wan"}
-            )
-            assert result["status"] == "error"
-            assert "Invalid count" in result["error"]
-
-        # Test invalid mode
-        async def test_invalid_mode():
-            result = await tool.execute(
-                {"action": "start", "mode": "invalid", "interface": "wan"}
-            )
-            assert result["status"] == "error"
-            assert "Invalid mode" in result["error"]
-
-        # Run the async tests
-        asyncio.run(test_invalid_duration())
-        asyncio.run(test_invalid_count())
-        asyncio.run(test_invalid_mode())
+        result = await tool.execute(
+            {"action": "start", "mode": "invalid", "interface": "wan"}
+        )
+        assert result["status"] == "error"
+        assert "Invalid mode" in result["error"]
 
         logger.info("✅ Packet capture parameter validation working correctly")
 

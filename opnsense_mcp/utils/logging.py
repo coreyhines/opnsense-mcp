@@ -14,8 +14,12 @@ def setup_logging(log_file: str | None = None, level: str = "INFO") -> None:
     logger = logging.getLogger()
     logger.setLevel(getattr(logging, level.upper()))
 
-    # Clear existing handlers
-    logger.handlers = []
+    # Close and clear existing handlers to avoid leaked file descriptors.
+    for handler in logger.handlers[:]:
+        try:
+            handler.close()
+        finally:
+            logger.removeHandler(handler)
 
     # Create console handler
     console_handler = logging.StreamHandler()
