@@ -1,0 +1,26 @@
+# Podman quadlet: Caddy TLS front (same pod as app).
+# Filename opnsense-mcp-caddy.container → systemd opnsense-mcp-caddy.service.
+
+[Unit]
+Description=TLS front for OPNsense MCP (Caddy)
+Documentation=https://caddyserver.com/docs/caddyfile
+After=network-online.target opnsense-mcp-pod.service opnsense-mcp-app.service
+Wants=network-online.target
+Requires=opnsense-mcp-pod.service
+Requires=opnsense-mcp-app.service
+
+[Container]
+Pod=opnsense-mcp.pod
+Image=docker.io/library/caddy:2-alpine
+ContainerName=opnsense-mcp-caddy
+
+Volume=/opt/certs/wild:/opt/certs/wild:ro,Z
+Volume=/opt/containerdata/opnsense-mcp/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+
+[Service]
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

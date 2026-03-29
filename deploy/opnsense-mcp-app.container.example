@@ -1,0 +1,31 @@
+# Podman quadlet: OPNsense MCP app (mcp-proxy SSE on 8765).
+# Used inside a pod (see opnsense-mcp.pod.example); Pod= references the .pod filename.
+# Quadlet unit: opnsense-mcp-app.service. Pod unit: opnsense-mcp-pod.service (from opnsense-mcp.pod).
+
+[Unit]
+Description=OPNsense MCP (Podman quadlet, mcp-proxy SSE)
+After=network-online.target opnsense-mcp-pod.service
+Wants=network-online.target
+Requires=opnsense-mcp-pod.service
+
+[Container]
+Pod=opnsense-mcp.pod
+Image=localhost/opnsense-mcp:latest
+ContainerName=opnsense-mcp-app
+Environment=OPNSENSE_MCP_INSTALL_ROOT=/opt/containerdata/opnsense-mcp
+
+EnvironmentFile=/opt/containerdata/opnsense-mcp/environment
+Volume=/opt/containerdata/opnsense-mcp:/opt/containerdata/opnsense-mcp:ro,Z
+Volume=/opt/certs/wild:/opt/certs/wild:ro,Z
+
+# Optional: SSH key for tools (host path must exist).
+# Volume=/opt/containerdata/opnsense-mcp/ssh:/root/.ssh:ro,Z
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+TimeoutStopSec=40
+
+[Install]
+WantedBy=multi-user.target

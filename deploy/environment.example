@@ -1,0 +1,18 @@
+# Copy to $OPNSENSE_MCP_INSTALL_ROOT/environment (default /opt/containerdata/opnsense-mcp/environment).
+# chmod 600. Quadlet sets OPNSENSE_MCP_INSTALL_ROOT and EnvironmentFile to this path; data dir is volume-mounted.
+#
+# With TLS (Caddy + /opt/certs/wild), MCP clients use (default hostname in caddyfile.example):
+#   https://opnsense-mcp.freeblizz.com/sse
+
+OPNSENSE_MCP_INSTALL_ROOT=/opt/containerdata/opnsense-mcp
+
+OPNSENSE_FIREWALL_HOST=firewall.example.com
+OPNSENSE_API_KEY=
+OPNSENSE_API_SECRET=
+# OPNSENSE_SSL_VERIFY=false
+# OPNSENSE_SSH_HOST=
+# OPNSENSE_SSH_USER=root
+# OPNSENSE_SSH_KEY=/path/in/container
+
+MCP_SECRET_KEY=change-me-long-random
+# LOG_LEVEL=INFO
