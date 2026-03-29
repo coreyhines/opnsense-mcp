@@ -1,0 +1,25 @@
+# Podman quadlet: shared pod for MCP + Caddy.
+# Quadlet appends "-pod" to the stem for the unit name: opnsense-mcp.pod → opnsense-mcp-pod.service.
+# PodName= sets the Podman pod name independently (default opnsense-mcp-pod).
+# Install to /etc/containers/systemd/opnsense-mcp.pod
+
+[Unit]
+Description=OPNsense MCP pod (Caddy + MCP)
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PodName=opnsense-mcp-pod
+# Optional custom network / static addresses (strongpod-style):
+# Network=net-10
+# IP=10.0.10.50
+# IP6=2601:441:8400:b7e1::50
+# DNS=10.0.2.2
+# DNS=10.0.10.4
+# No PublishPort: with macvlan (or similar) the pod has its own IP; Caddy :443 and mcp-proxy :8765 bind on the pod network.
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

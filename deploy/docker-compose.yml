@@ -1,0 +1,28 @@
+# Docker Compose (Linux amd64). TLS: Caddy terminates HTTPS; MCP is HTTP on loopback.
+# Used by deploy/install.sh --runtime docker. Copy or run from a checkout of this repo.
+
+services:
+  opnsense-mcp:
+    build:
+      context: .
+      dockerfile: deploy/Containerfile
+    image: opnsense-mcp:local
+    ports:
+      - "127.0.0.1:8765:8765"
+    environment:
+      OPNSENSE_MCP_INSTALL_ROOT: /opt/containerdata/opnsense-mcp
+    env_file:
+      - /opt/containerdata/opnsense-mcp/environment
+    volumes:
+      - /opt/containerdata/opnsense-mcp:/opt/containerdata/opnsense-mcp:ro
+    restart: unless-stopped
+
+  caddy:
+    image: docker.io/library/caddy:2-alpine
+    network_mode: host
+    volumes:
+      - /opt/certs/wild:/opt/certs/wild:ro
+      - /opt/containerdata/opnsense-mcp/Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
+    depends_on:
+      - opnsense-mcp

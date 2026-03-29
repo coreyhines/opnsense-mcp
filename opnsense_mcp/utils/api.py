@@ -15,6 +15,8 @@ from typing import Any
 import requests
 from urllib3.exceptions import InsecureRequestWarning
 
+from opnsense_mcp.utils.dhcp_provider import DHCPProvider, detect_dhcp_backend
+
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 logger = logging.getLogger(__name__)
 _MAC_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.IGNORECASE)
@@ -122,9 +124,9 @@ class OPNsenseClient:
         self.session.verify = False
         self._session_lock = threading.Lock()
 
-        # Use official endpoints for DHCP leases
-        self.dhcpv4_lease_endpoint = "/api/dhcpv4/leases/search_lease"
-        self.dhcpv6_lease_endpoint = "/api/dhcpv6/leases/search_lease"
+        # DHCP provider is detected lazily on first DHCP operation.
+        self._dhcp_provider: DHCPProvider | None = None
+        self._dhcp_provider_lock = asyncio.Lock()
 
         # Store candidates; actual probe deferred to first get_firewall_logs call
         self._firewall_log_endpoint_candidates: list[str | None] = [
@@ -155,6 +157,15 @@ class OPNsenseClient:
                 ),
             )
             self._firewall_log_endpoint_detected = True
+
+    async def _ensure_dhcp_provider(self) -> None:
+        """Detect and cache the DHCP backend provider on first use."""
+        if self._dhcp_provider is not None:
+            return
+        async with self._dhcp_provider_lock:
+            if self._dhcp_provider is not None:
+                return
+            self._dhcp_provider = await detect_dhcp_backend(self._make_request)
 
     def _get_basic_auth(self: "OPNsenseClient") -> str:
         """Create basic auth header from api key and secret."""
@@ -717,72 +728,40 @@ class OPNsenseClient:
         self.close()
 
     async def get_dhcpv4_leases(self: "OPNsenseClient") -> list[dict[str, Any]]:
-        """Get DHCPv4 lease table from OPNsense (official endpoint)."""
-        try:
-            response = await self._make_request("GET", self.dhcpv4_lease_endpoint)
-            # Try to extract leases from dict or list
-            if isinstance(response, dict):
-                if "leases" in response:
-                    return response["leases"]
-                if "rows" in response:
-                    return response["rows"]
-            parsed = response if isinstance(response, list) else []
-        except Exception:
-            logger.exception("Failed to get DHCPv4 leases")
-            return []
-        else:
-            return parsed
+        """Get DHCPv4 lease table from OPNsense."""
+        await self._ensure_dhcp_provider()
+        assert self._dhcp_provider is not None
+        return await self._dhcp_provider.get_v4_leases()
 
     async def get_dhcpv6_leases(self: "OPNsenseClient") -> list[dict[str, Any]]:
-        """Get DHCPv6 lease table from OPNsense (official endpoint)."""
-        try:
-            response = await self._make_request("GET", self.dhcpv6_lease_endpoint)
-            # Try to extract leases from dict or list
-            if isinstance(response, dict):
-                if "leases" in response:
-                    return response["leases"]
-                if "rows" in response:
-                    return response["rows"]
-            parsed = response if isinstance(response, list) else []
-        except Exception:
-            logger.exception("Failed to get DHCPv6 leases")
-            return []
-        else:
-            return parsed
+        """Get DHCPv6 lease table from OPNsense."""
+        await self._ensure_dhcp_provider()
+        assert self._dhcp_provider is not None
+        return await self._dhcp_provider.get_v6_leases()
 
     async def search_dhcpv4_leases(self, query: str) -> list[dict[str, Any]]:
         """Search DHCPv4 leases server-side by hostname, IP, or MAC."""
-        try:
-            response = await self._make_request(
-                "POST",
-                self.dhcpv4_lease_endpoint,
-                json={"searchPhrase": query, "current": 1, "rowCount": -1},
-            )
-            if isinstance(response, dict):
-                for key in ("rows", "leases"):
-                    if key in response:
-                        return response[key]
-            return response if isinstance(response, list) else []
-        except Exception:
-            logger.exception("Failed to search DHCPv4 leases")
-            return []
+        await self._ensure_dhcp_provider()
+        assert self._dhcp_provider is not None
+        return await self._dhcp_provider.search_v4_leases(query)
 
     async def search_dhcpv6_leases(self, query: str) -> list[dict[str, Any]]:
         """Search DHCPv6 leases server-side by hostname, IP, or MAC."""
-        try:
-            response = await self._make_request(
-                "POST",
-                self.dhcpv6_lease_endpoint,
-                json={"searchPhrase": query, "current": 1, "rowCount": -1},
-            )
-            if isinstance(response, dict):
-                for key in ("rows", "leases"):
-                    if key in response:
-                        return response[key]
-            return response if isinstance(response, list) else []
-        except Exception:
-            logger.exception("Failed to search DHCPv6 leases")
-            return []
+        await self._ensure_dhcp_provider()
+        assert self._dhcp_provider is not None
+        return await self._dhcp_provider.search_v6_leases(query)
+
+    async def delete_dhcpv4_lease(self, ip: str) -> dict[str, Any]:
+        """Delete a DHCPv4 lease by IP address."""
+        await self._ensure_dhcp_provider()
+        assert self._dhcp_provider is not None
+        return await self._dhcp_provider.delete_v4_lease(ip)
+
+    async def delete_dhcpv6_lease(self, ip: str) -> dict[str, Any]:
+        """Delete a DHCPv6 lease by IP address."""
+        await self._ensure_dhcp_provider()
+        assert self._dhcp_provider is not None
+        return await self._dhcp_provider.delete_v6_lease(ip)
 
     async def get_firewall_logs(
         self: "OPNsenseClient", limit: int = 100

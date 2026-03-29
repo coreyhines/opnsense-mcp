@@ -16,7 +16,8 @@ class TestDHCPLeaseDeleteTool:
         client = MagicMock()
         client.get_dhcpv4_leases = AsyncMock()
         client.get_dhcpv6_leases = AsyncMock()
-        client._make_request = AsyncMock()
+        client.delete_dhcpv4_lease = AsyncMock(return_value={"status": "ok"})
+        client.delete_dhcpv6_lease = AsyncMock(return_value={"status": "ok"})
         return client
 
     @pytest.fixture
@@ -73,8 +74,6 @@ class TestDHCPLeaseDeleteTool:
             {"ip": "192.168.1.100", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "test1"}
         ]
         mock_client.get_dhcpv6_leases.return_value = []
-        mock_client._make_request.return_value = {"status": "success"}
-
         result = await tool.execute({"ip": "192.168.1.100"})
 
         assert result["status"] == "success"
@@ -83,9 +82,7 @@ class TestDHCPLeaseDeleteTool:
         assert result["total_deleted"] == 1
 
         # Verify API calls (IP is included in the URL path)
-        mock_client._make_request.assert_called_once_with(
-            "POST", "/api/dhcpv4/leases/del_lease/192.168.1.100"
-        )
+        mock_client.delete_dhcpv4_lease.assert_called_once_with("192.168.1.100")
 
     @pytest.mark.asyncio
     async def test_execute_delete_by_mac(self, tool, mock_client):
@@ -95,8 +92,6 @@ class TestDHCPLeaseDeleteTool:
             {"ip": "192.168.1.100", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "test1"}
         ]
         mock_client.get_dhcpv6_leases.return_value = []
-        mock_client._make_request.return_value = {"status": "success"}
-
         result = await tool.execute({"mac": "AA-BB-CC-DD-EE-FF"})
 
         assert result["status"] == "success"
@@ -111,8 +106,6 @@ class TestDHCPLeaseDeleteTool:
             {"ip": "192.168.1.100", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "test1"}
         ]
         mock_client.get_dhcpv6_leases.return_value = []
-        mock_client._make_request.return_value = {"status": "success"}
-
         result = await tool.execute({"hostname": "test1"})
 
         assert result["status"] == "success"
@@ -155,7 +148,7 @@ class TestDHCPLeaseDeleteTool:
             {"ip": "192.168.1.100", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "test1"}
         ]
         mock_client.get_dhcpv6_leases.return_value = []
-        mock_client._make_request.side_effect = Exception("API Error")
+        mock_client.delete_dhcpv4_lease.side_effect = Exception("API Error")
 
         result = await tool.execute({"ip": "192.168.1.100"})
 
