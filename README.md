@@ -46,6 +46,10 @@ uv run python main.py
 - **LM Studio**: [Integration Guide](docs/GETTING_STARTED.md#lm-studio-integration)
 - **Continue**: [Integration Guide](docs/GETTING_STARTED.md#continue-integration)
 
+### Centralized deployment (HTTPS)
+
+For a long-lived instance with **TLS**, see **[`docs/CENTRALIZED_DEPLOY_SPEC.md`](docs/CENTRALIZED_DEPLOY_SPEC.md)** (also [deploy/README.md](deploy/README.md), [deploy/TLS.md](deploy/TLS.md)).
+
 ## 🎯 What Can It Do?
 
 The OPNsense MCP Server transforms your firewall management with AI-powered capabilities:

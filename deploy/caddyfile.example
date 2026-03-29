@@ -1,0 +1,35 @@
+# OPNsense MCP — Caddy terminates TLS; mcp-proxy serves MCP (SSE) at http://127.0.0.1:8765 in the same pod.
+#
+# Install copies this to $OPNSENSE_MCP_INSTALL_ROOT/Caddyfile (e.g. /opt/containerdata/opnsense-mcp/Caddyfile).
+# PEM paths must exist on the host and match OPNSENSE_MCP_TLS_CERTS (default: /opt/certs/wild).
+#
+# DNS: point opnsense-mcp.freeblizz.com (A or AAAA) at this pod’s IP — see deploy/TLS.md.
+# TLS: manual PEMs only (no automatic Let’s Encrypt in this template). A *.freeblizz.com wildcard must cover this name.
+
+{
+	admin off
+}
+
+opnsense-mcp.freeblizz.com {
+	tls /opt/certs/wild/fullchain.pem /opt/certs/wild/privkey.pem
+
+	encode zstd gzip
+
+	reverse_proxy http://127.0.0.1:8765 {
+		flush_interval -1
+	}
+}
+
+# Plain HTTP → HTTPS (clients using the hostname)
+:80 {
+	redir https://opnsense-mcp.freeblizz.com{uri} permanent
+}
+
+# --- Optional: HTTPS by IP or other names on the same cert (comment the block above if you need only one pattern)
+# :443 {
+# 	tls /opt/certs/wild/fullchain.pem /opt/certs/wild/privkey.pem
+# 	encode zstd gzip
+# 	reverse_proxy http://127.0.0.1:8765 {
+# 		flush_interval -1
+# 	}
+# }
