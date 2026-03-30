@@ -281,7 +281,9 @@ class PacketCaptureTool2:
                             return entry["name"]
                 return iface
         except (ImportError, OSError, ValueError, KeyError) as exc:
-            logger.debug("Live interface resolution failed, falling back to mock data: %s", exc)
+            logger.debug(
+                "Live interface resolution failed, falling back to mock data: %s", exc
+            )
         mock_path = os.path.join(
             os.path.dirname(__file__), "../../examples/mock_data/interfaces.json"
         )
@@ -717,7 +719,9 @@ class PacketCaptureTool2:
             # Test interface availability
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(f"ifconfig {shlex.quote(interface)}")  # nosec B601 — inputs sanitized via shlex.quote
+                stdin, stdout, stderr = client.exec_command(
+                    f"ifconfig {shlex.quote(interface)}"
+                )  # nosec B601 — inputs sanitized via shlex.quote
                 if (
                     "not found" in stderr.read().decode()
                     or "No such interface" in stderr.read().decode()

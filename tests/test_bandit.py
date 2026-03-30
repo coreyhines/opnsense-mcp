@@ -7,7 +7,17 @@ import subprocess
 def test_bandit_clean():
     """Run Bandit and assert zero findings (nosec-suppressed lines are excluded)."""
     result = subprocess.run(
-        ["python", "-m", "bandit", "-r", "opnsense_mcp/", "-f", "json", "-c", "pyproject.toml"],
+        [
+            "python",
+            "-m",
+            "bandit",
+            "-r",
+            "opnsense_mcp/",
+            "-f",
+            "json",
+            "-c",
+            "pyproject.toml",
+        ],
         capture_output=True,
         text=True,
     )
