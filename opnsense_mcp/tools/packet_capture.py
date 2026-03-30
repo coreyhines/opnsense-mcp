@@ -1,7 +1,7 @@
 import logging
 import os
 import shlex
-import subprocess
+import subprocess  # nosec B404 — subprocess required for local process management
 import time
 from pathlib import Path
 from typing import Any
@@ -90,14 +90,14 @@ class PacketCaptureTool2:
                 ["pgrep", "-f", "opnsense_mcp/server.py"],
                 capture_output=True,
                 text=True,
-            )
+            )  # nosec B603 B607 — hardcoded command, no user input
             if result.returncode != 0:
                 # Try alternative process detection
                 result2 = subprocess.run(
                     ["ps", "aux"],
                     capture_output=True,
                     text=True,
-                )
+                )  # nosec B603 B607 — hardcoded command, no user input
                 if "opnsense_mcp/server.py" in result2.stdout:
                     # Process is running but pgrep didn't find it
                     pass
@@ -150,14 +150,14 @@ class PacketCaptureTool2:
                 ["pgrep", "-f", "opnsense_mcp/server.py"],
                 capture_output=True,
                 text=True,
-            )
+            )  # nosec B603 B607 — hardcoded command, no user input
             if result.returncode != 0:
                 # Try alternative process detection
                 result2 = subprocess.run(
                     ["ps", "aux"],
                     capture_output=True,
                     text=True,
-                )
+                )  # nosec B603 B607 — hardcoded command, no user input
                 if "opnsense_mcp/server.py" in result2.stdout:
                     # Process is running but pgrep didn't find it
                     pass
@@ -169,7 +169,7 @@ class PacketCaptureTool2:
                             cwd=Path.cwd(),
                             timeout=10,
                             capture_output=True,
-                        )
+                        )  # nosec B603 B607 — hardcoded command, no user input
                         corrections.append("Attempted to restart MCP server")
                         time.sleep(2)  # Give it time to start
                     except Exception as e:
@@ -186,7 +186,7 @@ class PacketCaptureTool2:
                     cwd=Path.cwd(),
                     timeout=30,
                     capture_output=True,
-                )
+                )  # nosec B603 B607 — hardcoded command, no user input
                 corrections.append("Recreated virtual environment")
 
                 # Try to install dependencies
@@ -201,7 +201,7 @@ class PacketCaptureTool2:
                         cwd=Path.cwd(),
                         timeout=60,
                         capture_output=True,
-                    )
+                    )  # nosec B603 B607 — hardcoded command, no user input
                     corrections.append("Installed dependencies")
                 except Exception as e:
                     errors.append(f"Failed to install dependencies: {e}")
@@ -244,8 +244,8 @@ class PacketCaptureTool2:
                     aliases = await client._make_request(
                         "GET", "/api/interfaces/overview/export"
                     )
-                except Exception:
-                    pass
+                except (OSError, ValueError, KeyError) as exc:
+                    logger.debug("Failed to fetch interface aliases: %s", exc)
                 alias_list = []
                 if isinstance(aliases, dict):
                     for key, value in aliases.items():
@@ -280,8 +280,8 @@ class PacketCaptureTool2:
                         if iface_lc in addr.get("address", "").lower():
                             return entry["name"]
                 return iface
-        except Exception:
-            pass
+        except (ImportError, OSError, ValueError, KeyError) as exc:
+            logger.debug("Live interface resolution failed, falling back to mock data: %s", exc)
         mock_path = os.path.join(
             os.path.dirname(__file__), "../../examples/mock_data/interfaces.json"
         )
