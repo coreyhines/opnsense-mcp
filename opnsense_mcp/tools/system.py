@@ -84,7 +84,7 @@ class SystemTool:
 
     async def diagnose_mcp_server(self) -> dict[str, Any]:
         """Diagnose MCP server issues and provide solutions."""
-        import subprocess
+        import subprocess  # nosec B404 — subprocess required for local process management
         import time
         from pathlib import Path
 
@@ -98,7 +98,7 @@ class SystemTool:
                 ["pgrep", "-f", "opnsense_mcp/server.py"],
                 capture_output=True,
                 text=True,
-            )
+            )  # nosec B603 B607 — hardcoded command, no user input
             if result.returncode != 0:
                 issues.append("OPNsense MCP server is not running")
                 solutions.append("Restart the MCP server using: ./mcp_start.sh")
@@ -110,7 +110,7 @@ class SystemTool:
                         cwd=Path.cwd(),
                         timeout=10,
                         capture_output=True,
-                    )
+                    )  # nosec B603 B607 — hardcoded command, no user input
                     corrections.append("Attempted to restart MCP server")
                     time.sleep(2)
                 except Exception as e:
@@ -131,7 +131,7 @@ class SystemTool:
                     cwd=Path.cwd(),
                     timeout=30,
                     capture_output=True,
-                )
+                )  # nosec B603 B607 — hardcoded command, no user input
                 corrections.append("Recreated virtual environment")
             except Exception as e:
                 issues.append(f"Failed to recreate virtual environment: {e}")
@@ -156,7 +156,7 @@ class SystemTool:
                     cwd=Path.cwd(),
                     timeout=60,
                     capture_output=True,
-                )
+                )  # nosec B603 B607 — hardcoded command, no user input
                 corrections.append("Installed dependencies")
             except Exception as e:
                 issues.append(f"Failed to install dependencies: {e}")
