@@ -85,6 +85,7 @@ pip_audit:
       - pip-audit-report.json
   allow_failure: true
 
+# Repo filesystem only — scanning arbitrary base images (e.g. python:bookworm) is noisy and not app-specific.
 trivy_fs_scan:
   stage: security
   image:
@@ -97,19 +98,6 @@ trivy_fs_scan:
     when: always
     paths:
       - trivy-fs-report.json
-  allow_failure: true
-
-trivy_python_image_scan:
-  stage: security
-  image:
-    name: aquasec/trivy:0.59.1
-    entrypoint: [""]
-  script:
-    - trivy image --exit-code 1 --severity HIGH,CRITICAL python:3.12-bookworm -f json -o trivy-image-report.json
-  artifacts:
-    when: always
-    paths:
-      - trivy-image-report.json
   allow_failure: true
 
 # Aggregate security artifacts for download from the pipeline (not GitLab Pages).
@@ -129,9 +117,6 @@ collect_reports:
     - job: trivy_fs_scan
       artifacts: true
       optional: true
-    - job: trivy_python_image_scan
-      artifacts: true
-      optional: true
     - job: detect_secrets
       artifacts: true
       optional: true
@@ -141,11 +126,9 @@ collect_reports:
     - cp bandit-report.html public/ 2>/dev/null || echo "bandit-report.html not found"
     - cp pip-audit-report.json public/ 2>/dev/null || echo "pip-audit-report.json not found"
     - cp trivy-fs-report.json public/ 2>/dev/null || echo "trivy-fs-report.json not found"
-    - cp trivy-image-report.json public/ 2>/dev/null || echo "trivy-image-report.json not found"
     - cp .secrets.baseline public/ 2>/dev/null || echo ".secrets.baseline not found"
     - if [ -f pip-audit-report.json ]; then python3 opnsense_mcp/tools/convert_pip_audit_to_html.py pip-audit-report.json public/pip-audit-report.html; else echo "pip-audit-report.json not found, skipping conversion"; fi
     - if [ -f trivy-fs-report.json ]; then python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-fs-report.json public/trivy-fs-report.html; else echo "trivy-fs-report.json not found, skipping conversion"; fi
-    - if [ -f trivy-image-report.json ]; then python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-image-report.json public/trivy-image-report.html; else echo "trivy-image-report.json not found, skipping conversion"; fi
     - |
       python3 -c "
       import os
