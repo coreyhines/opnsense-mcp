@@ -9,7 +9,7 @@ stages:
   - deploy
 
 variables:
-  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
 .python_before_script: &python_before_script
@@ -25,8 +25,26 @@ ruff:
     - ruff check .
     - ruff format --check .
 
-# All security jobs are informational: allow_failure + artifacts.when: always
-# so reports are always uploaded and available even when issues are found.
+# Unit tests (required gate). SAST template adds semgrep-sast in the same stage.
+pytest:
+  stage: test
+  image: python:3.12-bookworm
+  cache:
+    key:
+      files:
+        - requirements.txt
+        - requirements-dev.txt
+    paths:
+      - .cache/pip
+  before_script:
+    - python3 --version
+    - pip install --quiet -r requirements.txt -r requirements-dev.txt
+    - pip install --quiet -e .
+  script:
+    - pytest tests/ -q --tb=short
+
+# Security scanners are informational: allow_failure + artifacts.when: always
+# so HTML/JSON reports still exist for collect_reports.
 
 bandit:
   stage: security
@@ -57,7 +75,6 @@ pip_audit:
   image: python:3.12-alpine
   before_script: *python_before_script
   script:
-    # Audit only this project's declared dependencies, not the CI tools
     - pip install --quiet -e .
     - pip-audit --format json -o pip-audit-report.json
   artifacts:
@@ -92,11 +109,30 @@ trivy_python_image_scan:
       - trivy-image-report.json
   allow_failure: true
 
-# Always runs so reports are aggregated regardless of scanner results
+# Aggregate security artifacts for download from the pipeline (not GitLab Pages).
 collect_reports:
   stage: deploy
   image: python:3.12-alpine
   when: always
+  needs:
+    - job: pytest
+      artifacts: false
+    - job: bandit
+      artifacts: true
+      optional: true
+    - job: pip_audit
+      artifacts: true
+      optional: true
+    - job: trivy_fs_scan
+      artifacts: true
+      optional: true
+    - job: trivy_python_image_scan
+      artifacts: true
+      optional: true
+    - job: detect_secrets
+      artifacts: true
+      optional: true
+  before_script: *python_before_script
   script:
     - mkdir -p public
     - cp bandit-report.html public/ 2>/dev/null || echo "bandit-report.html not found"
@@ -119,26 +155,7 @@ collect_reports:
                   f.write(f'<a href=\"{file}\">{file}</a><br>')
           f.write('</body></html>')
       "
-  dependencies:
-    - bandit
-    - pip_audit
-    - trivy_fs_scan
-    - trivy_python_image_scan
-    - detect_secrets
   artifacts:
     paths:
       - public
-
-pages:
-  stage: deploy
-  image: alpine:3.20
-  when: always
-  dependencies:
-    - collect_reports
-  script:
-    - echo "Deploying to GitLab Pages"
-  artifacts:
-    paths:
-      - public
-  only:
-    - main
+    expire_in: 1 week
