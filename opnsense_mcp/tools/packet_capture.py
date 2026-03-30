@@ -45,7 +45,7 @@ class PacketCaptureTool2:
             ssh_key or env_key or self._get_ssh_config("identityfile", config_host)
         )
         self.ssh_key = os.path.expanduser(raw_key) if raw_key else None
-        self.capture_file = "/tmp/mcp_capture.pcap"
+        self.capture_file = "/tmp/mcp_capture.pcap"  # nosec B108 — remote path on OPNsense firewall, not local temp usage
         self.ssh_port = 22
 
         # Keep connection details on logger, never stdout in MCP mode.
