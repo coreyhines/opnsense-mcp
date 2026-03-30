@@ -75,6 +75,8 @@ pip_audit:
   image: python:3.12-alpine
   before_script: *python_before_script
   script:
+    # Upgrade pip so the audit targets project deps, not CVEs in the image's old pip
+    - pip install --quiet --upgrade "pip>=26.0"
     - pip install --quiet -e .
     - pip-audit --format json -o pip-audit-report.json
   artifacts:
@@ -86,7 +88,8 @@ pip_audit:
 trivy_fs_scan:
   stage: security
   image:
-    name: aquasec/trivy:latest
+    # :latest can 404 on some registries; pin a known tag (see Docker Hub aquasec/trivy)
+    name: aquasec/trivy:0.59.1
     entrypoint: [""]
   script:
     - trivy fs --exit-code 1 --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
@@ -99,7 +102,7 @@ trivy_fs_scan:
 trivy_python_image_scan:
   stage: security
   image:
-    name: aquasec/trivy:latest
+    name: aquasec/trivy:0.59.1
     entrypoint: [""]
   script:
     - trivy image --exit-code 1 --severity HIGH,CRITICAL python:3.12-bookworm -f json -o trivy-image-report.json
