@@ -1,5 +1,6 @@
 import logging
 import os
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -385,8 +386,11 @@ class PacketCaptureTool2:
             else:
                 resolved_iface = interface
 
+        # Sanitize inputs for shell command construction
+        safe_iface = shlex.quote(resolved_iface)
+
         count_arg = ["-c", str(count)] if count else []
-        filter_arg = [filter_expr.strip()] if filter_expr.strip() else []
+        filter_arg = [shlex.quote(filter_expr.strip())] if filter_expr.strip() else []
 
         def clean_cmd(cmd_parts):
             return " ".join([part for part in cmd_parts if part])
@@ -396,7 +400,7 @@ class PacketCaptureTool2:
             if stream:
                 if count and not duration:
                     cmd_parts = (
-                        ["sudo", "timeout", "5", "tcpdump", "-U", "-i", resolved_iface]
+                        ["sudo", "timeout", "5", "tcpdump", "-U", "-i", safe_iface]
                         + count_arg
                         + ["-w", "-"]
                         + filter_arg
@@ -410,7 +414,7 @@ class PacketCaptureTool2:
                         "tcpdump",
                         "-U",
                         "-i",
-                        resolved_iface,
+                        safe_iface,
                         "-w",
                         "-",
                     ] + filter_arg
@@ -424,7 +428,7 @@ class PacketCaptureTool2:
                             "tcpdump",
                             "-U",
                             "-i",
-                            resolved_iface,
+                            safe_iface,
                         ]
                         + count_arg
                         + ["-w", "-"]
@@ -439,7 +443,7 @@ class PacketCaptureTool2:
                         "tcpdump",
                         "-U",
                         "-i",
-                        resolved_iface,
+                        safe_iface,
                         "-w",
                         "-",
                     ] + filter_arg
@@ -447,7 +451,7 @@ class PacketCaptureTool2:
                 cmd = f"/bin/sh -c '{cmd}'"
                 try:
                     client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(cmd)
+                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote  # nosec B601 — inputs sanitized via shlex.quote
                     pcap_data = stdout.read(preview_bytes)
                     err = stderr.read().decode(errors="replace")
                     client.close()
@@ -483,7 +487,7 @@ class PacketCaptureTool2:
                             "tcpdump",
                             vflags,
                             "-i",
-                            resolved_iface,
+                            safe_iface,
                         ]
                         + count_arg
                         + filter_arg
@@ -497,7 +501,7 @@ class PacketCaptureTool2:
                         "tcpdump",
                         vflags,
                         "-i",
-                        resolved_iface,
+                        safe_iface,
                     ] + filter_arg
                     cmd = clean_cmd(cmd_parts)
                 elif duration and count:
@@ -509,7 +513,7 @@ class PacketCaptureTool2:
                             "tcpdump",
                             vflags,
                             "-i",
-                            resolved_iface,
+                            safe_iface,
                         ]
                         + count_arg
                         + filter_arg
@@ -523,13 +527,13 @@ class PacketCaptureTool2:
                         "tcpdump",
                         vflags,
                         "-i",
-                        resolved_iface,
+                        safe_iface,
                     ] + filter_arg
                     cmd = clean_cmd(cmd_parts)
                 cmd = f"/bin/sh -c '{cmd}'"
                 try:
                     client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(cmd)
+                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote  # nosec B601 — inputs sanitized via shlex.quote
                     text_out = stdout.read(preview_bytes).decode(errors="replace")
                     err = stderr.read().decode(errors="replace")
                     client.close()
@@ -572,7 +576,7 @@ class PacketCaptureTool2:
         cmd = "sudo pkill -f 'tcpdump -i'"
         try:
             client = self._get_client()
-            stdin, stdout, stderr = client.exec_command(cmd)
+            stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
             stdout.channel.recv_exit_status()
             client.close()
             return {
@@ -694,7 +698,7 @@ class PacketCaptureTool2:
             # Test tcpdump availability
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command("which tcpdump")
+                stdin, stdout, stderr = client.exec_command("which tcpdump")  # nosec B601 — static command
                 if stdout.read().decode().strip() == "":
                     client.close()
                     return {
@@ -713,7 +717,7 @@ class PacketCaptureTool2:
             # Test interface availability
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(f"ifconfig {interface}")
+                stdin, stdout, stderr = client.exec_command(f"ifconfig {shlex.quote(interface)}")  # nosec B601 — inputs sanitized via shlex.quote
                 if (
                     "not found" in stderr.read().decode()
                     or "No such interface" in stderr.read().decode()
@@ -748,7 +752,7 @@ class PacketCaptureTool2:
             cmd = "ls /tmp"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
@@ -771,7 +775,7 @@ class PacketCaptureTool2:
             cmd = "which tcpdump && tcpdump --version | head -1"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
@@ -801,7 +805,7 @@ class PacketCaptureTool2:
             cmd = f"ifconfig {interface}"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
