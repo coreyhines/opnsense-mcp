@@ -10,6 +10,7 @@ import paramiko
 from paramiko.config import SSHConfig
 
 from opnsense_mcp.utils.env import load_opnsense_env
+from opnsense_mcp.utils.paramiko_ssh import apply_paramiko_host_key_policy
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +73,7 @@ class SSHFirewallRuleTool:
 
     def _get_ssh_client(self) -> paramiko.SSHClient:
         client = paramiko.SSHClient()
-        client.load_system_host_keys()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        apply_paramiko_host_key_policy(client)
         client.connect(
             hostname=self.ssh_host,
             username=self.ssh_user,
