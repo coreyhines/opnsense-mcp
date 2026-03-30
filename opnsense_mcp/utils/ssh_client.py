@@ -24,7 +24,7 @@ class OPNsenseSSHClient:
         """
         self.client = client
 
-        # Load environment variables from ~/.opnsense-env or .env
+        # Load credentials via env.load_opnsense_env (see opnsense_mcp.utils.env)
         load_opnsense_env()
 
         # Get SSH configuration exactly like packet capture tool
@@ -39,7 +39,8 @@ class OPNsenseSSHClient:
             or os.getenv("USER")
             or "root"
         )
-        self.ssh_key = env_key or self._get_ssh_config("identityfile", config_host)
+        raw_key = env_key or self._get_ssh_config("identityfile", config_host)
+        self.ssh_key = os.path.expanduser(raw_key) if raw_key else None
         self.ssh_port = 22
 
         # Debug SSH configuration

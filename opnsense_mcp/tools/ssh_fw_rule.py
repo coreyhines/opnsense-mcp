@@ -41,7 +41,7 @@ class SSHFirewallRuleTool:
     def __init__(self, client: Any) -> None:
         self.client = client
 
-        # Load environment variables from ~/.opnsense-env or .env
+        # Load credentials via env.load_opnsense_env (see opnsense_mcp.utils.env)
         load_opnsense_env()
 
         # Get SSH configuration exactly like packet capture tool

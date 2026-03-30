@@ -23,9 +23,9 @@ The AI agent automatically:
 
 #### Step 1: Device Identification
 ```bash
-# Agent executes in parallel:
+# Agent resolves identity first, then confirms in ARP:
 dhcp search="morpheus"
-arp search="morpheus"
+arp search="10.0.2.150"
 ```
 
 **Sample Results**:

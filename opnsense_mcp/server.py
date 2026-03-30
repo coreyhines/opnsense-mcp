@@ -34,7 +34,7 @@ from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables from ~/.opnsense-env or .env
+# Load credentials from home dotenv files (see utils/env.load_opnsense_env)
 load_opnsense_env()
 
 

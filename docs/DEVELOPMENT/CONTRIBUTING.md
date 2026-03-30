@@ -43,8 +43,8 @@ Thank you for your interest in contributing to the OPNsense MCP Server! This gui
 
 4. **Configure Environment**
    ```bash
-   cp examples/.opnsense-env ~/.opnsense-env
-   vi ~/.opnsense-env  # Add your OPNsense credentials
+   cp examples/.env.example ~/.env
+   vi ~/.env  # Add your OPNsense credentials
    ```
 
 ## 🛠️ Development Workflow
@@ -231,7 +231,7 @@ logging.basicConfig(level=logging.DEBUG)
 - Verify all dependencies are installed (`uv pip install -r requirements.txt`)
 
 ### **Authentication Issues**
-- Check `~/.opnsense-env` file exists and is readable
+- Check `~/.env` exists and is readable
 - Verify API credentials are correct
 - Test connectivity to OPNsense firewall
 

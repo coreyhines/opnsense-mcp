@@ -18,7 +18,7 @@ The project supports two operational modes using the same MCP tool implementatio
   - `opnsense_mcp/server.py` (server implementation used by launchers/proxy)
 - Tool implementation: `opnsense_mcp/tools/`
 - OPNsense API client: `opnsense_mcp/utils/api_optimized.py`
-- Environment loading includes `~/.env`, `~/.opnsense-env`, and deploy environment file paths used by centralized installs.
+- Environment loading: `~/.env` plus deploy paths (`$OPNSENSE_MCP_INSTALL_ROOT/environment`, `OPNSENSE_ENV_FILE`); see `opnsense_mcp/utils/env.py`.
 
 ## Local Dev Setup
 
@@ -26,7 +26,7 @@ The project supports two operational modes using the same MCP tool implementatio
 uv venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
-cp examples/.opnsense-env ~/.opnsense-env
+cp examples/.env.example ~/.env
 ```
 
 Run tests/lint:

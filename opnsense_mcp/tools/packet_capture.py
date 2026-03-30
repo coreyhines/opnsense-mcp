@@ -25,7 +25,7 @@ class PacketCaptureTool2:
     ):
         self.client = client
 
-        # Load environment variables from ~/.opnsense-env or .env
+        # Load credentials via env.load_opnsense_env (see opnsense_mcp.utils.env)
         load_opnsense_env()
 
         env_host = os.getenv("OPNSENSE_FIREWALL_HOST")
@@ -40,9 +40,10 @@ class PacketCaptureTool2:
             or os.getenv("USER")
             or "root"
         )
-        self.ssh_key = (
+        raw_key = (
             ssh_key or env_key or self._get_ssh_config("identityfile", config_host)
         )
+        self.ssh_key = os.path.expanduser(raw_key) if raw_key else None
         self.capture_file = "/tmp/mcp_capture.pcap"
         self.ssh_port = 22
 

@@ -15,13 +15,20 @@ if ! command -v uv &> /dev/null; then
     exit 1
 fi
 
-# Set environment variables from ~/.opnsense-env if it exists
-ENV_FILE="$HOME/.opnsense-env"
-if [ -f "$ENV_FILE" ]; then
+# Prefer ~/.env, then optional second home dotenv (same order as mcp_start.sh / load_opnsense_env)
+if [ -f "$HOME/.env" ]; then
+    echo -e "${GREEN}Loading environment from $HOME/.env${NC}"
+    set -a
+    # shellcheck disable=SC1090
+    source "$HOME/.env"
+    set +a
+elif [ -f "$HOME/.opnsense-env" ]; then
+    ENV_FILE="$HOME/.opnsense-env"
     echo -e "${GREEN}Loading environment from $ENV_FILE${NC}"
+    # shellcheck disable=SC2046
     export $(grep -v '^#' "$ENV_FILE" | xargs)
 else
-    echo -e "${YELLOW}Warning: $ENV_FILE not found. Using default settings.${NC}"
+    echo -e "${YELLOW}Warning: no ~/.env (or optional second home dotenv) found. Using default settings.${NC}"
     # Set default environment variables
     export FIREWALL_HOST="fw.example.com"
     export API_KEY="your_api_key_here"  # pragma: allowlist secret

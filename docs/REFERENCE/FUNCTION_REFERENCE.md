@@ -304,7 +304,7 @@ The MCP server is designed to handle complex queries that combine multiple funct
 ### "What is morpheus doing on the network?"
 
 **Agent Resolution Process**:
-1. **Identify the device**: `dhcp search="morpheus"` and `arp search="morpheus"`
+1. **Identify and verify the device IP**: `dhcp search="morpheus"` (plus DNS forward/PTR verification when available), then `arp search="<resolved_ip>"` for interface/MAC confirmation
 2. **Get network details**: Extract IP address, MAC address, interface location
 3. **Analyze current activity**: `get_logs src_ip="<morpheus_ip>"` and `get_logs dst_ip="<morpheus_ip>"`
 4. **Live traffic analysis**: `packet_capture interface="<appropriate_interface>" filter="host <morpheus_ip>"`
