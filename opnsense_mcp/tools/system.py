@@ -148,16 +148,12 @@ class SystemTool:
             try:
                 subprocess.run(
                     [
-                        "source",
-                        ".venv/bin/activate",
-                        "&&",
-                        "pip",
+                        str(Path.cwd() / ".venv" / "bin" / "pip"),
                         "install",
                         "-r",
                         "requirements.txt",
                     ],
                     cwd=Path.cwd(),
-                    shell=True,
                     timeout=60,
                     capture_output=True,
                 )
