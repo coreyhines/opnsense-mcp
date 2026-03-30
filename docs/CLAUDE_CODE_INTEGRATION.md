@@ -42,7 +42,7 @@ Use SSE only if your Claude Code MCP configuration supports remote SSE servers i
 
 - `mcp_start.sh` not executable:
   `chmod +x /absolute/path/to/opnsense-mcp/mcp_start.sh`
-- Credentials missing: verify `~/.opnsense-env`
+- Credentials missing: verify `~/.env`
 - SSE fails: verify cert trust, DNS, and Caddy config (`../deploy/TLS.md`)
 
 ## Related Docs

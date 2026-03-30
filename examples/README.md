@@ -3,6 +3,27 @@
 This directory contains example configuration files for the OPNsense MCP Server
 in both JSON and YAML formats, optimized for development and IDE usage.
 
+## Environment template
+
+- **`.env.example`** — copy to `~/.env` and set your API credentials (see comments inside the file).
+  Same flow as the [quick start](../README.md#quick-start): `cp examples/.env.example ~/.env`.
+
+## MCP bridge config (optional)
+
+If you use [`start_opnsense_bridge.sh`](../start_opnsense_bridge.sh) with an MCP bridge that reads **`BRIDGE_CONFIG`**:
+
+1. From the **repository root**, copy the example to a gitignored local file:
+
+   ```bash
+   cp examples/bridge_config_opnsense.example.json ./bridge_config_opnsense.local.json
+   ```
+
+2. Edit **`bridge_config_opnsense.local.json`** and replace every **`/absolute/path/to/opnsense-mcp`** with the absolute path to this clone (three places: `mcp_start.sh`, `cwd`, and the filesystem server allowed directory).
+
+3. The example uses **`npx`** for the filesystem and memory MCP servers so you are not tied to one machine’s global `node` paths. Switch to explicit `node` + paths if your bridge requires it.
+
+4. Override the config path anytime: **`BRIDGE_CONFIG=/path/to/config.json ./start_opnsense_bridge.sh`**
+
 ## Using the Configuration Files for Development
 
 The provided `mcp.json` and `mcp.yaml` files are specifically configured for

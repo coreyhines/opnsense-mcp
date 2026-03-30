@@ -36,7 +36,7 @@ Single planning/implementation reference for the **network service** path. **IDE
 
 - **Host path:** **`$OPNSENSE_MCP_INSTALL_ROOT/environment`** (default **`/opt/containerdata/opnsense-mcp/environment`**). Keep secrets on the **volume** under **`/opt/containerdata/opnsense-mcp`**, not under `/etc`.
 - **Quadlet:** `EnvironmentFile=` and **`Environment=OPNSENSE_MCP_INSTALL_ROOT=...`**; **`Volume=`** mounts the data dir read-only at the same path in-container so `load_opnsense_env()` sees the file.
-- **`load_opnsense_env()`** resolves **`$OPNSENSE_MCP_INSTALL_ROOT/environment`** (default root **`/opt/containerdata/opnsense-mcp`**), then **`OPNSENSE_ENV_FILE`**, then **`~/.env`** / **`~/.opnsense-env`**. See `tests/test_opnsense_env.py`.
+- **`load_opnsense_env()`** resolves **`$OPNSENSE_MCP_INSTALL_ROOT/environment`** (default root **`/opt/containerdata/opnsense-mcp`**), then **`OPNSENSE_ENV_FILE`**, then home-directory dotenv files starting with **`~/.env`** (see `tests/test_opnsense_env.py` and `opnsense_mcp/utils/env.py`).
 
 ---
 

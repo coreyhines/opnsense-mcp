@@ -27,7 +27,8 @@ def load_opnsense_env() -> None:
     1. ``$OPNSENSE_MCP_INSTALL_ROOT/environment`` (default root
        ``/opt/containerdata/opnsense-mcp``) if the file exists (override=True).
     2. Path in ``OPNSENSE_ENV_FILE`` if set and the file exists (override=True).
-    3. ``~/.env`` then ``~/.opnsense-env`` (override=False — only fills unset keys).
+    3. Home dotenv files in order (``override=False`` — only fills unset keys):
+       ``~/.env`` first, then one additional home-dotenv path for compatibility.
 
     Later steps (3) do not override keys already set by (1) or (2).
     """
@@ -43,7 +44,8 @@ def load_opnsense_env() -> None:
             logger.debug("Loaded environment file: %s", p)
     candidates = [
         Path.home() / ".env",
-        Path.home() / ".opnsense-env",
+        Path.home()
+        / ".opnsense-env",  # second file for backward compatibility (undocumented)
     ]
     for env_path in candidates:
         if env_path.exists():

@@ -13,8 +13,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Load environment variables if .opnsense-env exists
-# 1) Load from ~/.env first (preferred)
+# Load credentials: ~/.env first, then optional second home dotenv for missing OPNSENSE_* only
+# 1) Load from ~/.env first (documented path)
 if [ -f ~/.env ]; then
     echo "Loading environment from ~/.env" >&2
     set -a
@@ -41,9 +41,9 @@ if [ -z "${OPNSENSE_FIREWALL_HOST:-}" ] && [ -n "${OPNSENSE_URL:-}" ]; then
     fi
 fi
 
-# 3) Load from ~/.opnsense-env only for missing OPNSENSE_* variables
+# 3) Optional second home dotenv (missing OPNSENSE_* only)
 if [ -f ~/.opnsense-env ]; then
-    echo "Loading environment from ~/.opnsense-env (missing OPNSENSE_* only)" >&2
+    echo "Loading supplemental environment (missing OPNSENSE_* only)" >&2
     while IFS= read -r line || [ -n "$line" ]; do
         s="${line#"${line%%[![:space:]]*}"}" # trim leading whitespace
         if [ -z "$s" ] || [ "${s:0:1}" = "#" ]; then

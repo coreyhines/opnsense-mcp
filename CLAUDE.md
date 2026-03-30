@@ -8,7 +8,7 @@ This is an MCP (Model Context Protocol) server that exposes OPNsense firewall ma
 
 ## Environment Variables
 
-All connection credentials come from environment variables (or an `.opnsense-env` dotenv file):
+All connection credentials come from environment variables, typically loaded from `~/.env` (see `opnsense_mcp/utils/env.py`):
 
 ```
 OPNSENSE_FIREWALL_HOST   # Hostname/IP of the OPNsense firewall
@@ -76,6 +76,10 @@ EOF
 ```
 
 Never use bare `cat` in a commit message heredoc.
+
+## OPNsense MCP Output
+
+When displaying results from OPNsense MCP tools, summarize the data in a human-readable format (tables, bullet points, or prose). Do not show raw JSON unless the user explicitly asks for it.
 
 ## Code Standards
 

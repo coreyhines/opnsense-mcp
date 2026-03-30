@@ -22,10 +22,10 @@ If you are unsure, start with `STDIO`.
 uv venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
-cp examples/.opnsense-env ~/.opnsense-env
+cp examples/.env.example ~/.env
 ```
 
-Set credentials in `~/.opnsense-env`:
+Set credentials in `~/.env`:
 
 ```env
 OPNSENSE_API_KEY=your_api_key
@@ -116,7 +116,7 @@ Read before production:
 ## Troubleshooting
 
 - Missing Python deps: `uv pip install -r requirements.txt`
-- Credentials not loading: verify `~/.opnsense-env` values
+- Credentials not loading: verify `~/.env` values and file permissions (`chmod 600 ~/.env`)
 - Script permissions: `chmod +x mcp_start.sh`
 - SSE TLS issues: check cert paths and hostname in `deploy/TLS.md`
 

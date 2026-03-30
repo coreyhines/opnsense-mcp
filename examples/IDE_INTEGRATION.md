@@ -10,13 +10,13 @@ For the fastest way to get started:
 
 ```bash
 # Copy environment template
-cp examples/.opnsense-env ~/.opnsense-env
+cp examples/.env.example ~/.env
 
-# Edit with vi
-vi ~/.opnsense-env
+# Edit with your editor
+vi ~/.env
 
-# Run the development server
-./examples/run_dev_server.sh
+# Run the development server (use mcp_start.sh or your IDE config; see README)
+./mcp_start.sh
 ```
 
 ## VS Code Integration
@@ -34,8 +34,8 @@ Visual Studio Code offers excellent Python debugging capabilities. To set up:
 2. Create your environment file:
 
    ```bash
-   cp examples/.opnsense-env ~/.opnsense-env
-   # Edit with vi
+   cp examples/.env.example ~/.env
+   # Edit with your editor
    ```
 
 3. Install the Python extension if you haven't already
@@ -52,9 +52,8 @@ For PyCharm users:
 1. Create your environment file:
 
    ```bash
-   cp examples/.opnsense-env ~/.opnsense-env
-   # Edit with vi
-   vi ~/.opnsense-env
+   cp examples/.env.example ~/.env
+   vi ~/.env
    ```
 
 2. Open the project in PyCharm
@@ -63,8 +62,8 @@ For PyCharm users:
    - Click on "Run" > "Edit Configurations"
    - Click the "+" button and select "Python"
    - Set the following:
-     - Script path: Select the `server_new.py` file
-     - Parameters: Leave empty
+     - Script path: entry you use to run the MCP server (e.g. `opnsense_mcp/server.py` via project launcher)
+     - Parameters: Leave empty or per your setup
      - Python interpreter: Select your project venv
      - Environment variables: Click "..." and add the following:
 
@@ -74,46 +73,42 @@ For PyCharm users:
        LOG_LEVEL=DEBUG
        ```
 
-     - Check "EnvFile" and add `~/.opnsense-env`
+     - Check "EnvFile" and add `~/.env`
    - Click "OK" to save
 
 4. Run or debug the configuration
 
 ## Other IDEs
 
-For other IDEs, you can use the provided `mcp_ide_config.json` as a reference for
+For other IDEs, you can use the provided `examples/mcp.json` as a reference for
 setting up your environment.
 
 ## Using the Environment Variables
 
-The environment file (`~/.opnsense-env`) contains the following variables:
+Use **`~/.env`** (copy from `examples/.env.example`). See `opnsense_mcp/utils/env.py` for load order.
 
-- `OPNSENSE_HOST`: Hostname or IP of your OPNsense firewall
+Typical variables:
+
+- `OPNSENSE_FIREWALL_HOST`: Hostname or IP of your OPNsense firewall
 - `OPNSENSE_API_KEY`: API key for authentication
 - `OPNSENSE_API_SECRET`: API secret for authentication
-- `PORT`: Port to run the MCP server on (default: 8080)
-- `HOST`: Host to bind to (default: 127.0.0.1)
-- `DEBUG`: Enable debug mode (true/false)
-- `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR)
-- `TEST_MODE`: Enable test mode (true/false)
-- `MOCK_API`: Use mock API responses instead of real OPNsense calls (true/false)
+- `OPNSENSE_SSL_VERIFY`: `true` or `false` (self-signed certs often use `false`)
+- `DEBUG`, `LOG_LEVEL`: optional development toggles
 
 ## Development Tools
 
 Several tools are provided to help with development:
 
 - `create_mock_data.py`: Creates mock data for testing without a real OPNsense instance
-- `run_dev_server.sh`: Sets up the environment and runs the server
 - `test_standalone.py`: Run standalone tests for specific API endpoints
 - `test_integration.py`: Run integration tests for all components
 
 ## Example MCP Server Command
 
-You can run the MCP server directly using UV with:
+You can run with credentials from `~/.env`:
 
 ```bash
-uv run --env-file ~/.opnsense-env --with fastapi,uvicorn,pydantic,pyopnsense \
-  /Users/corey/vs-code/opnsense/mcp_server/server_new.py
+uv run --env-file ~/.env python -m opnsense_mcp.server
 ```
 
-This command can be integrated with various IDEs and task runners.
+Adjust module path if your launcher differs. This pattern works with IDEs that support `--env-file`.

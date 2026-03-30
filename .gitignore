@@ -3,6 +3,7 @@ vars/
 .opnsense-env
 .env
 .env.*
+!examples/.env.example
 .envrc
 .venv/
 tmp_*
@@ -23,6 +24,8 @@ uv.lock
 # Local/generated files
 .DS_Store
 .mcp.json
+# MCP bridge: copy from examples/bridge_config_opnsense.example.json
+bridge_config_opnsense.local.json
 .vscode/
 opnsense-mcp.code-workspace
 mcp_server.log
