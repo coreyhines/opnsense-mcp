@@ -730,37 +730,43 @@ class OPNsenseClient:
     async def get_dhcpv4_leases(self: "OPNsenseClient") -> list[dict[str, Any]]:
         """Get DHCPv4 lease table from OPNsense."""
         await self._ensure_dhcp_provider()
-        assert self._dhcp_provider is not None
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
         return await self._dhcp_provider.get_v4_leases()
 
     async def get_dhcpv6_leases(self: "OPNsenseClient") -> list[dict[str, Any]]:
         """Get DHCPv6 lease table from OPNsense."""
         await self._ensure_dhcp_provider()
-        assert self._dhcp_provider is not None
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
         return await self._dhcp_provider.get_v6_leases()
 
     async def search_dhcpv4_leases(self, query: str) -> list[dict[str, Any]]:
         """Search DHCPv4 leases server-side by hostname, IP, or MAC."""
         await self._ensure_dhcp_provider()
-        assert self._dhcp_provider is not None
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
         return await self._dhcp_provider.search_v4_leases(query)
 
     async def search_dhcpv6_leases(self, query: str) -> list[dict[str, Any]]:
         """Search DHCPv6 leases server-side by hostname, IP, or MAC."""
         await self._ensure_dhcp_provider()
-        assert self._dhcp_provider is not None
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
         return await self._dhcp_provider.search_v6_leases(query)
 
     async def delete_dhcpv4_lease(self, ip: str) -> dict[str, Any]:
         """Delete a DHCPv4 lease by IP address."""
         await self._ensure_dhcp_provider()
-        assert self._dhcp_provider is not None
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
         return await self._dhcp_provider.delete_v4_lease(ip)
 
     async def delete_dhcpv6_lease(self, ip: str) -> dict[str, Any]:
         """Delete a DHCPv6 lease by IP address."""
         await self._ensure_dhcp_provider()
-        assert self._dhcp_provider is not None
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
         return await self._dhcp_provider.delete_v6_lease(ip)
 
     async def get_firewall_logs(
