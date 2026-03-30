@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import shlex
 from typing import Any
 
 import paramiko
@@ -86,7 +87,7 @@ class SSHFirewallRuleTool:
         ssh = None
         try:
             ssh = self._get_ssh_client()
-            stdin, stdout, stderr = ssh.exec_command(command)
+            stdin, stdout, stderr = ssh.exec_command(command)  # nosec B601 — inputs sanitized via shlex.quote
             exit_code = stdout.channel.recv_exit_status()
             stdout_output = stdout.read().decode().strip()
             stderr_output = stderr.read().decode().strip()
@@ -180,20 +181,20 @@ class SSHFirewallRuleTool:
         # Use OPNsense's firewall rule management
         # First, let's try using the OPNsense firewall rule CLI
         cmd = "opnsense-shell firewall rule add"
-        cmd += f" --interface {interface}"
-        cmd += f" --action {action}"
-        cmd += f" --direction {direction}"
+        cmd += f" --interface {shlex.quote(interface)}"
+        cmd += f" --action {shlex.quote(action)}"
+        cmd += f" --direction {shlex.quote(direction)}"
 
         if protocol != "any":
-            cmd += f" --protocol {protocol}"
+            cmd += f" --protocol {shlex.quote(protocol)}"
 
         if source_net != "any":
-            cmd += f" --source {source_net}"
+            cmd += f" --source {shlex.quote(source_net)}"
 
         if destination_net != "any":
-            cmd += f" --destination {destination_net}"
+            cmd += f" --destination {shlex.quote(destination_net)}"
 
-        cmd += f" --description '{description}'"
+        cmd += f" --description {shlex.quote(description)}"
 
         return cmd
 
