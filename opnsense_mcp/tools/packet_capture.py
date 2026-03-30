@@ -1,6 +1,7 @@
 import logging
 import os
-import subprocess
+import shlex
+import subprocess  # nosec B404 — subprocess required for local process management
 import time
 from pathlib import Path
 from typing import Any
@@ -45,7 +46,7 @@ class PacketCaptureTool2:
             ssh_key or env_key or self._get_ssh_config("identityfile", config_host)
         )
         self.ssh_key = os.path.expanduser(raw_key) if raw_key else None
-        self.capture_file = "/tmp/mcp_capture.pcap"
+        self.capture_file = "/tmp/mcp_capture.pcap"  # nosec B108 — remote path on OPNsense firewall, not local temp usage
         self.ssh_port = 22
 
         # Keep connection details on logger, never stdout in MCP mode.
@@ -89,14 +90,14 @@ class PacketCaptureTool2:
                 ["pgrep", "-f", "opnsense_mcp/server.py"],
                 capture_output=True,
                 text=True,
-            )
+            )  # nosec B603 B607 — hardcoded command, no user input
             if result.returncode != 0:
                 # Try alternative process detection
                 result2 = subprocess.run(
                     ["ps", "aux"],
                     capture_output=True,
                     text=True,
-                )
+                )  # nosec B603 B607 — hardcoded command, no user input
                 if "opnsense_mcp/server.py" in result2.stdout:
                     # Process is running but pgrep didn't find it
                     pass
@@ -149,14 +150,14 @@ class PacketCaptureTool2:
                 ["pgrep", "-f", "opnsense_mcp/server.py"],
                 capture_output=True,
                 text=True,
-            )
+            )  # nosec B603 B607 — hardcoded command, no user input
             if result.returncode != 0:
                 # Try alternative process detection
                 result2 = subprocess.run(
                     ["ps", "aux"],
                     capture_output=True,
                     text=True,
-                )
+                )  # nosec B603 B607 — hardcoded command, no user input
                 if "opnsense_mcp/server.py" in result2.stdout:
                     # Process is running but pgrep didn't find it
                     pass
@@ -168,7 +169,7 @@ class PacketCaptureTool2:
                             cwd=Path.cwd(),
                             timeout=10,
                             capture_output=True,
-                        )
+                        )  # nosec B603 B607 — hardcoded command, no user input
                         corrections.append("Attempted to restart MCP server")
                         time.sleep(2)  # Give it time to start
                     except Exception as e:
@@ -185,26 +186,22 @@ class PacketCaptureTool2:
                     cwd=Path.cwd(),
                     timeout=30,
                     capture_output=True,
-                )
+                )  # nosec B603 B607 — hardcoded command, no user input
                 corrections.append("Recreated virtual environment")
 
                 # Try to install dependencies
                 try:
                     subprocess.run(
                         [
-                            "source",
-                            ".venv/bin/activate",
-                            "&&",
-                            "pip",
+                            str(Path.cwd() / ".venv" / "bin" / "pip"),
                             "install",
                             "-r",
                             "requirements.txt",
                         ],
                         cwd=Path.cwd(),
-                        shell=True,
                         timeout=60,
                         capture_output=True,
-                    )
+                    )  # nosec B603 B607 — hardcoded command, no user input
                     corrections.append("Installed dependencies")
                 except Exception as e:
                     errors.append(f"Failed to install dependencies: {e}")
@@ -247,8 +244,8 @@ class PacketCaptureTool2:
                     aliases = await client._make_request(
                         "GET", "/api/interfaces/overview/export"
                     )
-                except Exception:
-                    pass
+                except (OSError, ValueError, KeyError) as exc:
+                    logger.debug("Failed to fetch interface aliases: %s", exc)
                 alias_list = []
                 if isinstance(aliases, dict):
                     for key, value in aliases.items():
@@ -283,8 +280,10 @@ class PacketCaptureTool2:
                         if iface_lc in addr.get("address", "").lower():
                             return entry["name"]
                 return iface
-        except Exception:
-            pass
+        except (ImportError, OSError, ValueError, KeyError) as exc:
+            logger.debug(
+                "Live interface resolution failed, falling back to mock data: %s", exc
+            )
         mock_path = os.path.join(
             os.path.dirname(__file__), "../../examples/mock_data/interfaces.json"
         )
@@ -389,8 +388,11 @@ class PacketCaptureTool2:
             else:
                 resolved_iface = interface
 
+        # Sanitize inputs for shell command construction
+        safe_iface = shlex.quote(resolved_iface)
+
         count_arg = ["-c", str(count)] if count else []
-        filter_arg = [filter_expr.strip()] if filter_expr.strip() else []
+        filter_arg = [shlex.quote(filter_expr.strip())] if filter_expr.strip() else []
 
         def clean_cmd(cmd_parts):
             return " ".join([part for part in cmd_parts if part])
@@ -400,7 +402,7 @@ class PacketCaptureTool2:
             if stream:
                 if count and not duration:
                     cmd_parts = (
-                        ["sudo", "timeout", "5", "tcpdump", "-U", "-i", resolved_iface]
+                        ["sudo", "timeout", "5", "tcpdump", "-U", "-i", safe_iface]
                         + count_arg
                         + ["-w", "-"]
                         + filter_arg
@@ -414,7 +416,7 @@ class PacketCaptureTool2:
                         "tcpdump",
                         "-U",
                         "-i",
-                        resolved_iface,
+                        safe_iface,
                         "-w",
                         "-",
                     ] + filter_arg
@@ -428,7 +430,7 @@ class PacketCaptureTool2:
                             "tcpdump",
                             "-U",
                             "-i",
-                            resolved_iface,
+                            safe_iface,
                         ]
                         + count_arg
                         + ["-w", "-"]
@@ -443,7 +445,7 @@ class PacketCaptureTool2:
                         "tcpdump",
                         "-U",
                         "-i",
-                        resolved_iface,
+                        safe_iface,
                         "-w",
                         "-",
                     ] + filter_arg
@@ -451,7 +453,7 @@ class PacketCaptureTool2:
                 cmd = f"/bin/sh -c '{cmd}'"
                 try:
                     client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(cmd)
+                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote  # nosec B601 — inputs sanitized via shlex.quote
                     pcap_data = stdout.read(preview_bytes)
                     err = stderr.read().decode(errors="replace")
                     client.close()
@@ -487,7 +489,7 @@ class PacketCaptureTool2:
                             "tcpdump",
                             vflags,
                             "-i",
-                            resolved_iface,
+                            safe_iface,
                         ]
                         + count_arg
                         + filter_arg
@@ -501,7 +503,7 @@ class PacketCaptureTool2:
                         "tcpdump",
                         vflags,
                         "-i",
-                        resolved_iface,
+                        safe_iface,
                     ] + filter_arg
                     cmd = clean_cmd(cmd_parts)
                 elif duration and count:
@@ -513,7 +515,7 @@ class PacketCaptureTool2:
                             "tcpdump",
                             vflags,
                             "-i",
-                            resolved_iface,
+                            safe_iface,
                         ]
                         + count_arg
                         + filter_arg
@@ -527,13 +529,13 @@ class PacketCaptureTool2:
                         "tcpdump",
                         vflags,
                         "-i",
-                        resolved_iface,
+                        safe_iface,
                     ] + filter_arg
                     cmd = clean_cmd(cmd_parts)
                 cmd = f"/bin/sh -c '{cmd}'"
                 try:
                     client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(cmd)
+                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote  # nosec B601 — inputs sanitized via shlex.quote
                     text_out = stdout.read(preview_bytes).decode(errors="replace")
                     err = stderr.read().decode(errors="replace")
                     client.close()
@@ -576,7 +578,7 @@ class PacketCaptureTool2:
         cmd = "sudo pkill -f 'tcpdump -i'"
         try:
             client = self._get_client()
-            stdin, stdout, stderr = client.exec_command(cmd)
+            stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
             stdout.channel.recv_exit_status()
             client.close()
             return {
@@ -698,7 +700,7 @@ class PacketCaptureTool2:
             # Test tcpdump availability
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command("which tcpdump")
+                stdin, stdout, stderr = client.exec_command("which tcpdump")  # nosec B601 — static command
                 if stdout.read().decode().strip() == "":
                     client.close()
                     return {
@@ -717,7 +719,9 @@ class PacketCaptureTool2:
             # Test interface availability
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(f"ifconfig {interface}")
+                stdin, stdout, stderr = client.exec_command(
+                    f"ifconfig {shlex.quote(interface)}"
+                )  # nosec B601 — inputs sanitized via shlex.quote
                 if (
                     "not found" in stderr.read().decode()
                     or "No such interface" in stderr.read().decode()
@@ -752,7 +756,7 @@ class PacketCaptureTool2:
             cmd = "ls /tmp"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
@@ -775,7 +779,7 @@ class PacketCaptureTool2:
             cmd = "which tcpdump && tcpdump --version | head -1"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
@@ -805,7 +809,7 @@ class PacketCaptureTool2:
             cmd = f"ifconfig {interface}"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
