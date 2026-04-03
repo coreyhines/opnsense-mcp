@@ -282,8 +282,12 @@ class OPNsenseClient:
     # Keep this alias — used by search_ndp_table
     _get_ndp_table = get_ndp_table
 
-    async def get_firewall_rules(self: "OPNsenseClient") -> list[dict[str, Any]]:
-        """Get firewall rules from OPNsense."""
+    async def get_firewall_rules(
+        self: "OPNsenseClient",
+        *,
+        row_count: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Get firewall rules from OPNsense (Firewall Automation searchRule rows)."""
         try:
             logger.debug("Fetching firewall rules...")
             # Use the searchRule endpoint as per OPNsense API docs
@@ -291,7 +295,7 @@ class OPNsenseClient:
             data = await self._make_request(
                 "POST",
                 "/api/firewall/filter/searchRule",
-                json={"current": 1, "rowCount": 100},
+                json={"current": 1, "rowCount": row_count},
             )
 
             if not isinstance(data, dict):

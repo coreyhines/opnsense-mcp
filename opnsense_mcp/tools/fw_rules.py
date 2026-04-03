@@ -7,8 +7,80 @@ from typing import Any
 from pydantic import BaseModel
 
 from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_sequence(value: Any) -> int:
+    """Coerce rule sequence to int."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _parse_boolish(val: Any) -> bool:
+    """Parse OPNsense API 0/1 strings or booleans."""
+    if isinstance(val, bool):
+        return val
+    return str(val).lower() in ("1", "true", "yes")
+
+
+def _map_search_rule_row(rule: dict[str, Any]) -> dict[str, Any]:
+    """Normalize searchRule API row or mock rule dict into the fw_rules output shape."""
+    if isinstance(rule.get("source"), dict):
+        src = rule["source"]
+        dst = rule.get("destination") or {}
+        return {
+            "id": str(rule.get("uuid") or rule.get("id", "")),
+            "sequence": _parse_sequence(rule.get("sequence")),
+            "interface": str(rule.get("interface", "")),
+            "direction": str(rule.get("direction", "")),
+            "ipprotocol": str(rule.get("ipprotocol", "")),
+            "protocol": str(rule.get("protocol", "")),
+            "source": {
+                "net": str(src.get("net", "")),
+                "port": str(src.get("port", "")),
+            },
+            "destination": {
+                "net": str(dst.get("net", "")),
+                "port": str(dst.get("port", "")),
+            },
+            "action": str(rule.get("action", "")),
+            "enabled": _parse_boolish(rule.get("enabled")),
+            "description": str(rule.get("description") or ""),
+            "gateway": str(rule.get("gateway") or ""),
+            "log": _parse_boolish(rule.get("log")),
+            "quick": _parse_boolish(rule.get("quick")),
+        }
+
+    return {
+        "id": str(rule.get("uuid") or rule.get("id", "")),
+        "sequence": _parse_sequence(rule.get("sequence")),
+        "interface": str(rule.get("interface", "")),
+        "direction": str(rule.get("direction", "")),
+        "ipprotocol": str(rule.get("ipprotocol", "")),
+        "protocol": str(rule.get("protocol", "")),
+        "source": {
+            "net": str(rule.get("source", "")),
+            "port": str(rule.get("source_port", "")),
+        },
+        "destination": {
+            "net": str(rule.get("destination", "")),
+            "port": str(rule.get("destination_port", "")),
+        },
+        "action": str(rule.get("action", "")),
+        "enabled": _parse_boolish(rule.get("enabled")),
+        "description": str(rule.get("description") or ""),
+        "gateway": str(rule.get("gateway") or ""),
+        "log": _parse_boolish(rule.get("log")),
+        "quick": _parse_boolish(rule.get("quick")),
+    }
 
 
 class FirewallEndpoint(BaseModel):
@@ -40,7 +112,7 @@ class FirewallRule(BaseModel):
 class FwRulesTool:
     """Tool for retrieving and managing firewall rules in OPNsense."""
 
-    def __init__(self, client: OPNsenseClient | None) -> None:
+    def __init__(self, client: OPNsenseClient | MockOPNsenseClient | None) -> None:
         """
         Initialize the firewall rules tool.
 
@@ -166,55 +238,23 @@ class FwRulesTool:
 
         return resolved
 
-    async def _get_rules(self) -> list[dict[str, Any]]:
+    async def _get_rules(self) -> tuple[list[dict[str, Any]], str | None]:
         """
-        Get firewall rules from OPNsense API.
+        Get firewall rules via the client (POST searchRule on real API).
 
         Returns:
-            List of firewall rule dictionaries.
+            (rules, error_message). error_message is set when the fetch fails.
 
         """
+        if self.client is None:
+            return [], "No client available"
         try:
-            endpoint = "/api/firewall/filter/searchRule"
-            params = {
-                "current": 1,
-                "rowCount": 1000,
-            }  # Increase row count to get more rules
-            data = await self.client._make_request("GET", endpoint, params=params)
-
-            rules = []
-            if data.get("total", 0) > 0:
-                for rule in data.get("rows", []):
-                    rules.append(
-                        {
-                            "id": rule.get("uuid", ""),
-                            "sequence": rule.get("sequence", 0),
-                            "interface": rule.get("interface", ""),
-                            "direction": rule.get("direction", ""),
-                            "ipprotocol": rule.get("ipprotocol", ""),
-                            "protocol": rule.get("protocol", ""),
-                            "source": {
-                                "net": rule.get("source", ""),
-                                "port": rule.get("source_port", ""),
-                            },
-                            "destination": {
-                                "net": rule.get("destination", ""),
-                                "port": rule.get("destination_port", ""),
-                            },
-                            "action": rule.get("action", ""),
-                            "enabled": rule.get("enabled", "") == "1",
-                            "description": rule.get("description", ""),
-                            "gateway": rule.get("gateway", ""),
-                            "log": rule.get("log", "") == "1",
-                            "quick": rule.get("quick", "") == "1",
-                        }
-                    )
-
-        except Exception:
+            raw_rows = await self.client.get_firewall_rules(row_count=1000)
+        except Exception as e:
             logger.exception("Failed to get firewall rules")
-            return []
-        else:
-            return rules
+            return [], str(e)
+        rules = [_map_search_rule_row(r) for r in raw_rows]
+        return rules, None
 
     async def _filter_rules_by_interface(
         self, rules: list[dict[str, Any]], interface_query: str
@@ -336,8 +376,22 @@ class FwRulesTool:
                     "error": "No client available",
                 }
 
-            # Get all rules
-            all_rules = await self._get_rules()
+            # Get all rules (same endpoint as OPNsenseClient.get_firewall_rules)
+            all_rules, fetch_error = await self._get_rules()
+            if fetch_error:
+                return {
+                    "rules": [],
+                    "total": 0,
+                    "total_all": 0,
+                    "status": "error",
+                    "error": fetch_error,
+                    "filters_applied": {
+                        "interface": params.get("interface"),
+                        "action": params.get("action"),
+                        "protocol": params.get("protocol"),
+                        "enabled": params.get("enabled"),
+                    },
+                }
 
             # Apply filters
             filtered_rules = all_rules
