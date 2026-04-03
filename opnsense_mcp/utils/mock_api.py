@@ -73,10 +73,23 @@ class MockOPNsenseClient:
         data = self.mock_data.get("interfaces", {})
         return data.get("interfaces", [])
 
-    async def get_firewall_rules(self):
-        """Get mock firewall rules."""
+    async def get_firewall_rules(
+        self, *, row_count: int = 1000
+    ) -> list[dict[str, Any]]:
+        """Get mock firewall rules (row_count matches OPNsense client; ignored here)."""
+        _ = row_count
         data = self.mock_data.get("firewall_rules", {})
         return data.get("rules", [])
+
+    async def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
+        """Stub for tools that call the real client's request helper (empty grid by default)."""
+        logger.debug("Mock _make_request: %s %s", method, endpoint)
+        return {"total": 0, "rows": []}
 
     async def get_firewall_logs(self, limit: int = 500) -> list[dict[str, Any]]:
         """Get mock firewall logs."""
