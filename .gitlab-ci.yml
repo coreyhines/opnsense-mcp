@@ -105,8 +105,9 @@ ai-review:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
+    # Run on MR pipelines automatically (after prior stages succeed; parallel with ruff in lint).
     - if: '$CI_MERGE_REQUEST_IID'
-      when: manual
+      when: on_success
 
 # Unit tests (required gate). SAST template adds semgrep-sast in the same stage.
 pytest:
