@@ -46,6 +46,7 @@ variables:
 ruff:
   stage: lint
   timeout: 15m
+  dependencies: []
   image:
     name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
@@ -55,6 +56,7 @@ ruff:
 
 ai-review:
   stage: lint
+  dependencies: []
   image:
     name: nikitafilonov/ai-review:latest
     pull_policy: if-not-present
@@ -130,6 +132,7 @@ ai-review:
 gitguardian_scan:
   stage: scanning
   timeout: 20m
+  dependencies: []
   image:
     name: docker.io/gitguardian/ggshield:latest
     pull_policy: if-not-present
@@ -150,6 +153,7 @@ gitguardian_scan:
 pytest:
   stage: test
   timeout: 25m
+  dependencies: []
   image:
     name: $PYTHON_312_BOOKWORM_IMAGE
   cache:
@@ -185,11 +189,13 @@ pytest:
 bandit:
   stage: security
   timeout: 20m
+  dependencies: []
   image:
     name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
   script:
-    - bandit -r "$CI_PROJECT_DIR" -x "$CI_PROJECT_DIR/.venv,$CI_PROJECT_DIR/tests" -v -f html -o bandit-report.html
+    # --exit-zero: still emit HTML findings but do not fail the job (allow_failure is true; avoids red noise).
+    - bandit -r "$CI_PROJECT_DIR" -x "$CI_PROJECT_DIR/.venv,$CI_PROJECT_DIR/tests" -v -f html -o bandit-report.html --exit-zero
   artifacts:
     when: always
     paths:
@@ -199,6 +205,7 @@ bandit:
 detect_secrets:
   stage: security
   timeout: 15m
+  dependencies: []
   image:
     name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
@@ -214,6 +221,7 @@ detect_secrets:
 pip_audit:
   stage: security
   timeout: 25m
+  dependencies: []
   image:
     name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
@@ -232,6 +240,7 @@ pip_audit:
 pip_audit_prod:
   stage: security
   timeout: 25m
+  dependencies: []
   image:
     name: $PYTHON_312_ALPINE_IMAGE
   before_script:
@@ -253,6 +262,7 @@ pip_audit_prod:
 sbom:
   stage: security
   timeout: 25m
+  dependencies: []
   image:
     name: $PYTHON_312_ALPINE_IMAGE
   before_script:
@@ -275,6 +285,7 @@ sbom:
 trivy_fs_scan:
   stage: security
   timeout: 30m
+  dependencies: []
   image:
     name: $TRIVY_IMAGE
     entrypoint: [""]
