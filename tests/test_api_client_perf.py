@@ -72,9 +72,9 @@ async def test_lazy_endpoint_detects_on_first_call_and_caches(client_config):
 
         # Second call must NOT re-probe
         await client.get_firewall_logs()
-        assert mock_session.get.call_count == 1, (
-            "Probe must be cached after first detection"
-        )
+        assert (
+            mock_session.get.call_count == 1
+        ), "Probe must be cached after first detection"
 
 
 async def test_get_arp_table_uses_session_not_pyopnsense(client_config):
@@ -175,9 +175,9 @@ async def test_make_request_fails_fast_without_retry_sleep(client_config):
         with pytest.raises(Exception):  # noqa: B017
             await client._make_request("GET", "/api/test")
         elapsed = time.monotonic() - start
-        assert elapsed < 0.5, (
-            f"Request took {elapsed:.2f}s — retry sleep still present?"
-        )
+        assert (
+            elapsed < 0.5
+        ), f"Request took {elapsed:.2f}s — retry sleep still present?"
 
 
 async def test_default_timeout_is_5_seconds(client_config):

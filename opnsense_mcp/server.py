@@ -274,7 +274,10 @@ async def handle_message(
             {
                 "name": "fw_rules",
                 "description": (
-                    "Get the current firewall rule set for context and reasoning"
+                    "Get firewall rules exposed by the OPNsense Firewall Automation API "
+                    "(Firewall → Automation). Rules that exist only under the classic "
+                    "Firewall → Rules UI may not appear here; see OPNsense API docs. "
+                    "Returns the current rule set for context and reasoning."
                 ),
                 "inputSchema": {
                     "type": "object",

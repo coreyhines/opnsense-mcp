@@ -1,6 +1,10 @@
 # ci
+# Image digests are multi-arch manifest list digests from Docker Hub (library/python, aquasec/trivy).
 include:
   - template: Security/SAST.gitlab-ci.yml
+
+default:
+  interruptible: true
 
 stages:
   - lint
@@ -11,6 +15,11 @@ stages:
 variables:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  # Minimum line coverage for opnsense_mcp (ratchet upward as tests grow).
+  PYTEST_COV_FAIL_UNDER: "40"
+  PYTHON_312_ALPINE_IMAGE: "docker.io/library/python@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322"
+  PYTHON_312_BOOKWORM_IMAGE: "docker.io/library/python@sha256:868caacbb670a798da4741cb4944aee2d90adb753b15b17bff98242d76bb9144"
+  TRIVY_IMAGE: "docker.io/aquasec/trivy@sha256:029e990b328d149bf0a9ffe355919041e1f86192db2df47e217f8a36dd42ceac"
 
 .python_before_script: &python_before_script
   - python3 --version
@@ -19,16 +28,93 @@ variables:
 # Hard gate — code must be clean before anything else runs
 ruff:
   stage: lint
-  image: python:3.12-alpine
+  timeout: 15m
+  image:
+    name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
   script:
     - ruff check .
     - ruff format --check .
 
+ai-review:
+  stage: lint
+  image:
+    name: nikitafilonov/ai-review:latest
+    pull_policy: if-not-present
+  script:
+    - |
+      if [ -z "${OLLAMA_API_KEY:-}" ]; then
+        echo "ERROR: OLLAMA_API_KEY is missing. Add it in GitLab CI/CD Variables and ensure scope/protection allow this pipeline."
+        exit 1
+      fi
+    - export LLM__HTTP_CLIENT__API_TOKEN="$OLLAMA_API_KEY"
+    - export LLM__META__MODEL="${OLLAMA_REVIEW_MODEL:-kimi-k2.6:cloud}"
+    - export VCS__HTTP_CLIENT__API_TOKEN="${GITLAB_AI_REVIEW_TOKEN:-$CI_JOB_TOKEN}"
+    - mkdir -p log
+    - ai-review clear-summary || true
+    - ai-review run-context 2>&1 | tee log/ai-review-context.log || true
+    - |
+      if rg -n "RemoteProtocolError|Server disconnected without sending a response" log/ai-review-context.log; then
+        echo "Transient Ollama disconnect detected in context review, retrying once..."
+        ai-review run-context 2>&1 | tee log/ai-review-context-retry.log || true
+        cp log/ai-review-context-retry.log log/ai-review-context.log
+      fi
+    - |
+      if rg -n "LLM returned an empty response|LLM returned empty string for inline review|No inline comments from context review" log/ai-review-context.log; then
+        echo "Low-signal context output detected, retrying context review once..."
+        ai-review run-context 2>&1 | tee log/ai-review-context-empty-retry.log || true
+        cp log/ai-review-context-empty-retry.log log/ai-review-context.log
+      fi
+    - ai-review run-summary 2>&1 | tee log/ai-review-summary.log || true
+    - |
+      if rg -n "RemoteProtocolError|Server disconnected without sending a response" log/ai-review-summary.log; then
+        echo "Transient Ollama disconnect detected in summary review, retrying once..."
+        ai-review run-summary 2>&1 | tee log/ai-review-summary-retry.log || true
+        cp log/ai-review-summary-retry.log log/ai-review-summary.log
+      fi
+    - |
+      if rg -i -n "no (significant )?issues found|nothing to improve|overall( the)? changes (look|looks) good|lgtm|good job" log/ai-review-summary.log; then
+        echo "Low-signal summary detected; clearing summary comment."
+        ai-review clear-summary || true
+      fi
+    - cat log/ai-review-context.log log/ai-review-summary.log > log/ai-review.log
+    - |
+      if rg -n "ValidationError:|Input should be a valid URL|LLM request failed|RemoteProtocolError|Server disconnected without sending a response|\\[OllamaHTTPClient\\] 401|OPENAI_V1_HTTP_CLIENT.*Status 401|GitLabMergeRequestsHTTPClient.*401|Failed to (create|process) (inline|summary|general) comment|Summary LLM output was empty|LLM returned empty summary" log/ai-review.log; then
+        echo "ERROR: ai-review encountered an auth or comment-posting failure."
+        exit 1
+      fi
+  variables:
+    # Ollama Cloud API endpoint and auth
+    LLM__PROVIDER: "OPENAI"
+    LLM__META__MAX_TOKENS: "4000"
+    LLM__META__TEMPERATURE: "0.2"
+    LLM__HTTP_CLIENT__API_URL: "https://ollama.com/v1"
+    # GitLab MR context
+    VCS__PROVIDER: "GITLAB"
+    VCS__PIPELINE__PROJECT_ID: "$CI_PROJECT_ID"
+    VCS__PIPELINE__MERGE_REQUEST_ID: "$CI_MERGE_REQUEST_IID"
+    VCS__HTTP_CLIENT__API_URL: "$CI_SERVER_URL"
+  allow_failure: false
+  artifacts:
+    when: always
+    paths:
+      - log/ai-review.log
+      - log/ai-review-context.log
+      - log/ai-review-summary.log
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    # Run on MR pipelines automatically (after prior stages succeed; parallel with ruff in lint).
+    - if: '$CI_MERGE_REQUEST_IID'
+      when: on_success
+
 # Unit tests (required gate). SAST template adds semgrep-sast in the same stage.
 pytest:
   stage: test
-  image: python:3.12-bookworm
+  timeout: 25m
+  image:
+    name: $PYTHON_312_BOOKWORM_IMAGE
   cache:
     key:
       files:
@@ -41,14 +127,29 @@ pytest:
     - pip install --quiet -r requirements.txt -r requirements-dev.txt
     - pip install --quiet -e .
   script:
-    - pytest tests/ -q --tb=short
+    - >
+      pytest tests/ -q --tb=short
+      --cov=opnsense_mcp
+      --cov-report=xml:coverage.xml
+      --cov-report=term
+      --cov-fail-under=${PYTEST_COV_FAIL_UNDER}
+  coverage: '/Total coverage: (\d+(?:\.\d+)?%)/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - coverage.xml
+    expire_in: 1 week
 
-# Security scanners are informational: allow_failure + artifacts.when: always
-# so HTML/JSON reports still exist for collect_reports.
+# Security: informational scanners (dev/editable env and repo-wide heuristics) + hard gates below.
 
 bandit:
   stage: security
-  image: python:3.12-alpine
+  timeout: 20m
+  image:
+    name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
   script:
     - bandit -r "$CI_PROJECT_DIR" -x "$CI_PROJECT_DIR/.venv,$CI_PROJECT_DIR/tests" -v -f html -o bandit-report.html
@@ -60,7 +161,9 @@ bandit:
 
 detect_secrets:
   stage: security
-  image: python:3.12-alpine
+  timeout: 15m
+  image:
+    name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
   script:
     - detect-secrets scan --all-files --exclude-files '\.git/config' > .secrets.baseline
@@ -70,27 +173,73 @@ detect_secrets:
       - .secrets.baseline
   allow_failure: true
 
+# Full tree + editable install — often includes dev-only CVE noise; keep informational.
 pip_audit:
   stage: security
-  image: python:3.12-alpine
+  timeout: 25m
+  image:
+    name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
   script:
     # Upgrade pip so the audit targets project deps, not CVEs in the image's old pip
     - pip install --quiet --upgrade "pip>=26.0"
     - pip install --quiet -e .
-    - pip-audit --format json -o pip-audit-report.json
+    - pip-audit --progress-spinner off --format json -o pip-audit-report.json
   artifacts:
     when: always
     paths:
       - pip-audit-report.json
   allow_failure: true
 
-# Repo filesystem only — scanning arbitrary base images (e.g. python:bookworm) is noisy and not app-specific.
+# Production dependency closure only (requirements.txt) — blocking supply-chain gate.
+pip_audit_prod:
+  stage: security
+  timeout: 25m
+  image:
+    name: $PYTHON_312_ALPINE_IMAGE
+  before_script:
+    - python3 --version
+    - pip install --quiet --upgrade "pip>=26.0"
+    - pip install --quiet pip-audit
+  script:
+    - python3 -m venv .ci-venv-prod-audit
+    - . .ci-venv-prod-audit/bin/activate
+    - pip install --quiet -r requirements.txt
+    - pip-audit --progress-spinner off -f json -o pip-audit-prod.json
+  artifacts:
+    when: always
+    paths:
+      - pip-audit-prod.json
+  allow_failure: false
+
+# CycloneDX SBOM for the production dependency closure (downloadable artifact).
+sbom:
+  stage: security
+  timeout: 25m
+  image:
+    name: $PYTHON_312_ALPINE_IMAGE
+  before_script:
+    - python3 --version
+    - pip install --quiet --upgrade "pip>=26.0"
+    - pip install --quiet pip-audit
+  script:
+    - python3 -m venv .ci-venv-sbom
+    - . .ci-venv-sbom/bin/activate
+    - pip install --quiet -r requirements.txt
+    - pip-audit --progress-spinner off -f cyclonedx-json -o sbom.cdx.json
+  artifacts:
+    when: always
+    paths:
+      - sbom.cdx.json
+    expire_in: 4 weeks
+  allow_failure: false
+
+# Repo filesystem — HIGH/CRITICAL only; blocking container-supply-chain posture for the repo tree.
 trivy_fs_scan:
   stage: security
+  timeout: 30m
   image:
-    # :latest can 404 on some registries; pin a known tag (see Docker Hub aquasec/trivy)
-    name: aquasec/trivy:0.59.1
+    name: $TRIVY_IMAGE
     entrypoint: [""]
   script:
     - trivy fs --exit-code 1 --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
@@ -98,20 +247,29 @@ trivy_fs_scan:
     when: always
     paths:
       - trivy-fs-report.json
-  allow_failure: true
+  allow_failure: false
 
 # Aggregate security artifacts for download from the pipeline (not GitLab Pages).
 collect_reports:
   stage: deploy
-  image: python:3.12-alpine
+  timeout: 15m
+  image:
+    name: $PYTHON_312_ALPINE_IMAGE
   when: always
   needs:
     - job: pytest
-      artifacts: false
+      artifacts: true
+      optional: false
     - job: bandit
       artifacts: true
       optional: true
     - job: pip_audit
+      artifacts: true
+      optional: true
+    - job: pip_audit_prod
+      artifacts: true
+      optional: true
+    - job: sbom
       artifacts: true
       optional: true
     - job: trivy_fs_scan
@@ -123,11 +281,15 @@ collect_reports:
   before_script: *python_before_script
   script:
     - mkdir -p public
+    - cp coverage.xml public/ 2>/dev/null || echo "coverage.xml not found"
     - cp bandit-report.html public/ 2>/dev/null || echo "bandit-report.html not found"
     - cp pip-audit-report.json public/ 2>/dev/null || echo "pip-audit-report.json not found"
+    - cp pip-audit-prod.json public/ 2>/dev/null || echo "pip-audit-prod.json not found"
+    - cp sbom.cdx.json public/ 2>/dev/null || echo "sbom.cdx.json not found"
     - cp trivy-fs-report.json public/ 2>/dev/null || echo "trivy-fs-report.json not found"
     - cp .secrets.baseline public/ 2>/dev/null || echo ".secrets.baseline not found"
     - if [ -f pip-audit-report.json ]; then python3 opnsense_mcp/tools/convert_pip_audit_to_html.py pip-audit-report.json public/pip-audit-report.html; else echo "pip-audit-report.json not found, skipping conversion"; fi
+    - if [ -f pip-audit-prod.json ]; then python3 opnsense_mcp/tools/convert_pip_audit_to_html.py pip-audit-prod.json public/pip-audit-prod.html; else echo "pip-audit-prod.json not found, skipping conversion"; fi
     - if [ -f trivy-fs-report.json ]; then python3 opnsense_mcp/tools/convert_trivy_to_html.py trivy-fs-report.json public/trivy-fs-report.html; else echo "trivy-fs-report.json not found, skipping conversion"; fi
     - |
       python3 -c "

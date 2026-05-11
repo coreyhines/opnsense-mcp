@@ -144,6 +144,9 @@ class TestAllMCPTools:
         result = await tool.execute({})
 
         assert isinstance(result, dict)
+        assert result.get("status") == "success"
+        assert result.get("total_all") == 2
+        assert len(result.get("rules", [])) == 2
         logger.info("✅ FwRulesTool executed successfully")
 
     @pytest.mark.asyncio
