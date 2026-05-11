@@ -2,17 +2,17 @@
 # OPNsense MCP centralized install (Linux amd64). GitLab is the default clone source.
 # Idempotent: safe to re-run (git pull, rebuild, systemd reload).
 #
-#   curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/feat/centralized-deploy/deploy/install.sh' | sudo bash
-# Until deploy is merged to main, set branch explicitly:
-#   curl -fsSL '.../raw/main/deploy/install.sh' | sudo env OPNSENSE_MCP_GIT_REF=feat/centralized-deploy bash
+#   curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | sudo bash
+# Optional: clone a different ref (fork, release branch, etc.):
+#   sudo env OPNSENSE_MCP_GIT_REF=my-branch bash deploy/install.sh
 # Override clone URL:
 #   sudo OPNSENSE_MCP_REPO_URL='https://gitlab.../opensense-mcp.git' bash deploy/install.sh
 #
 set -euo pipefail
 
 readonly DEFAULT_REPO_URL="${OPNSENSE_MCP_REPO_URL:-https://gitlab.freeblizz.com/coreyhines/opensense-mcp.git}"
-# Default branch carries deploy/ assets; use main after merge (see docs/CENTRALIZED_DEPLOY_SPEC.md).
-readonly GIT_REF="${OPNSENSE_MCP_GIT_REF:-feat/centralized-deploy}"
+# Default git ref is main (see docs/CENTRALIZED_DEPLOY_SPEC.md); override with OPNSENSE_MCP_GIT_REF.
+readonly GIT_REF="${OPNSENSE_MCP_GIT_REF:-main}"
 # Default matches strongpod-style layout under /opt/containerdata (override with OPNSENSE_MCP_INSTALL_ROOT).
 readonly INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
 readonly SRC_DIR="${INSTALL_ROOT}/src"
@@ -84,7 +84,7 @@ verify_deploy_tree() {
   done
   if [[ "${missing}" -ne 0 ]]; then
     echo "Clone at ${SRC_DIR} does not contain deploy/ (wrong branch?)." >&2
-    echo "Re-run with: sudo env OPNSENSE_MCP_GIT_REF=feat/centralized-deploy bash deploy/install.sh" >&2
+    echo "Re-run with: sudo env OPNSENSE_MCP_GIT_REF=main bash deploy/install.sh" >&2
     exit 1
   fi
 }
@@ -322,6 +322,6 @@ echo "  Env:         ${INSTALL_ROOT}/environment" >&2
 echo "  Caddyfile:   ${CADDYFILE_HOST}" >&2
 if [[ "$RUNTIME" == "podman" ]]; then
   echo "  Quadlets:    /etc/containers/systemd/ (${POD_QUADLET_FILE:-opnsense-mcp.pod}, ${MCP_QUADLET_BASENAME:-opnsense-mcp-app}.container, ${CADDY_QUADLET_BASENAME:-opnsense-mcp-caddy}.container)" >&2
-  echo "  Image:       localhost/opnsense-mcp:latest" >&2
+  echo "  Image:       ${IMAGE_REPO}:${IMAGE_TAG}" >&2
 fi
 echo "Edit credentials and Caddy hostname/TLS paths if you have not already." >&2
