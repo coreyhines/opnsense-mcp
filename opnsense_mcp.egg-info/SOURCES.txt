@@ -5,6 +5,7 @@ opnsense_mcp/server.py
 opnsense_mcp.egg-info/PKG-INFO
 opnsense_mcp.egg-info/SOURCES.txt
 opnsense_mcp.egg-info/dependency_links.txt
+opnsense_mcp.egg-info/requires.txt
 opnsense_mcp.egg-info/top_level.txt
 tests/test_add_firewall_rule_payload.py
 tests/test_additional_tools.py
