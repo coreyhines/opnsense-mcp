@@ -418,9 +418,7 @@ class PacketCaptureTool2:
                 cmd = build_cmd(cmd_parts)
                 try:
                     client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(
-                        cmd
-                    )  # nosec B601 — inputs sanitized via shlex.quote
+                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                     pcap_data = stdout.read(preview_bytes)
                     err = stderr.read().decode(errors="replace")
                     client.close()
@@ -498,9 +496,7 @@ class PacketCaptureTool2:
                 cmd = build_cmd(cmd_parts)
                 try:
                     client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(
-                        cmd
-                    )  # nosec B601 — inputs sanitized via shlex.quote
+                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                     text_out = stdout.read(preview_bytes).decode(errors="replace")
                     err = stderr.read().decode(errors="replace")
                     client.close()
@@ -543,9 +539,7 @@ class PacketCaptureTool2:
         cmd = "sudo pkill -f 'tcpdump -i'"
         try:
             client = self._get_client()
-            stdin, stdout, stderr = client.exec_command(
-                cmd
-            )  # nosec B601 — inputs sanitized via shlex.quote
+            stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
             stdout.channel.recv_exit_status()
             client.close()
             return {
@@ -673,9 +667,7 @@ class PacketCaptureTool2:
             # Test tcpdump availability
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(
-                    "which tcpdump"
-                )  # nosec B601 — static command
+                stdin, stdout, stderr = client.exec_command("which tcpdump")  # nosec B601 — static command
                 if stdout.read().decode().strip() == "":
                     client.close()
                     return {
@@ -731,9 +723,7 @@ class PacketCaptureTool2:
             cmd = "ls /tmp"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(
-                    cmd
-                )  # nosec B601 — inputs sanitized via shlex.quote
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
@@ -756,9 +746,7 @@ class PacketCaptureTool2:
             cmd = "which tcpdump && tcpdump --version | head -1"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(
-                    cmd
-                )  # nosec B601 — inputs sanitized via shlex.quote
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
@@ -788,9 +776,7 @@ class PacketCaptureTool2:
             cmd = f"ifconfig {interface}"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(
-                    cmd
-                )  # nosec B601 — inputs sanitized via shlex.quote
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
