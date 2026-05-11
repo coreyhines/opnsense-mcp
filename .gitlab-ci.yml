@@ -166,7 +166,6 @@ pytest:
   before_script:
     - python3 --version
     - pip install --quiet -r requirements.txt -r requirements-dev.txt
-    - pip install --quiet -e .
   script:
     - >
       pytest tests/ -q --tb=short
