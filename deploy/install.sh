@@ -17,11 +17,14 @@ readonly GIT_REF="${OPNSENSE_MCP_GIT_REF:-feat/centralized-deploy}"
 readonly INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
 readonly SRC_DIR="${INSTALL_ROOT}/src"
 readonly CADDYFILE_HOST="${INSTALL_ROOT}/Caddyfile"
+readonly IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-localhost/opnsense-mcp}"
+readonly IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-latest}"
 RUNTIME="${OPNSENSE_MCP_RUNTIME:-podman}"
 
 usage() {
   echo "Usage: $0 [--runtime podman|docker]" >&2
-  echo "  Env: OPNSENSE_MCP_REPO_URL, OPNSENSE_MCP_GIT_REF, OPNSENSE_MCP_INSTALL_ROOT" >&2
+  echo "  Env: OPNSENSE_MCP_REPO_URL, OPNSENSE_MCP_GIT_REF, OPNSENSE_MCP_INSTALL_ROOT," >&2
+  echo "       OPNSENSE_MCP_IMAGE_REPO, OPNSENSE_MCP_IMAGE_TAG" >&2
   echo "  Quadlet (Podman): OPNSENSE_MCP_POD_NAME, OPNSENSE_MCP_CONTAINER_NAME," >&2
   echo "    OPNSENSE_MCP_CADDY_CONTAINER_NAME, OPNSENSE_MCP_NETWORK, OPNSENSE_MCP_IP," >&2
   echo "    OPNSENSE_MCP_IP6, OPNSENSE_MCP_DNS (space-separated), OPNSENSE_MCP_TLS_CERTS" >&2
@@ -175,7 +178,7 @@ write_opnsense_mcp_quadlet() {
     printf '%s\n' ''
     printf '%s\n' '[Container]'
     printf '%s\n' "Pod=${pod_quadlet_file}"
-    printf '%s\n' 'Image=localhost/opnsense-mcp:latest'
+    printf '%s\n' "Image=${IMAGE_REPO}:${IMAGE_TAG}"
     printf '%s\n' "ContainerName=${OPNSENSE_MCP_CONTAINER_NAME}"
     printf '%s\n' "Environment=OPNSENSE_MCP_INSTALL_ROOT=${INSTALL_ROOT}"
     printf '%s\n' "EnvironmentFile=${INSTALL_ROOT}/environment"
@@ -278,11 +281,11 @@ if [[ "$RUNTIME" == "podman" ]]; then
   rmdir "${LEGACY_QUADLET_SUBDIR}" 2>/dev/null || true
   rm -f "${QUADLET_DIR}/opnsense-mcp.container" "${QUADLET_DIR}/caddy-opnsense-mcp.container" \
     "${QUADLET_DIR}/opnsense-mcp-pod.pod"
-  echo "Quadlet: dir=${QUADLET_DIR} file=${POD_QUADLET_FILE} PodName=${POD_NAME} systemd=${POD_SVC} MCP=${OPNSENSE_MCP_CONTAINER_NAME} Caddy=${OPNSENSE_MCP_CADDY_CONTAINER_NAME} Network=${OPNSENSE_MCP_NETWORK:-} IP=${OPNSENSE_MCP_IP:-} IP6=${OPNSENSE_MCP_IP6:-} DNS=${OPNSENSE_MCP_DNS:-} TLS=${OPNSENSE_MCP_TLS_CERTS}" >&2
+  echo "Quadlet: dir=${QUADLET_DIR} file=${POD_QUADLET_FILE} PodName=${POD_NAME} systemd=${POD_SVC} MCP=${OPNSENSE_MCP_CONTAINER_NAME} Caddy=${OPNSENSE_MCP_CADDY_CONTAINER_NAME} Image=${IMAGE_REPO}:${IMAGE_TAG} Network=${OPNSENSE_MCP_NETWORK:-} IP=${OPNSENSE_MCP_IP:-} IP6=${OPNSENSE_MCP_IP6:-} DNS=${OPNSENSE_MCP_DNS:-} TLS=${OPNSENSE_MCP_TLS_CERTS}" >&2
   write_opnsense_mcp_pod "${QUADLET_DIR}/${POD_QUADLET_FILE}" "${POD_NAME}"
   write_opnsense_mcp_quadlet "${QUADLET_DIR}/${MCP_QUADLET_BASENAME}.container" "${POD_SVC}" "${POD_QUADLET_FILE}"
   write_caddy_quadlet "${QUADLET_DIR}/${CADDY_QUADLET_BASENAME}.container" "${POD_SVC}" "${MCP_APP_SVC}" "${POD_QUADLET_FILE}"
-  "${RUNTIME}" build -f "${SRC_DIR}/deploy/Containerfile" -t localhost/opnsense-mcp:latest "${SRC_DIR}"
+  "${RUNTIME}" build -f "${SRC_DIR}/deploy/Containerfile" -t "${IMAGE_REPO}:${IMAGE_TAG}" "${SRC_DIR}"
   systemctl daemon-reload
   _pod_load_state=$(systemctl show -p LoadState --value "${POD_SVC}" 2>/dev/null || echo "unknown")
   if [[ "${_pod_load_state}" != "loaded" ]]; then
