@@ -25,6 +25,78 @@ ruff:
     - ruff check .
     - ruff format --check .
 
+ai-review:
+  stage: lint
+  image:
+    name: nikitafilonov/ai-review:latest
+    pull_policy: if-not-present
+  script:
+    - |
+      if [ -z "${OLLAMA_API_KEY:-}" ]; then
+        echo "ERROR: OLLAMA_API_KEY is missing. Add it in GitLab CI/CD Variables and ensure scope/protection allow this pipeline."
+        exit 1
+      fi
+    - export LLM__HTTP_CLIENT__API_TOKEN="$OLLAMA_API_KEY"
+    - export LLM__META__MODEL="${OLLAMA_REVIEW_MODEL:-kimi-k2.6:cloud}"
+    - export VCS__HTTP_CLIENT__API_TOKEN="${GITLAB_AI_REVIEW_TOKEN:-$CI_JOB_TOKEN}"
+    - mkdir -p log
+    - ai-review clear-summary || true
+    - ai-review run-context 2>&1 | tee log/ai-review-context.log || true
+    - |
+      if rg -n "RemoteProtocolError|Server disconnected without sending a response" log/ai-review-context.log; then
+        echo "Transient Ollama disconnect detected in context review, retrying once..."
+        ai-review run-context 2>&1 | tee log/ai-review-context-retry.log || true
+        cp log/ai-review-context-retry.log log/ai-review-context.log
+      fi
+    - |
+      if rg -n "LLM returned an empty response|LLM returned empty string for inline review|No inline comments from context review" log/ai-review-context.log; then
+        echo "Low-signal context output detected, retrying context review once..."
+        ai-review run-context 2>&1 | tee log/ai-review-context-empty-retry.log || true
+        cp log/ai-review-context-empty-retry.log log/ai-review-context.log
+      fi
+    - ai-review run-summary 2>&1 | tee log/ai-review-summary.log || true
+    - |
+      if rg -n "RemoteProtocolError|Server disconnected without sending a response" log/ai-review-summary.log; then
+        echo "Transient Ollama disconnect detected in summary review, retrying once..."
+        ai-review run-summary 2>&1 | tee log/ai-review-summary-retry.log || true
+        cp log/ai-review-summary-retry.log log/ai-review-summary.log
+      fi
+    - |
+      if rg -i -n "no (significant )?issues found|nothing to improve|overall( the)? changes (look|looks) good|lgtm|good job" log/ai-review-summary.log; then
+        echo "Low-signal summary detected; clearing summary comment."
+        ai-review clear-summary || true
+      fi
+    - cat log/ai-review-context.log log/ai-review-summary.log > log/ai-review.log
+    - |
+      if rg -n "ValidationError:|Input should be a valid URL|LLM request failed|RemoteProtocolError|Server disconnected without sending a response|\\[OllamaHTTPClient\\] 401|OPENAI_V1_HTTP_CLIENT.*Status 401|GitLabMergeRequestsHTTPClient.*401|Failed to (create|process) (inline|summary|general) comment|Summary LLM output was empty|LLM returned empty summary" log/ai-review.log; then
+        echo "ERROR: ai-review encountered an auth or comment-posting failure."
+        exit 1
+      fi
+  variables:
+    # Ollama Cloud API endpoint and auth
+    LLM__PROVIDER: "OPENAI"
+    LLM__META__MAX_TOKENS: "4000"
+    LLM__META__TEMPERATURE: "0.2"
+    LLM__HTTP_CLIENT__API_URL: "https://ollama.com/v1"
+    # GitLab MR context
+    VCS__PROVIDER: "GITLAB"
+    VCS__PIPELINE__PROJECT_ID: "$CI_PROJECT_ID"
+    VCS__PIPELINE__MERGE_REQUEST_ID: "$CI_MERGE_REQUEST_IID"
+    VCS__HTTP_CLIENT__API_URL: "$CI_SERVER_URL"
+  allow_failure: false
+  artifacts:
+    when: always
+    paths:
+      - log/ai-review.log
+      - log/ai-review-context.log
+      - log/ai-review-summary.log
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_MERGE_REQUEST_IID'
+      when: manual
+
 # Unit tests (required gate). SAST template adds semgrep-sast in the same stage.
 pytest:
   stage: test
