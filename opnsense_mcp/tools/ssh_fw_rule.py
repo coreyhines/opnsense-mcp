@@ -3,15 +3,11 @@
 import asyncio
 import json
 import logging
-import os
 import shlex
 from typing import Any
 
-import paramiko
-from paramiko.config import SSHConfig
-
 from opnsense_mcp.utils.env import load_opnsense_env
-from opnsense_mcp.utils.paramiko_ssh import apply_paramiko_host_key_policy
+from opnsense_mcp.utils.ssh_client import OPNsenseSSHClient
 
 logger = logging.getLogger(__name__)
 
@@ -43,51 +39,33 @@ class SSHFirewallRuleTool:
     def __init__(self, client: Any) -> None:
         self.client = client
 
-        # Load credentials via env.load_opnsense_env (see opnsense_mcp.utils.env)
         load_opnsense_env()
 
-        # Get SSH configuration exactly like packet capture tool
-        env_host = os.getenv("OPNSENSE_FIREWALL_HOST")
-        config_host = env_host or "opnsense"
-        self.ssh_host = config_host
-        self.ssh_user = self._get_ssh_config("user", config_host) or "root"
-        self.ssh_key = self._get_ssh_config("identityfile", config_host)
-        self.ssh_port = 22
+        self._ssh = OPNsenseSSHClient(client)
+        _cfg = self._ssh.get_config()
+        self.ssh_host = _cfg["host"]
+        self.ssh_user = _cfg["user"]
+        self.ssh_key = _cfg["key"]
+        self.ssh_port = _cfg["port"]
 
         logger.info(
-            f"SSH Config: host={self.ssh_host}, user={self.ssh_user}, key={self.ssh_key}"
+            "SSH Config: host=%s, user=%s, key=%s, port=%s",
+            self.ssh_host,
+            self.ssh_user,
+            self.ssh_key,
+            self.ssh_port,
         )
 
-    def _get_ssh_config(self, key: str, config_host: str) -> str | None:
-        ssh_config_path = os.path.expanduser("~/.ssh/config")
-        if not os.path.exists(ssh_config_path):
-            return None
-        try:
-            with open(ssh_config_path) as f:
-                config = SSHConfig()
-                config.parse(f)
-                host = config.lookup(config_host)
-                return host.get(key)
-        except Exception as e:
-            logger.warning(f"Failed to read SSH config: {e}")
-            return None
-
-    def _get_ssh_client(self) -> paramiko.SSHClient:
-        client = paramiko.SSHClient()
-        apply_paramiko_host_key_policy(client)
-        client.connect(
-            hostname=self.ssh_host,
-            username=self.ssh_user,
-            key_filename=self.ssh_key,
-            port=self.ssh_port,
-        )
-        return client
+    def _get_ssh_client(self):
+        return self._ssh.get_ssh_client()
 
     def _execute_ssh_command(self, command: str) -> dict[str, Any]:
         ssh = None
         try:
             ssh = self._get_ssh_client()
-            stdin, stdout, stderr = ssh.exec_command(command)  # nosec B601 — inputs sanitized via shlex.quote
+            stdin, stdout, stderr = ssh.exec_command(
+                command
+            )  # nosec B601 — inputs sanitized via shlex.quote
             exit_code = stdout.channel.recv_exit_status()
             stdout_output = stdout.read().decode().strip()
             stderr_output = stderr.read().decode().strip()

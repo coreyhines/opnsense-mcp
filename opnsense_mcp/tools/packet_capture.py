@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shlex
@@ -7,10 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import paramiko
-from paramiko.config import SSHConfig
 
 from opnsense_mcp.utils.env import load_opnsense_env
-from opnsense_mcp.utils.paramiko_ssh import apply_paramiko_host_key_policy
+from opnsense_mcp.utils.ssh_client import OPNsenseSSHClient
 
 logger = logging.getLogger(__name__)
 
@@ -27,57 +27,23 @@ class PacketCaptureTool2:
     ):
         self.client = client
 
-        # Load credentials via env.load_opnsense_env (see opnsense_mcp.utils.env)
         load_opnsense_env()
 
-        env_host = os.getenv("OPNSENSE_FIREWALL_HOST")
-        env_user = os.getenv("OPNSENSE_SSH_USER")
-        env_key = os.getenv("OPNSENSE_SSH_KEY")
-        config_host = ssh_host or env_host or "opnsense"
-        self.ssh_host = config_host
-        self.ssh_user = (
-            ssh_user
-            or env_user
-            or self._get_ssh_config("user", config_host)
-            or os.getenv("USER")
-            or "root"
+        self._ssh = OPNsenseSSHClient(
+            client,
+            ssh_host=ssh_host,
+            ssh_user=ssh_user,
+            ssh_key=ssh_key,
         )
-        raw_key = (
-            ssh_key or env_key or self._get_ssh_config("identityfile", config_host)
-        )
-        self.ssh_key = os.path.expanduser(raw_key) if raw_key else None
+        _cfg = self._ssh.get_config()
+        self.ssh_host = _cfg["host"]
+        self.ssh_user = _cfg["user"]
+        self.ssh_key = _cfg["key"]
+        self.ssh_port = _cfg["port"]
         self.capture_file = "/tmp/mcp_capture.pcap"  # nosec B108 — remote path on OPNsense firewall, not local temp usage
-        self.ssh_port = 22
-
-        # Keep connection details on logger, never stdout in MCP mode.
-        logger.info(
-            "SSH Config: host=%s, user=%s, key=%s",
-            self.ssh_host,
-            self.ssh_user,
-            self.ssh_key,
-        )
-
-    def _get_ssh_config(self, key: str, config_host: str) -> str | None:
-        ssh_config_path = os.path.expanduser("~/.ssh/config")
-        if not os.path.exists(ssh_config_path):
-            return None
-        with open(ssh_config_path) as f:
-            config = SSHConfig()
-            config.parse(f)
-            host = config.lookup(config_host)
-            return host.get(key)
 
     def _get_client(self) -> paramiko.SSHClient:
-        client = paramiko.SSHClient()
-        apply_paramiko_host_key_policy(client)
-        client.connect(
-            hostname=self.ssh_host,
-            username=self.ssh_user,
-            key_filename=self.ssh_key,
-            port=self.ssh_port,
-            timeout=10,
-        )
-        return client
+        return self._ssh.get_ssh_client()
 
     def _detect_mcp_server_issues(self) -> dict[str, Any]:
         """Detect common MCP server issues and provide solutions."""
@@ -118,8 +84,7 @@ class PacketCaptureTool2:
 
         # Check if required dependencies are installed
         try:
-            import dotenv
-            import paramiko
+            import dotenv  # noqa: F401 — dependency check for diagnostics
         except ImportError as e:
             issues.append(f"Missing dependency: {e}")
             solutions.append("Install dependencies: pip install -r requirements.txt")
@@ -130,7 +95,13 @@ class PacketCaptureTool2:
             client.close()
         except Exception as e:
             issues.append(f"SSH connection failed: {e}")
-            solutions.append("Check SSH configuration and firewall connectivity")
+            solutions.append(
+                "Set OPNSENSE_SSH_HOST (or OPNSENSE_FIREWALL_HOST), OPNSENSE_SSH_USER, "
+                "OPNSENSE_SSH_KEY, optional OPNSENSE_SSH_PORT and OPNSENSE_SSH_TIMEOUT. "
+                "Ensure this machine can reach the firewall on that TCP port (firewall rule, "
+                "SSH enabled on LAN/management, correct route). "
+                "See examples/.env.example."
+            )
 
         return {
             "has_issues": len(issues) > 0,
@@ -219,9 +190,6 @@ class PacketCaptureTool2:
         Resolve user-friendly interface name (e.g., 'wan', 'wifi', 'vlan 81') to real device name (e.g., 'ax1').
         Uses all available metadata: name, description, VLAN, addresses, aliases.
         """
-        import json
-        import os
-
         try:
             from opnsense_mcp.utils.api import OPNsenseClient
 
@@ -388,14 +356,15 @@ class PacketCaptureTool2:
             else:
                 resolved_iface = interface
 
-        # Sanitize inputs for shell command construction
         safe_iface = shlex.quote(resolved_iface)
 
         count_arg = ["-c", str(count)] if count else []
         filter_arg = [shlex.quote(filter_expr.strip())] if filter_expr.strip() else []
 
-        def clean_cmd(cmd_parts):
-            return " ".join([part for part in cmd_parts if part])
+        def build_cmd(cmd_parts: list[str]) -> str:
+            """Join command parts and wrap for /bin/sh -c with proper quoting."""
+            inner = " ".join(p for p in cmd_parts if p)
+            return f"/bin/sh -c {shlex.quote(inner)}"
 
         if mode == "raw":
             # Raw pcap output (binary/hex preview)
@@ -407,7 +376,6 @@ class PacketCaptureTool2:
                         + ["-w", "-"]
                         + filter_arg
                     )
-                    cmd = clean_cmd(cmd_parts)
                 elif duration and not count:
                     cmd_parts = [
                         "sudo",
@@ -420,7 +388,6 @@ class PacketCaptureTool2:
                         "-w",
                         "-",
                     ] + filter_arg
-                    cmd = clean_cmd(cmd_parts)
                 elif duration and count:
                     cmd_parts = (
                         [
@@ -436,7 +403,6 @@ class PacketCaptureTool2:
                         + ["-w", "-"]
                         + filter_arg
                     )
-                    cmd = clean_cmd(cmd_parts)
                 else:
                     cmd_parts = [
                         "sudo",
@@ -449,11 +415,12 @@ class PacketCaptureTool2:
                         "-w",
                         "-",
                     ] + filter_arg
-                    cmd = clean_cmd(cmd_parts)
-                cmd = f"/bin/sh -c '{cmd}'"
+                cmd = build_cmd(cmd_parts)
                 try:
                     client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote  # nosec B601 — inputs sanitized via shlex.quote
+                    stdin, stdout, stderr = client.exec_command(
+                        cmd
+                    )  # nosec B601 — inputs sanitized via shlex.quote
                     pcap_data = stdout.read(preview_bytes)
                     err = stderr.read().decode(errors="replace")
                     client.close()
@@ -494,7 +461,6 @@ class PacketCaptureTool2:
                         + count_arg
                         + filter_arg
                     )
-                    cmd = clean_cmd(cmd_parts)
                 elif duration and not count:
                     cmd_parts = [
                         "sudo",
@@ -505,7 +471,6 @@ class PacketCaptureTool2:
                         "-i",
                         safe_iface,
                     ] + filter_arg
-                    cmd = clean_cmd(cmd_parts)
                 elif duration and count:
                     cmd_parts = (
                         [
@@ -520,7 +485,6 @@ class PacketCaptureTool2:
                         + count_arg
                         + filter_arg
                     )
-                    cmd = clean_cmd(cmd_parts)
                 else:
                     cmd_parts = [
                         "sudo",
@@ -531,11 +495,12 @@ class PacketCaptureTool2:
                         "-i",
                         safe_iface,
                     ] + filter_arg
-                    cmd = clean_cmd(cmd_parts)
-                cmd = f"/bin/sh -c '{cmd}'"
+                cmd = build_cmd(cmd_parts)
                 try:
                     client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote  # nosec B601 — inputs sanitized via shlex.quote
+                    stdin, stdout, stderr = client.exec_command(
+                        cmd
+                    )  # nosec B601 — inputs sanitized via shlex.quote
                     text_out = stdout.read(preview_bytes).decode(errors="replace")
                     err = stderr.read().decode(errors="replace")
                     client.close()
@@ -578,7 +543,9 @@ class PacketCaptureTool2:
         cmd = "sudo pkill -f 'tcpdump -i'"
         try:
             client = self._get_client()
-            stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
+            stdin, stdout, stderr = client.exec_command(
+                cmd
+            )  # nosec B601 — inputs sanitized via shlex.quote
             stdout.channel.recv_exit_status()
             client.close()
             return {
@@ -694,13 +661,21 @@ class PacketCaptureTool2:
                 return {
                     "status": "error",
                     "error": f"SSH connection failed: {str(e)}",
-                    "guidance": "Please check your SSH configuration and ensure the firewall is accessible.",
+                    "guidance": (
+                        "Configure OPNSENSE_SSH_HOST, OPNSENSE_SSH_USER, OPNSENSE_SSH_KEY in ~/.env; "
+                        "optional OPNSENSE_SSH_PORT (default 22), OPNSENSE_SSH_TIMEOUT (default 15s). "
+                        "From the machine running the MCP server, test: "
+                        "ssh -i $KEY -p $PORT $USER@$HOST. "
+                        "Allow SSH from that client IP on OPNsense (Firewall → Rules → relevant interface)."
+                    ),
                 }
 
             # Test tcpdump availability
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command("which tcpdump")  # nosec B601 — static command
+                stdin, stdout, stderr = client.exec_command(
+                    "which tcpdump"
+                )  # nosec B601 — static command
                 if stdout.read().decode().strip() == "":
                     client.close()
                     return {
@@ -756,7 +731,9 @@ class PacketCaptureTool2:
             cmd = "ls /tmp"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
+                stdin, stdout, stderr = client.exec_command(
+                    cmd
+                )  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
@@ -779,7 +756,9 @@ class PacketCaptureTool2:
             cmd = "which tcpdump && tcpdump --version | head -1"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
+                stdin, stdout, stderr = client.exec_command(
+                    cmd
+                )  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
@@ -809,7 +788,9 @@ class PacketCaptureTool2:
             cmd = f"ifconfig {interface}"
             try:
                 client = self._get_client()
-                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
+                stdin, stdout, stderr = client.exec_command(
+                    cmd
+                )  # nosec B601 — inputs sanitized via shlex.quote
                 out = stdout.read().decode(errors="replace")
                 err = stderr.read().decode(errors="replace")
                 client.close()
