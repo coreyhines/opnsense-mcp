@@ -12,7 +12,10 @@ OPNSENSE_API_SECRET=
 # OPNSENSE_SSL_VERIFY=false
 # OPNSENSE_SSH_HOST=
 # OPNSENSE_SSH_USER=root
-# OPNSENSE_SSH_KEY=/path/in/container
+# OPNSENSE_SSH_KEY=/path/in/container          # PRIVATE key path (not .pub)
+# OPNSENSE_SSH_PORT=22
+# OPNSENSE_SSH_TIMEOUT=15
+# OPNSENSE_SSH_ADDRESS_FAMILY=inet             # inet (IPv4), inet6, or any
 
 MCP_SECRET_KEY=change-me-long-random
 # LOG_LEVEL=INFO
