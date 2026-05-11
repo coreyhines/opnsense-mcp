@@ -6,6 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "opnsense-mcp"
 version = "1.0.0"
 description = "OPNsense MCP Server for network and firewall management"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.13"
 
 [tool.setuptools]
