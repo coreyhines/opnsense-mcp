@@ -63,9 +63,7 @@ class SSHFirewallRuleTool:
         ssh = None
         try:
             ssh = self._get_ssh_client()
-            stdin, stdout, stderr = ssh.exec_command(
-                command
-            )  # nosec B601 — inputs sanitized via shlex.quote
+            stdin, stdout, stderr = ssh.exec_command(command)  # nosec B601 — inputs sanitized via shlex.quote
             exit_code = stdout.channel.recv_exit_status()
             stdout_output = stdout.read().decode().strip()
             stderr_output = stderr.read().decode().strip()
