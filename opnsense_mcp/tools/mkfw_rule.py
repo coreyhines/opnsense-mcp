@@ -75,7 +75,7 @@ class FirewallRuleSpec(BaseModel):
             Validated IP protocol value.
 
         """
-        allowed = ["inet", "inet6"]
+        allowed = ["inet", "inet6", "inet46"]
         if v not in allowed:
             raise ValueError(f"IP protocol must be one of {allowed}")
         return v
@@ -148,6 +148,7 @@ class MkfwRuleTool:
         try:
             # Convert flat parameters to nested format for OPNsense API
             api_params = params.copy()
+            apply_changes = bool(api_params.pop("apply", True))
 
             # Convert source parameters
             if "source_net" in api_params or "source_port" in api_params:
@@ -165,9 +166,6 @@ class MkfwRuleTool:
 
             # Create rule specification
             rule_spec = FirewallRuleSpec(**api_params)
-
-            # Get apply setting
-            apply_changes = params.get("apply", True)
 
             # Create the rule using the client
             result = await self.client.add_firewall_rule(rule_spec.model_dump())
