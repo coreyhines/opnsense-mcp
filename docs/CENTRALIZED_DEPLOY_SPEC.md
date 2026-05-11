@@ -44,15 +44,15 @@ Single planning/implementation reference for the **network service** path. **IDE
 
 - **Scripts:** `deploy/install.sh`, `deploy/uninstall.sh` (run as **root**).
 - **Default clone URL (GitLab):** `https://gitlab.freeblizz.com/coreyhines/opensense-mcp.git` — override with **`OPNSENSE_MCP_REPO_URL`**.
-- **Default git ref:** **`feat/centralized-deploy`** (until `deploy/` is merged to **`main`**, override with **`OPNSENSE_MCP_GIT_REF=main`**).
+- **Default git ref:** **`main`** (override with **`OPNSENSE_MCP_GIT_REF`** for forks or release branches).
 - **Install root:** **`OPNSENSE_MCP_INSTALL_ROOT`** (default **`/opt/containerdata/opnsense-mcp`**); checkout lives at **`$INSTALL_ROOT/src`**.
+- **Image tag (Podman):** **`OPNSENSE_MCP_IMAGE_REPO`** (default **`localhost/opnsense-mcp`**) and **`OPNSENSE_MCP_IMAGE_TAG`** (default **`latest`**) control the `podman build` tag and the quadlet `Image=` line.
 - **Podman (default):** clones/updates repo, **`podman build`**, installs **`<PodName>.pod`** (default **`opnsense-mcp-pod.pod`** when **`OPNSENSE_MCP_POD_NAME`** is unset or **`opnsense-mcp-pod`**), **`opnsense-mcp-app.container`**, and **`opnsense-mcp-caddy.container`** **directly under** **`/etc/containers/systemd/`** (not in a subdirectory: Podman before **4.7** does not recurse, so nested paths never produce units). Creates **`$INSTALL_ROOT/environment`** and **`$INSTALL_ROOT/Caddyfile`** if missing, then **`systemctl enable`** on those paths (or **`start`** if the distro rejects `enable` on generated quadlet services — see Red Hat / Podman quadlet notes). Re-run install removes prior copies under **`/etc/containers/systemd/opnsense-mcp/`** to avoid duplicate quadlets on 4.7+.
 - **Docker:** `deploy/install.sh --runtime docker` runs **`docker compose -p opnsense-mcp -f deploy/docker-compose.yml up -d --build`** from the checkout.
-- **One-liner (raw script on the branch that contains `deploy/`):**
+- **One-liner (raw script on `main`):**
   ```bash
-  curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/feat/centralized-deploy/deploy/install.sh' | sudo bash
+  curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | sudo bash
   ```
-  If you must pull `main` from Git but `main` does not include `deploy/` yet, set **`OPNSENSE_MCP_GIT_REF=feat/centralized-deploy`** so the clone has the Containerfile and quadlet examples.
 - **Uninstall:** `sudo bash deploy/uninstall.sh` (from checkout) or copy the script to the host. **Docker:** `--runtime docker`. Optional **`--purge-env`** removes **`$INSTALL_ROOT/environment`**.
 
 ### Manual uninstall (no script)
