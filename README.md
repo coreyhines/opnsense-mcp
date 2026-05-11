@@ -112,3 +112,7 @@ First 10 users get feedback incorporated into the tool. If you find bugs or have
 - Claude Code specifics: [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md)
 - Centralized SSE spec: [`docs/CENTRALIZED_DEPLOY_SPEC.md`](docs/CENTRALIZED_DEPLOY_SPEC.md)
 - Contributor guide: [`docs/DEVELOPMENT/CONTRIBUTING.md`](docs/DEVELOPMENT/CONTRIBUTING.md)
+
+## License
+
+This project is released under the [MIT License](LICENSE).
