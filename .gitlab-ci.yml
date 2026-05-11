@@ -1,7 +1,23 @@
 # ci
 # Image digests are multi-arch manifest list digests from Docker Hub (library/python, aquasec/trivy).
+#
+# Merge request pipelines: GitLab requires `workflow: rules` or per-job `rules` that match
+# `CI_PIPELINE_SOURCE == "merge_request_event"` in *this* file. Rules only in `include:` do not
+# satisfy that prerequisite, otherwise MR pipelines can compile to almost nothing (e.g. only jobs
+# that reference `$CI_MERGE_REQUEST_IID` in root rules).
 include:
   - template: Security/SAST.gitlab-ci.yml
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - when: never
 
 default:
   interruptible: true
