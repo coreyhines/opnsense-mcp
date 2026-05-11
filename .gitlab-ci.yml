@@ -24,6 +24,7 @@ default:
 
 stages:
   - lint
+  - scanning
   - test
   - security
   - deploy
@@ -124,6 +125,26 @@ ai-review:
     # Run on MR pipelines automatically (after prior stages succeed; parallel with ruff in lint).
     - if: '$CI_MERGE_REQUEST_IID'
       when: on_success
+
+# GitGuardian — secret scan of commits in CI (requires masked GITGUARDIAN_API_KEY in CI/CD variables).
+gitguardian_scan:
+  stage: scanning
+  timeout: 20m
+  image:
+    name: docker.io/gitguardian/ggshield:latest
+    pull_policy: if-not-present
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"
+  script:
+    - |
+      if [ -z "${GITGUARDIAN_API_KEY:-}" ]; then
+        echo "ERROR: GITGUARDIAN_API_KEY is not set. Add a masked CI/CD variable in GitLab (project or group) with your GitGuardian service account token."
+        exit 1
+      fi
+    - export GITGUARDIAN_API_KEY="$GITGUARDIAN_API_KEY"
+    - ggshield -c .gitguardian.yaml secret scan ci
+  allow_failure: false
 
 # Unit tests (required gate). SAST template adds semgrep-sast in the same stage.
 pytest:
