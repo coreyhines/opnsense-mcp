@@ -55,12 +55,12 @@ class PerformanceBenchmark:
             "platform": sys.platform,
             "working_directory": str(Path.cwd()),
             "opnsense_host": os.environ.get("OPNSENSE_FIREWALL_HOST", "Not set"),
-            "opnsense_api_key": "Set"
-            if os.environ.get("OPNSENSE_API_KEY")
-            else "Not set",
-            "opnsense_api_secret": "Set"
-            if os.environ.get("OPNSENSE_API_SECRET")
-            else "Not set",
+            "opnsense_api_key": (
+                "Set" if os.environ.get("OPNSENSE_API_KEY") else "Not set"
+            ),
+            "opnsense_api_secret": (
+                "Set" if os.environ.get("OPNSENSE_API_SECRET") else "Not set"
+            ),
         }
 
     def _log(self, message: str, level: str = "INFO"):

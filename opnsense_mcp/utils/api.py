@@ -4,6 +4,7 @@
 import asyncio
 import base64
 import ipaddress
+import json
 import logging
 import os
 import re
@@ -70,6 +71,55 @@ ENDPOINTS = {
         "gateway_status": "/api/routes/gateway/status",
     },
 }
+
+
+def _firewall_rule_inner_for_add_api(rule_data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Build the JSON object posted under the ``rule`` key for ``/api/firewall/filter/addRule``.
+
+    OPNsense ``addRuleAction`` uses ``addBase('rule', ...)``, which only reads POST data from
+    the ``rule`` field. Nested ``source`` / ``destination`` dicts from our tools are flattened
+    to ``source_net``, ``source_port``, ``destination_net``, ``destination_port``.
+    """
+    inner: dict[str, Any] = {}
+    desc = (rule_data.get("description") or "").strip()
+    if desc:
+        inner["description"] = desc
+    iface = rule_data.get("interface")
+    if iface not in (None, ""):
+        inner["interface"] = str(iface)
+    for key in ("direction", "ipprotocol", "protocol"):
+        val = rule_data.get(key)
+        if val not in (None, ""):
+            inner[key] = val
+    gw = rule_data.get("gateway")
+    if gw not in (None, ""):
+        inner["gateway"] = str(gw)
+    act = rule_data.get("action")
+    if act not in (None, ""):
+        inner["action"] = str(act)
+    if "enabled" in rule_data:
+        en = rule_data["enabled"]
+        inner["enabled"] = "1" if en is True else "0" if en is False else str(en)
+    src = rule_data.get("source")
+    if not isinstance(src, dict):
+        src = {}
+    dst = rule_data.get("destination")
+    if not isinstance(dst, dict):
+        dst = {}
+    inner["source_net"] = str(src.get("net") or "any")
+    inner["destination_net"] = str(dst.get("net") or "any")
+    sport, dport = src.get("port"), dst.get("port")
+    if sport not in (None, "", "any"):
+        inner["source_port"] = str(sport)
+    if dport not in (None, "", "any"):
+        inner["destination_port"] = str(dport)
+    seq = rule_data.get("sequence", 0)
+    if isinstance(seq, int) and seq > 0:
+        inner["sequence"] = seq
+    elif isinstance(seq, str) and seq.isdigit() and int(seq) > 0:
+        inner["sequence"] = int(seq)
+    return inner
 
 
 class APIError(Exception):
@@ -243,7 +293,19 @@ class OPNsenseClient:
                         isinstance(json_data, dict)
                         and json_data.get("result") == "failed"
                     ):
-                        error_msg = json_data.get("message", "Unknown API error")
+                        error_msg = json_data.get("message")
+                        if not error_msg:
+                            vals = json_data.get("validations")
+                            if vals:
+                                try:
+                                    error_msg = json.dumps(
+                                        vals,
+                                        sort_keys=True,
+                                    )
+                                except (TypeError, ValueError):
+                                    error_msg = str(vals)
+                        if not error_msg:
+                            error_msg = "Unknown API error"
                         raise RequestError(f"API error: {error_msg}")
                     return json_data
 
@@ -282,8 +344,12 @@ class OPNsenseClient:
     # Keep this alias — used by search_ndp_table
     _get_ndp_table = get_ndp_table
 
-    async def get_firewall_rules(self: "OPNsenseClient") -> list[dict[str, Any]]:
-        """Get firewall rules from OPNsense."""
+    async def get_firewall_rules(
+        self: "OPNsenseClient",
+        *,
+        row_count: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Get firewall rules from OPNsense (Firewall Automation searchRule rows)."""
         try:
             logger.debug("Fetching firewall rules...")
             # Use the searchRule endpoint as per OPNsense API docs
@@ -291,7 +357,7 @@ class OPNsenseClient:
             data = await self._make_request(
                 "POST",
                 "/api/firewall/filter/searchRule",
-                json={"current": 1, "rowCount": 100},
+                json={"current": 1, "rowCount": row_count},
             )
 
             if not isinstance(data, dict):
@@ -409,10 +475,11 @@ class OPNsenseClient:
         """Add a new firewall rule."""
         try:
             logger.debug(f"Creating firewall rule: {rule_data}")
+            payload = {"rule": _firewall_rule_inner_for_add_api(rule_data)}
             response = await self._make_request(
                 "POST",
                 ENDPOINTS["firewall"]["add_rule"],
-                json=rule_data,  # Send rule data directly, not wrapped in "rule" key
+                json=payload,
             )
 
             if not isinstance(response, dict):

@@ -22,6 +22,10 @@ opnsense_mcp/tools/__pycache__/lldp.cpython-313.pyc
 uv.lock
 
 # Local/generated files
+.coverage
+coverage.xml
+htmlcov/
+.ci-venv-*/
 .DS_Store
 .mcp.json
 # MCP bridge: copy from examples/bridge_config_opnsense.example.json
