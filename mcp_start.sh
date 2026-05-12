@@ -85,6 +85,21 @@ else
     echo "Warning: No virtual environment found (.venv or venv)" >&2
 fi
 
+# Hosted MCP runtimes (e.g. Glama) may create .venv without installing project
+# dependencies. If core imports are missing, install from requirements.txt once.
+if [ -n "${VIRTUAL_ENV:-}" ] && [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+    PY="$VIRTUAL_ENV/bin/python3"
+    if ! "$PY" -c "import pydantic" 2>/dev/null; then
+        echo "Installing Python dependencies from requirements.txt into venv..." >&2
+        if ! "$PY" -m pip --version >/dev/null 2>&1; then
+            echo "pip missing from venv; running ensurepip..." >&2
+            "$PY" -m ensurepip --upgrade --default-pip
+        fi
+        PIP_DISABLE_PIP_VERSION_CHECK=1 \
+            "$PY" -m pip install --no-cache-dir -r "$SCRIPT_DIR/requirements.txt"
+    fi
+fi
+
 # Check if required environment variables are set
 if [ -z "$OPNSENSE_FIREWALL_HOST" ]; then
     echo "Warning: OPNSENSE_FIREWALL_HOST not set in environment" >&2
