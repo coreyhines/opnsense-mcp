@@ -86,17 +86,39 @@ else
 fi
 
 # Hosted MCP runtimes (e.g. Glama) may create .venv without installing project
-# dependencies. If core imports are missing, install from requirements.txt once.
-if [ -n "${VIRTUAL_ENV:-}" ] && [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+# dependencies. Do not require requirements.txt — some images omit it and only
+# ship opnsense_mcp/ + pyproject.toml.
+if [ -n "${VIRTUAL_ENV:-}" ]; then
     PY="$VIRTUAL_ENV/bin/python3"
     if ! "$PY" -c "import pydantic" 2>/dev/null; then
-        echo "Installing Python dependencies from requirements.txt into venv..." >&2
+        echo "Python deps missing in venv; installing..." >&2
         if ! "$PY" -m pip --version >/dev/null 2>&1; then
             echo "pip missing from venv; running ensurepip..." >&2
             "$PY" -m ensurepip --upgrade --default-pip
         fi
-        PIP_DISABLE_PIP_VERSION_CHECK=1 \
+        export PIP_DISABLE_PIP_VERSION_CHECK=1
+        if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
             "$PY" -m pip install --no-cache-dir -r "$SCRIPT_DIR/requirements.txt"
+        elif [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
+            echo "requirements.txt not in image; pip install from pyproject.toml..." >&2
+            "$PY" -m pip install --no-cache-dir "$SCRIPT_DIR"
+        else
+            echo "No requirements.txt or pyproject.toml; installing minimal runtime pins..." >&2
+            "$PY" -m pip install --no-cache-dir \
+                "pydantic>=2.0.0" \
+                "requests>=2.31.0" \
+                "httpx>=0.24.0" \
+                "python-dotenv>=1.0.0" \
+                "fastmcp>=0.1.0" \
+                "pyyaml>=6.0.0" \
+                "fastapi>=0.100.0" \
+                "uvicorn>=0.24.0" \
+                "ruamel.yaml>=0.17.0" \
+                "python-multipart>=0.0.6" \
+                "typing-extensions>=4.0.0" \
+                "passlib[bcrypt]>=1.7.4" \
+                "paramiko>=3.0.0"
+        fi
     fi
 fi
 

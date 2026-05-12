@@ -1,13 +1,84 @@
 #!/usr/bin/env python3
 """OPNsense MCP Server - Main entry point for the MCP server."""
 
-import asyncio
-import json
+from __future__ import annotations
+
 import logging
 import os
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import Any
+
+
+def _discover_project_root() -> Path | None:
+    """Return repo root (directory with pyproject.toml and opnsense_mcp/), if any."""
+    here = Path(__file__).resolve()
+    for d in here.parents:
+        if (d / "pyproject.toml").is_file() and (d / "opnsense_mcp").is_dir():
+            return d
+    return None
+
+
+def _ensure_runtime_deps() -> None:
+    """Install third-party deps when the interpreter has no venv packages (hosted MCP)."""
+    try:
+        import pydantic  # noqa: F401
+    except ImportError:
+        pass
+    else:
+        return
+
+    pip = [sys.executable, "-m", "pip"]
+    try:
+        subprocess.run(  # nosec B603
+            [*pip, "--version"], check=True, capture_output=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        subprocess.run(  # nosec B603
+            [sys.executable, "-m", "ensurepip", "--upgrade", "--default-pip"],
+            check=True,
+        )
+
+    install = [*pip, "install", "--no-cache-dir"]
+    root = _discover_project_root()
+    if root is not None:
+        req = root / "requirements.txt"
+        if req.is_file():
+            subprocess.run(  # nosec B603
+                [*install, "-r", str(req)], cwd=str(root), check=True
+            )
+            return
+        subprocess.run(  # nosec B603
+            [*install, str(root)], cwd=str(root), check=True
+        )
+        return
+
+    subprocess.run(  # nosec B603
+        [
+            *install,
+            "pydantic>=2.0.0",
+            "requests>=2.31.0",
+            "httpx>=0.24.0",
+            "python-dotenv>=1.0.0",
+            "fastmcp>=0.1.0",
+            "pyyaml>=6.0.0",
+            "fastapi>=0.100.0",
+            "uvicorn>=0.24.0",
+            "ruamel.yaml>=0.17.0",
+            "python-multipart>=0.0.6",
+            "typing-extensions>=4.0.0",
+            "passlib[bcrypt]>=1.7.4",
+            "paramiko>=3.0.0",
+        ],
+        check=True,
+    )
+
+
+_ensure_runtime_deps()
+
+import asyncio
+import json
 
 from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.arp import ARPTool
