@@ -1,3 +1,19 @@
-# Canonical runtime dependencies: pyproject.toml [project.dependencies].
-# Editable install pulls those in for pip-based workflows (CI, legacy docs).
+# Keep in sync with pyproject.toml [project.dependencies].
+# Explicit pins ensure Glama and similar hosts that materialize .venv from this
+# file still get the full set when editable/pyproject resolution is skipped or
+# partial.
+fastapi>=0.100.0
+uvicorn>=0.24.0
+ruamel.yaml>=0.17.0
+pydantic>=2.0.0
+requests>=2.31.0
+python-multipart>=0.0.6
+typing-extensions>=4.0.0
+passlib[bcrypt]>=1.7.4
+httpx>=0.24.0
+python-dotenv>=1.0.0
+fastmcp>=0.1.0
+pyyaml>=6.0.0
+paramiko>=3.0.0
+
 -e .
