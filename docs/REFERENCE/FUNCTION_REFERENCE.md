@@ -11,7 +11,7 @@ This document provides a comprehensive reference for all supported functions in 
 
 **Parameters**:
 - `mac` (optional): Filter by MAC address
-- `ip` (optional): Filter by IP address  
+- `ip` (optional): Filter by IP address
 - `search` (optional): Search by IP/MAC/hostname
 
 **Quick Example**:
