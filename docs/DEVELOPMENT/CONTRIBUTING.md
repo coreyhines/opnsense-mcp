@@ -32,10 +32,10 @@ Thank you for your interest in contributing to the OPNsense MCP Server! This gui
    ```bash
    # Create virtual environment
    uv venv
-   
+
    # Activate virtual environment
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   
+
    # Install dependencies
    uv pip install -r requirements.txt
    uv pip install -r requirements-dev.txt
@@ -83,15 +83,15 @@ uv run ruff format .
    # opnsense_mcp/tools/your_tool.py
    from typing import Any, Dict
    from opnsense_mcp.utils.api import OPNsenseClient
-   
+
    async def your_tool_name(client: OPNsenseClient, **kwargs) -> Dict[str, Any]:
        """
        Brief description of what this tool does.
-       
+
        Args:
            client: OPNsense API client
            **kwargs: Tool-specific parameters
-           
+
        Returns:
            Dict containing tool results
        """
@@ -103,7 +103,7 @@ uv run ruff format .
    ```python
    # opnsense_mcp/server.py
    from opnsense_mcp.tools.your_tool import your_tool_name
-   
+
    # Add to tools list
    tools = [
        # ... existing tools
@@ -116,7 +116,7 @@ uv run ruff format .
    # tests/test_your_tool.py
    import pytest
    from opnsense_mcp.tools.your_tool import your_tool_name
-   
+
    @pytest.mark.asyncio
    async def test_your_tool_name():
        # Test implementation
@@ -344,4 +344,4 @@ Contributors are recognized in several ways:
 - **Documentation**: Credit in relevant documentation sections
 - **Community**: Recognition in community discussions
 
-Thank you for contributing to making OPNsense network management more accessible and powerful! 
+Thank you for contributing to making OPNsense network management more accessible and powerful!

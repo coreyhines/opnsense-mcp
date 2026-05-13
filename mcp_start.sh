@@ -147,4 +147,4 @@ else
     echo "Using system Python" >&2
     export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
     exec python3 opnsense_mcp/server.py
-fi 
+fi

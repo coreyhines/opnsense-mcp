@@ -54,7 +54,7 @@ fi
 if [ "$MOCK_API" = "true" ]; then
     MOCK_DATA_DIR="${MOCK_DATA_PATH:-./examples/mock_data}"
     mkdir -p "$MOCK_DATA_DIR"
-    
+
     # Create mock data if the directory is empty
     if [ -z "$(ls -A "$MOCK_DATA_DIR")" ]; then
         if [ -f "./examples/create_mock_data.py" ]; then

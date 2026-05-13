@@ -1,6 +1,6 @@
 # DHCP Backend API Endpoints (OPNsense)
 
-Scope: lease list/search/delete paths for Kea and dnsmasq, plus low-cost backend detection probes.  
+Scope: lease list/search/delete paths for Kea and dnsmasq, plus low-cost backend detection probes.
 Status: based on OPNsense API docs + OPNsense issue/source snippets + ISC Kea API docs.
 
 ## Quick Endpoint Matrix
@@ -60,13 +60,13 @@ If status is inconclusive, do one lease search probe with minimal page size/defa
 
 ## Sources
 
-- OPNsense API docs:  
-  - <https://docs.opnsense.org/development/api/core/dhcpv4.html>  
-  - <https://docs.opnsense.org/development/api/core/dhcpv6.html>  
-  - <https://docs.opnsense.org/development/api/core/dnsmasq.html>  
+- OPNsense API docs:
+  - <https://docs.opnsense.org/development/api/core/dhcpv4.html>
+  - <https://docs.opnsense.org/development/api/core/dhcpv6.html>
+  - <https://docs.opnsense.org/development/api/core/dnsmasq.html>
   - <https://docs.opnsense.org/development/api/core/kea.html>
-- OPNsense issue on Kea ACL/routes:  
+- OPNsense issue on Kea ACL/routes:
   - <https://github.com/opnsense/core/issues/7770>
-- ISC Kea API/command reference (baseline command/response semantics):  
-  - <https://kea.readthedocs.io/en/kea-2.6.0/api.html>  
+- ISC Kea API/command reference (baseline command/response semantics):
+  - <https://kea.readthedocs.io/en/kea-2.6.0/api.html>
   - <https://reports.kea.isc.org/dev_guide/d9/dda/libdhcp_lease_cmds.html>
