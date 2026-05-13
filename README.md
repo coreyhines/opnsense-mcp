@@ -1,5 +1,8 @@
 # OPNsense MCP Server
 
+[![opnsense-mcp MCP server](https://glama.ai/mcp/servers/coreyhines/opnsense-mcp/badges/card.svg)](https://glama.ai/mcp/servers/coreyhines/opnsense-mcp)
+[![opnsense-mcp MCP server](https://glama.ai/mcp/servers/coreyhines/opnsense-mcp/badges/score.svg)](https://glama.ai/mcp/servers/coreyhines/opnsense-mcp)
+
 MCP server for OPNsense firewall operations (ARP, DHCP, logs, rules, interfaces, system status, packet capture).
 
 Use one of two deployment modes:
