@@ -4,5 +4,7 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^(opnsense_mcp\.egg-info/.*|opnsense_mcp/utils/data/oui\.csv)$
       - id: end-of-file-fixer
-      - id: check-yaml 
+        exclude: ^(opnsense_mcp\.egg-info/.*|opnsense_mcp/utils/data/oui\.csv)$
+      - id: check-yaml

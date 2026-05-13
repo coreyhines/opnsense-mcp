@@ -59,22 +59,22 @@ packet_capture interface="ax0_vlan2" filter="host 10.0.2.150" duration=60 count=
 #### AI Agent's Comprehensive Response:
 
 > **morpheus Network Activity Summary**
-> 
+>
 > **Device Details:**
 > - **Location**: Wired LAN (VLAN2) via interface ax0_vlan2
 > - **IP Address**: 10.0.2.150 (DHCP lease active until Dec 15, 2:30 PM)
 > - **MAC Address**: 52:54:00:12:34:56
-> 
+>
 > **Current Activity:**
 > - **Active SSH session** to internal server 10.0.1.5 (likely development/admin work)
 > - **GitHub API interaction** via HTTPS (development activity)
 > - **Low-volume steady traffic** indicating interactive use
-> 
+>
 > **Recent Patterns (last 24h):**
 > - **45 web connections** to development and documentation sites
 > - **12 SSH sessions** to internal infrastructure
 > - **No blocked connections** - all traffic within policy
-> 
+>
 > **Security Assessment**: ✅ **Normal behavior** - consistent with development workstation usage patterns
 
 ---
@@ -135,19 +135,19 @@ packet_capture interface="ax0_vlan81" filter="port 53" duration=60 count=100
 #### AI Agent's Comprehensive Response:
 
 > **Network Security Assessment**
-> 
+>
 > **🔒 Security Status: GOOD**
-> 
+>
 > **Threat Activity:**
 > - **23 SSH brute-force attempts** from external IPs (all blocked ✅)
 > - **No internal threats detected**
 > - **No unauthorized devices** found on trusted networks
-> 
+>
 > **Privacy Protection:**
 > - **DNS over HTTPS active** on all internal VLANs ✅
 > - **No DNS leaks detected** in guest/solar networks ✅
 > - **Normal encrypted traffic patterns** observed
-> 
+>
 > **Recommendations:**
 > - SSH brute-force activity is normal and being blocked effectively
 > - Consider fail2ban for repeat offenders
@@ -210,25 +210,25 @@ fw_rules interface="iot" action="block"
 #### AI Agent's Comprehensive Response:
 
 > **IoT Device Connectivity Issue Diagnosed**
-> 
+>
 > **Device Details:**
 > - **Found**: 192.168.100.15 on IoT VLAN (ax0_vlan100)
 > - **MAC Address**: aa:bb:cc:dd:ee:10
 > - **DHCP Status**: ⚠️ **No hostname lease** (device may be using static IP)
-> 
+>
 > **Root Cause:**
 > - **Firewall rule "Block IoT Internet Access"** is preventing HTTPS connections
 > - **DNS and NTP work** correctly (device can resolve names and sync time)
 > - **HTTPS to api.nest.com blocked** by security policy
-> 
+>
 > **Solutions:**
 > 1. **Create specific allow rule** for nest.com API endpoints
 > 2. **Modify existing rule** to allow specific IoT cloud services
 > 3. **Consider IoT whitelist approach** instead of blanket blocking
-> 
+>
 > **Recommended Action:**
 > ```bash
-> mkfw_rule description="Allow Nest API access" interface="iot" action="pass" 
+> mkfw_rule description="Allow Nest API access" interface="iot" action="pass"
 >           destination_net="api.nest.com" destination_port="443" protocol="tcp"
 > ```
 
@@ -280,21 +280,21 @@ fw_rules interface="guest"
 #### AI Agent's Comprehensive Response:
 
 > **Guest Network Performance Analysis**
-> 
+>
 > **Current Status:**
 > - **8 active devices** on guest VLAN (10.0.4.0/24)
 > - **Total guest traffic**: ~20 MB/min
 > - **Firewall performance**: Normal (8% CPU)
-> 
+>
 > **Performance Issue Identified:**
 > - **Device 10.0.4.23** consuming 75% of guest bandwidth
 > - **Activity**: Heavy video streaming (YouTube/Netflix)
 > - **Impact**: Other guests experiencing reduced speeds
-> 
+>
 > **Quality of Service Status:**
 > - **Rate limiting active**: 10 Mbps per device ✅
 > - **Traffic prioritization**: Guest traffic correctly deprioritized ✅
-> 
+>
 > **Recommendations:**
 > 1. Current rate limiting is working as designed
 > 2. Consider reducing per-device limit to 5 Mbps for more fair sharing
