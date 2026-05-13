@@ -272,4 +272,4 @@ Once you're comfortable with these basic examples:
 - **Mention interface names** for targeted queries
 - **Ask for explanations** when you don't understand the results
 - **Combine multiple queries** for comprehensive analysis
-- **Use the AI's suggestions** for follow-up questions 
+- **Use the AI's suggestions** for follow-up questions
