@@ -1,5 +1,9 @@
-# Minimal pre-commit configuration to avoid Python 3.13 compatibility issues
 repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        args: [--config, .gitleaks.toml, --redact, --log-opts, main]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
