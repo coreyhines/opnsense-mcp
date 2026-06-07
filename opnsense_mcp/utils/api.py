@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 _MAC_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.IGNORECASE)
 
 
+def _record_type_for_server(server: str) -> str:
+    """Return Unbound host-override record type (A or AAAA) for an IP address."""
+    addr = ipaddress.ip_address(server.strip())
+    return "AAAA" if addr.version == 6 else "A"
+
+
 def _reverse_name_matches_query(reverse_name: str, query: str) -> bool:
     """Return True when PTR reverse name confirms a hostname query."""
     q = query.lower().strip(".")
@@ -1114,8 +1120,10 @@ class OPNsenseClient:
         server: str,
         description: str = "",
         enabled: bool = True,
+        rr: str | None = None,
     ) -> dict[str, Any]:
         """Add a DNS host override to Unbound."""
+        record_type = rr if rr is not None else _record_type_for_server(server)
         return await self._make_request(
             "POST",
             ENDPOINTS["unbound"]["add"],
@@ -1124,7 +1132,7 @@ class OPNsenseClient:
                     "enabled": "1" if enabled else "0",
                     "hostname": hostname,
                     "domain": domain,
-                    "rr": "A",
+                    "rr": record_type,
                     "server": server,
                     "description": description,
                 }
