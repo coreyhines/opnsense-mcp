@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from opnsense_mcp.build_info import get_build_info
 from opnsense_mcp.utils.api import OPNsenseClient
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,11 @@ class SystemTool:
             # Combine system info and health data
             combined_status = {**system_info, **health_data}
 
-            return {"status": "success", "system": combined_status}
+            return {
+                "status": "success",
+                "system": combined_status,
+                "mcp_server": get_build_info(),
+            }
 
         except Exception as e:
             logger.exception("Failed to get system status")

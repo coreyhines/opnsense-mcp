@@ -80,6 +80,7 @@ _ensure_runtime_deps()
 import asyncio
 import json
 
+from opnsense_mcp.build_info import get_build_info
 from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.arp import ARPTool
 from opnsense_mcp.tools.dhcp import DHCPTool
@@ -214,12 +215,19 @@ async def handle_message(
         protocol_version = message.get("params", {}).get("protocolVersion")
         if not protocol_version or protocol_version == "undefined":
             protocol_version = "2024-11-05"
+        build_info = get_build_info()
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
             "result": {
                 "protocolVersion": protocol_version,
-                "serverInfo": {"name": "opnsense-mcp", "version": "1.0.0"},
+                "serverInfo": {
+                    "name": build_info["name"],
+                    "version": build_info["package_version"],
+                    "git_commit": build_info["git_commit"],
+                    "git_ref": build_info["git_ref"],
+                    "build_time": build_info["build_time"],
+                },
                 "capabilities": {"tools": {"listChanged": False}},
             },
         }

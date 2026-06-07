@@ -4,6 +4,10 @@
 
 FROM docker.io/library/python:3.12-slim-bookworm
 
+ARG GIT_COMMIT=unknown
+ARG GIT_REF=unknown
+ARG BUILD_TIME=unknown
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONIOENCODING=utf-8 \
@@ -21,6 +25,12 @@ COPY requirements.txt pyproject.toml README.md ./
 COPY opnsense_mcp ./opnsense_mcp
 COPY examples ./examples
 COPY main.py ./
+
+RUN printf '%s\n' \
+    "GIT_COMMIT = \"${GIT_COMMIT}\"" \
+    "GIT_REF = \"${GIT_REF}\"" \
+    "BUILD_TIME = \"${BUILD_TIME}\"" \
+    > /app/opnsense_mcp/_build_info_generated.py
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \

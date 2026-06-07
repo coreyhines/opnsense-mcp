@@ -285,7 +285,17 @@ if [[ "$RUNTIME" == "podman" ]]; then
   write_opnsense_mcp_pod "${QUADLET_DIR}/${POD_QUADLET_FILE}" "${POD_NAME}"
   write_opnsense_mcp_quadlet "${QUADLET_DIR}/${MCP_QUADLET_BASENAME}.container" "${POD_SVC}" "${POD_QUADLET_FILE}"
   write_caddy_quadlet "${QUADLET_DIR}/${CADDY_QUADLET_BASENAME}.container" "${POD_SVC}" "${MCP_APP_SVC}" "${POD_QUADLET_FILE}"
-  "${RUNTIME}" build -f "${SRC_DIR}/deploy/Containerfile" -t "${IMAGE_REPO}:${IMAGE_TAG}" "${SRC_DIR}"
+  BUILD_GIT_COMMIT=$(
+    git -C "${SRC_DIR}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown
+  )
+  BUILD_GIT_REF="${GIT_REF}"
+  BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  echo "Building image with git_commit=${BUILD_GIT_COMMIT} git_ref=${BUILD_GIT_REF} build_time=${BUILD_TIME}" >&2
+  "${RUNTIME}" build -f "${SRC_DIR}/deploy/Containerfile" -t "${IMAGE_REPO}:${IMAGE_TAG}" \
+    --build-arg "GIT_COMMIT=${BUILD_GIT_COMMIT}" \
+    --build-arg "GIT_REF=${BUILD_GIT_REF}" \
+    --build-arg "BUILD_TIME=${BUILD_TIME}" \
+    "${SRC_DIR}"
   systemctl daemon-reload
   _pod_load_state=$(systemctl show -p LoadState --value "${POD_SVC}" 2>/dev/null || echo "unknown")
   if [[ "${_pod_load_state}" != "loaded" ]]; then
@@ -314,7 +324,10 @@ else
     echo "docker not found in PATH" >&2
     exit 1
   fi
-  (cd "${SRC_DIR}" && docker compose -p opnsense-mcp -f deploy/docker-compose.yml up -d --build)
+  (cd "${SRC_DIR}" && docker compose -p opnsense-mcp -f deploy/docker-compose.yml up -d --build \
+    --build-arg "GIT_COMMIT=$(git -C "${SRC_DIR}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)" \
+    --build-arg "GIT_REF=${GIT_REF}" \
+    --build-arg "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)")
 fi
 
 echo "Install finished (${RUNTIME})." >&2
