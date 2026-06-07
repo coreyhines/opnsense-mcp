@@ -69,6 +69,7 @@ async def test_mkdns_and_rmdns_success_and_error_paths() -> None:
     )
     assert mkdns_result["status"] == "success"
     assert mkdns_result["uuid"] == "abc-123"
+    assert mkdns_result["rr"] == "A"
 
     rmdns = RmdnsTool(client)
     client.del_host_override.return_value = {"result": "deleted"}

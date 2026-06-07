@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.api import OPNsenseClient, _record_type_for_server
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,14 @@ class MkdnsTool:
             }
 
         try:
+            record_type = _record_type_for_server(server)
+        except ValueError:
+            return {
+                "status": "error",
+                "error": f"Invalid IP address for server: {server}",
+            }
+
+        try:
             result = await self.client.add_host_override(
                 hostname=hostname,
                 domain=domain,
@@ -102,6 +110,7 @@ class MkdnsTool:
                 "hostname": hostname,
                 "domain": domain,
                 "server": server,
+                "rr": record_type,
                 "applied": True,
                 "status": "success",
             }
