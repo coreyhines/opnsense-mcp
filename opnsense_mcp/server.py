@@ -87,6 +87,7 @@ from opnsense_mcp.tools.dhcp import DHCPTool
 from opnsense_mcp.tools.dhcp_lease_delete import DHCPLeaseDeleteTool
 from opnsense_mcp.tools.dns import DNSTool
 from opnsense_mcp.tools.firewall_logs import FirewallLogsTool
+from opnsense_mcp.tools.flush_dns import FlushDnsTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.gateway_status import GatewayStatusTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
@@ -201,6 +202,7 @@ async def handle_message(
     dns_tool: DNSTool,
     mkdns_tool: MkdnsTool,
     rmdns_tool: RmdnsTool,
+    flush_dns_tool: FlushDnsTool,
     toggle_fw_rule_tool: ToggleFwRuleTool,
     set_fw_rule_tool: SetFwRuleTool,
     aliases_tool: AliasesTool,
@@ -643,6 +645,35 @@ async def handle_message(
                 },
             },
             {
+                "name": "flush_dns",
+                "description": (
+                    "Flush Unbound DNS cache for a hostname or restart Unbound "
+                    "to clear all cached answers"
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "hostname": {
+                            "type": "string",
+                            "description": (
+                                "FQDN to flush (e.g. headroom.freeblizz.com); "
+                                "required when mode=name"
+                            ),
+                            "optional": True,
+                        },
+                        "mode": {
+                            "type": "string",
+                            "description": (
+                                "name (default): unbound-control flush one host; "
+                                "restart: API restart clears full cache"
+                            ),
+                            "optional": True,
+                        },
+                    },
+                    "required": [],
+                },
+            },
+            {
                 "name": "toggle_fw_rule",
                 "description": "Enable or disable a firewall rule",
                 "inputSchema": {
@@ -927,6 +958,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if tool_name == "flush_dns":
+            result = await flush_dns_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         if tool_name == "toggle_fw_rule":
             result = await toggle_fw_rule_tool.execute(arguments)
             return {
@@ -1010,6 +1048,7 @@ def main() -> None:
     dns_tool = DNSTool(client)
     mkdns_tool = MkdnsTool(client)
     rmdns_tool = RmdnsTool(client)
+    flush_dns_tool = FlushDnsTool(client)
     toggle_fw_rule_tool = ToggleFwRuleTool(client)
     set_fw_rule_tool = SetFwRuleTool(client)
     aliases_tool = AliasesTool(client)
@@ -1073,6 +1112,7 @@ def main() -> None:
                     dns_tool,
                     mkdns_tool,
                     rmdns_tool,
+                    flush_dns_tool,
                     toggle_fw_rule_tool,
                     set_fw_rule_tool,
                     aliases_tool,
