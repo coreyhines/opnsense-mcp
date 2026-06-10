@@ -7,6 +7,7 @@ import pytest
 
 from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.dns import DNSTool
+from opnsense_mcp.tools.flush_dns import FlushDnsTool
 from opnsense_mcp.tools.gateway_status import GatewayStatusTool
 from opnsense_mcp.tools.get_logs import GetLogsTool
 from opnsense_mcp.tools.mkdns import MkdnsTool
@@ -83,6 +84,35 @@ async def test_mkdns_and_rmdns_success_and_error_paths() -> None:
     assert mkdns_error["status"] == "error"
     rmdns_error = await RmdnsTool(None).execute({"uuid": "abc-123"})
     assert rmdns_error["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_flush_dns_success_and_error_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = AsyncMock()
+    client.restart_unbound.return_value = {"status": "ok"}
+    tool = FlushDnsTool(client)
+
+    monkeypatch.setattr(
+        tool._ssh,
+        "execute_command",
+        lambda _cmd: {"success": True, "stdout": "ok", "stderr": "", "exit_code": 0},
+    )
+    name_result = await tool.execute({"hostname": "headroom.freeblizz.com"})
+    assert name_result["status"] == "success"
+    assert name_result["mode"] == "name"
+    assert name_result["hostname"] == "headroom.freeblizz.com"
+
+    restart_result = await tool.execute({"mode": "restart"})
+    assert restart_result["status"] == "success"
+    assert restart_result["mode"] == "restart"
+
+    invalid = await tool.execute({"mode": "name", "hostname": "not-a-host"})
+    assert invalid["status"] == "error"
+
+    no_client = await FlushDnsTool(None).execute({"hostname": "x.example.com"})
+    assert no_client["status"] == "error"
 
 
 @pytest.mark.asyncio
