@@ -69,6 +69,7 @@ ENDPOINTS = {
         "set": "/api/unbound/settings/setHostOverride",
         "delete": "/api/unbound/settings/delHostOverride",
         "reconfigure": "/api/unbound/service/reconfigure",
+        "restart": "/api/unbound/service/restart",
     },
     "alias": {
         "search": "/api/firewall/alias/searchItem",
@@ -1149,6 +1150,10 @@ class OPNsenseClient:
     async def reconfigure_unbound(self) -> dict[str, Any]:
         """Apply Unbound DNS configuration changes."""
         return await self._make_request("POST", ENDPOINTS["unbound"]["reconfigure"])
+
+    async def restart_unbound(self) -> dict[str, Any]:
+        """Restart Unbound (clears resolver cache; brief DNS interruption)."""
+        return await self._make_request("POST", ENDPOINTS["unbound"]["restart"])
 
     async def search_aliases(self, search: str = "") -> list[dict[str, Any]]:
         """List firewall aliases, optionally filtered."""
