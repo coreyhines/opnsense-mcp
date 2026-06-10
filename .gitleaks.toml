@@ -1,0 +1,14 @@
+title = "opnsense-mcp"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Env var placeholders and gitleaks artifacts"
+paths = [
+  '''\.gitleaks-baseline\.json$''',
+  '''gitleaks-report\.json$''',
+]
+regexes = [
+  '''\$\{[A-Z][A-Z0-9_]+\}''',
+]
