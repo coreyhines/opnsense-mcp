@@ -4,6 +4,7 @@ from opnsense_mcp.utils.dhcp_host import (
     DhcpHostRecord,
     apply_v4_suffix,
     apply_v6_suffix,
+    find_ipv4_conflicts,
     flatten_host_for_write,
     format_ip_field,
     parse_ip_field,
@@ -106,3 +107,43 @@ def test_flatten_host_for_write_changes_ip_only():
     assert payload["set_tag"] == "t1"
     assert payload["descr"] == "x"
     assert payload["hwaddr"] == "AA:BB"
+
+
+def test_find_ipv4_conflicts_other_reservation():
+    hosts = [
+        {"uuid": "u1", "host": "printer", "ip": "10.0.8.2,::2", "hwaddr": "AA"},
+        {"uuid": "u2", "host": "bose", "ip": "10.0.8.9,::9", "hwaddr": "BB"},
+    ]
+    leases = [{"address": "10.0.8.50", "hwaddr": "CC", "hostname": "tv"}]
+    conflicts = find_ipv4_conflicts(
+        target_ipv4="10.0.8.9",
+        moving_uuid="u1",
+        hosts=hosts,
+        leases=leases,
+    )
+    assert any(c["kind"] == "reservation" and c["host"] == "bose" for c in conflicts)
+
+
+def test_find_ipv4_conflicts_active_lease():
+    hosts = [{"uuid": "u1", "host": "printer", "ip": "10.0.8.2,::2", "hwaddr": "AA"}]
+    leases = [{"address": "10.0.8.9", "hwaddr": "CC", "hostname": "tv"}]
+    conflicts = find_ipv4_conflicts(
+        target_ipv4="10.0.8.9",
+        moving_uuid="u1",
+        hosts=hosts,
+        leases=leases,
+    )
+    assert any(c["kind"] == "lease" and c["address"] == "10.0.8.9" for c in conflicts)
+
+
+def test_find_ipv4_conflicts_none_when_free():
+    hosts = [{"uuid": "u1", "host": "printer", "ip": "10.0.8.2,::2", "hwaddr": "AA"}]
+    assert (
+        find_ipv4_conflicts(
+            target_ipv4="10.0.8.9",
+            moving_uuid="u1",
+            hosts=hosts,
+            leases=[],
+        )
+        == []
+    )

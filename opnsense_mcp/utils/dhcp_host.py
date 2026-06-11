@@ -123,3 +123,41 @@ def flatten_host_for_write(
     }
     payload["ip"] = format_ip_field(new_ipv4, new_ipv6)
     return payload
+
+
+def find_ipv4_conflicts(
+    *,
+    target_ipv4: str,
+    moving_uuid: str,
+    hosts: list[dict[str, Any]],
+    leases: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return conflicts for ``target_ipv4``: other reservations or active leases
+    already holding the address. The host being moved (``moving_uuid``) is ignored.
+    """
+    conflicts: list[dict[str, Any]] = []
+    for row in hosts:
+        if str(row.get("uuid") or "") == moving_uuid:
+            continue
+        v4, _ = parse_ip_field(str(row.get("ip") or ""))
+        if v4 == target_ipv4:
+            conflicts.append(
+                {
+                    "kind": "reservation",
+                    "host": str(row.get("host") or ""),
+                    "address": target_ipv4,
+                    "hwaddr": str(row.get("hwaddr") or ""),
+                }
+            )
+    for lease in leases:
+        addr = str(lease.get("address") or lease.get("ip") or "")
+        if addr == target_ipv4:
+            conflicts.append(
+                {
+                    "kind": "lease",
+                    "address": target_ipv4,
+                    "hostname": str(lease.get("hostname") or ""),
+                    "hwaddr": str(lease.get("hwaddr") or ""),
+                }
+            )
+    return conflicts
