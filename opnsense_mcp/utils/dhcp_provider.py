@@ -48,9 +48,21 @@ def require_subnet_dns_provider(provider: DHCPProvider) -> Any:
     """Return provider when subnet DNS is supported, else raise ValueError."""
     if not provider_supports_subnet_dns(provider):
         backend = getattr(provider, "name", provider.__class__.__name__)
-        msg = (
-            f"Subnet DNS configuration is not supported for DHCP backend {backend!r}"
-        )
+        msg = f"Subnet DNS configuration is not supported for DHCP backend {backend!r}"
+        raise ValueError(msg)
+    return provider
+
+
+def provider_supports_host_move(provider: DHCPProvider) -> bool:
+    """Return True when the detected provider supports host moves."""
+    return bool(getattr(provider, "HOST_MOVE_SUPPORTED", False))
+
+
+def require_host_provider(provider: DHCPProvider) -> Any:
+    """Return provider when host move is supported, else raise ValueError."""
+    if not provider_supports_host_move(provider):
+        backend = getattr(provider, "name", provider.__class__.__name__)
+        msg = f"DHCP host move is not supported for backend {backend!r}"
         raise ValueError(msg)
     return provider
 
