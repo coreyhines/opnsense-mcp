@@ -107,3 +107,19 @@ def apply_v6_suffix(target: int | str) -> str:
         msg = f"IPv6 reservation must be a '::N' suffix, got {raw!r}"
         raise ValueError(msg)
     return raw
+
+
+def flatten_host_for_write(
+    record: DhcpHostRecord,
+    *,
+    new_ipv4: str | None,
+    new_ipv6: str | None,
+) -> dict[str, Any]:
+    """Build a flat host payload (inner object for ``{"host": ...}``) preserving
+    all original fields and replacing only the ``ip`` field.
+    """
+    payload: dict[str, Any] = {
+        key: str(record.raw.get(key, "") or "") for key in _PASSTHROUGH_FIELDS
+    }
+    payload["ip"] = format_ip_field(new_ipv4, new_ipv6)
+    return payload
