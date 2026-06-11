@@ -1,6 +1,6 @@
 # DHCP Host Move & Subnet Defrag — Feasibility
 
-Status: feasibility discussion + **Phase 0 spike complete** (live API validated).  
+Status: feasibility discussion + **Phase 0 spike complete** (live API validated).
 Last updated: 2026-06-11.
 
 > **Phase 0 spike results are in [Phase 0 Spike Results](#phase-0-spike-results-2026-06-11) below.**
