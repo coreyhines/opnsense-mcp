@@ -18,6 +18,7 @@ from opnsense_mcp.utils.dhcp_subnet_dns import (
 logger = logging.getLogger(__name__)
 
 MakeRequestFn = Callable[..., Coroutine[Any, Any, dict[str, Any] | list[Any]]]
+_UNSET: object = object()
 
 
 class DnsmasqProvider:
@@ -151,15 +152,41 @@ class DnsmasqProvider:
         response = await self._request("GET", self.OPTIONS_SEARCH_ENDPOINT)
         return extract_rows(response)
 
+    async def _load_ranges(self) -> list[dict[str, Any]]:
+        """Load all dnsmasq DHCP range rows."""
+        response = await self._request("GET", self.RANGES_SEARCH_ENDPOINT)
+        return extract_rows(response)
+
+    async def _scope_dhcp_tag(self, scope: DhcpScope) -> str | None:
+        """
+        Return the dhcp ``set_tag`` UUID applied to clients on this scope.
+
+        OPNsense tags DHCP clients from range ``set_tag`` values. Scoped DNS
+        options must use the same ``tag`` (not ``interface``) to take effect.
+        """
+        for row in await self._load_ranges():
+            row_interface = str(row.get("interface") or "").strip()
+            if not interface_matches(row_interface, scope.interface):
+                continue
+            set_tag = str(row.get("set_tag") or "").strip()
+            if set_tag:
+                return set_tag
+        return None
+
     def _option_matches_scope(
         self,
         row: dict[str, Any],
         scope: DhcpScope,
         family: Family,
+        dhcp_tag: str | None,
     ) -> bool:
         """Return True when an option row matches scope and DNS family."""
+        row_tag = str(row.get("tag") or "").strip()
         row_interface = str(row.get("interface") or "").strip()
-        if not interface_matches(row_interface, scope.interface):
+        if dhcp_tag:
+            if row_tag != dhcp_tag:
+                return False
+        elif not interface_matches(row_interface, scope.interface):
             return False
         if family == "ipv4":
             return str(row.get("option") or "").strip() == "6"
@@ -169,29 +196,34 @@ class DnsmasqProvider:
         self,
         scope: DhcpScope,
         family: Family,
+        dhcp_tag: str | None,
     ) -> dict[str, Any] | None:
         """Find the dnsmasq option row for scoped DNS servers."""
         for row in await self._load_options():
-            if self._option_matches_scope(row, scope, family):
+            if self._option_matches_scope(row, scope, family, dhcp_tag):
                 return row
         return None
 
-    async def _flat_option_payload(
+    def _flat_option_payload(
         self,
         row: dict[str, Any],
         scope: DhcpScope,
         family: Family,
         value: str,
+        dhcp_tag: str | None,
     ) -> dict[str, Any]:
         """Build a flat dnsmasq option payload accepted by set_option."""
+        use_tag = str(row.get("tag") or dhcp_tag or "")
         payload: dict[str, Any] = {
             "uuid": str(row.get("uuid") or ""),
             "type": str(row.get("type") or "set"),
-            "interface": str(row.get("interface") or scope.interface),
-            "tag": str(row.get("tag") or ""),
+            "interface": ""
+            if use_tag
+            else str(row.get("interface") or scope.interface),
+            "tag": use_tag,
             "set_tag": str(row.get("set_tag") or ""),
             "value": value,
-            "force": str(row.get("force") or "0"),
+            "force": str(row.get("force") or ("1" if use_tag else "0")),
             "description": str(row.get("description") or ""),
         }
         if family == "ipv4":
@@ -206,14 +238,19 @@ class DnsmasqProvider:
         self,
         scope: DhcpScope,
         family: Family,
+        dhcp_tag: str | None | object = _UNSET,
     ) -> SubnetDnsSnapshot:
         """Read current scoped DNS servers for one family."""
-        row = await self._find_option_row(scope, family)
+        if dhcp_tag is _UNSET:
+            resolved_tag = await self._scope_dhcp_tag(scope)
+        else:
+            resolved_tag = dhcp_tag
+        row = await self._find_option_row(scope, family, resolved_tag)
         if not row:
             return SubnetDnsSnapshot(family=family, servers=[], backend_payload=None)
         value = str(row.get("value") or "")
         servers = parse_dns_server_list(value, family)
-        payload = await self._flat_option_payload(row, scope, family, value)
+        payload = self._flat_option_payload(row, scope, family, value, resolved_tag)
         return SubnetDnsSnapshot(
             family=family,
             servers=servers,
@@ -228,8 +265,9 @@ class DnsmasqProvider:
     ) -> dict[str, Any]:
         """Return scoped IPv4/IPv6 DNS servers from dnsmasq DHCP options."""
         scope = await self.resolve_subnet_scope(subnet=subnet, interface=interface)
-        ipv4 = await self._read_option_snapshot(scope, "ipv4")
-        ipv6 = await self._read_option_snapshot(scope, "ipv6")
+        dhcp_tag = await self._scope_dhcp_tag(scope)
+        ipv4 = await self._read_option_snapshot(scope, "ipv4", dhcp_tag)
+        ipv6 = await self._read_option_snapshot(scope, "ipv6", dhcp_tag)
         return {
             "backend": self.name,
             "scope": {
@@ -245,6 +283,7 @@ class DnsmasqProvider:
         self,
         scope: DhcpScope,
         snapshot: SubnetDnsSnapshot,
+        dhcp_tag: str | None | object = _UNSET,
     ) -> None:
         """Write one dnsmasq option snapshot for rollback or apply."""
         family = snapshot.family
@@ -254,9 +293,7 @@ class DnsmasqProvider:
         if payload and payload.get("uuid"):
             uuid = str(payload["uuid"])
             option_data = {
-                key: value
-                for key, value in payload.items()
-                if key != "uuid"
+                key: value for key, value in payload.items() if key != "uuid"
             }
             option_data["value"] = formatted
             await self._request(
@@ -270,12 +307,16 @@ class DnsmasqProvider:
         if not snapshot.servers:
             return
 
+        if dhcp_tag is _UNSET:
+            resolved_tag = await self._scope_dhcp_tag(scope)
+        else:
+            resolved_tag = dhcp_tag
         new_option: dict[str, Any] = {
             "type": "set",
-            "interface": scope.interface,
+            "interface": "" if resolved_tag else scope.interface,
             "value": formatted,
-            "force": "0",
-            "tag": "",
+            "force": "1" if resolved_tag else "0",
+            "tag": resolved_tag or "",
             "set_tag": "",
             "description": "",
         }
@@ -318,7 +359,8 @@ class DnsmasqProvider:
     ) -> dict[str, Any]:
         """Update scoped DNS servers for one family with rollback on failure."""
         scope = await self.resolve_subnet_scope(subnet=subnet, interface=interface)
-        before = await self._read_option_snapshot(scope, family)
+        dhcp_tag = await self._scope_dhcp_tag(scope)
+        before = await self._read_option_snapshot(scope, family, dhcp_tag)
         after = SubnetDnsSnapshot(
             family=family,
             servers=servers,
@@ -327,21 +369,23 @@ class DnsmasqProvider:
         created_new = before.backend_payload is None and not before.servers
 
         try:
-            await self._write_option_snapshot(scope, after)
+            await self._write_option_snapshot(scope, after, dhcp_tag)
             if created_new and after.backend_payload is None:
-                refreshed = await self._read_option_snapshot(scope, family)
+                refreshed = await self._read_option_snapshot(scope, family, dhcp_tag)
                 after.backend_payload = refreshed.backend_payload
             await self._reconfigure()
         except Exception as exc:
             logger.exception("dnsmasq subnet DNS update failed; rolling back")
             restore_error: str | None = None
             try:
-                if created_new and after.backend_payload and after.backend_payload.get(
-                    "uuid"
+                if (
+                    created_new
+                    and after.backend_payload
+                    and after.backend_payload.get("uuid")
                 ):
                     await self._delete_option(str(after.backend_payload["uuid"]))
                 else:
-                    await self._write_option_snapshot(scope, before)
+                    await self._write_option_snapshot(scope, before, dhcp_tag)
                 await self._reconfigure()
             except Exception as restore_exc:
                 restore_error = str(restore_exc)

@@ -24,6 +24,7 @@ async def test_list_subnet_dns_reads_scoped_options(make_request: AsyncMock) -> 
                 "subnet": "24",
             }
         },
+        {"rows": []},
         {
             "rows": [
                 {
@@ -71,6 +72,7 @@ async def test_list_subnet_dns_reads_scoped_options(make_request: AsyncMock) -> 
 async def test_set_subnet_dns_updates_and_reconfigures(make_request: AsyncMock) -> None:
     make_request.side_effect = [
         {"opt2": {"identifier": "opt2", "ipaddr": "10.0.2.1", "subnet": "24"}},
+        {"rows": []},
         {
             "rows": [
                 {
@@ -81,7 +83,7 @@ async def test_set_subnet_dns_updates_and_reconfigures(make_request: AsyncMock) 
                 }
             ]
         },
-        {"uuid": "opt-v4", "interface": "opt2", "option": "6", "value": "10.0.10.5"},
+        {"rows": []},
         {"result": "saved"},
         {"result": "done"},
     ]
@@ -111,6 +113,7 @@ async def test_set_subnet_dns_rolls_back_on_reconfigure_failure(
 ) -> None:
     make_request.side_effect = [
         {"opt2": {"identifier": "opt2", "ipaddr": "10.0.2.1", "subnet": "24"}},
+        {"rows": []},
         {
             "rows": [
                 {
@@ -137,3 +140,105 @@ async def test_set_subnet_dns_rolls_back_on_reconfigure_failure(
     assert result["status"] == "error"
     assert result["restored"] is True
     assert result["before"] == ["10.0.10.5"]
+
+
+@pytest.mark.asyncio
+async def test_list_subnet_dns_uses_dhcp_range_tag(make_request: AsyncMock) -> None:
+    internal_tag = "97f6eab8-edd3-4390-a721-dfe9584c6b73"
+    make_request.side_effect = [
+        {
+            "opt5": {
+                "identifier": "opt5",
+                "description": "VLAN81wifi",
+                "ipaddr": "10.0.8.1",
+                "subnet": "24",
+            }
+        },
+        {
+            "rows": [
+                {
+                    "interface": "opt5",
+                    "set_tag": internal_tag,
+                    "start_addr": "10.0.8.2",
+                    "end_addr": "10.0.8.240",
+                }
+            ]
+        },
+        {
+            "rows": [
+                {
+                    "uuid": "opt-v4",
+                    "interface": "",
+                    "tag": internal_tag,
+                    "option": "6",
+                    "value": "10.0.2.2,10.0.10.46",
+                    "force": "1",
+                }
+            ]
+        },
+        {"rows": []},
+    ]
+
+    provider = DnsmasqProvider(make_request)
+    result = await provider.list_subnet_dns(interface="opt5")
+
+    assert result["ipv4"] == ["10.0.2.2", "10.0.10.46"]
+
+
+@pytest.mark.asyncio
+async def test_set_subnet_dns_creates_tagged_option(make_request: AsyncMock) -> None:
+    internal_tag = "97f6eab8-edd3-4390-a721-dfe9584c6b73"
+    make_request.side_effect = [
+        {
+            "opt5": {
+                "identifier": "opt5",
+                "ipaddr": "10.0.8.1",
+                "subnet": "24",
+            }
+        },
+        {
+            "rows": [
+                {
+                    "interface": "opt5",
+                    "set_tag": internal_tag,
+                    "start_addr": "10.0.8.2",
+                    "end_addr": "10.0.8.240",
+                }
+            ]
+        },
+        {"rows": []},
+        {"result": "added"},
+        {
+            "rows": [
+                {
+                    "uuid": "new-opt-v4",
+                    "interface": "",
+                    "tag": internal_tag,
+                    "option": "6",
+                    "value": "10.0.2.2,10.0.10.46",
+                    "force": "1",
+                }
+            ]
+        },
+        {"result": "done"},
+    ]
+
+    provider = DnsmasqProvider(make_request)
+    result = await provider.set_subnet_dns(
+        interface="opt5",
+        family="ipv4",
+        servers=["10.0.2.2", "10.0.10.46"],
+    )
+
+    assert result["status"] == "success"
+    add_calls = [
+        call
+        for call in make_request.call_args_list
+        if call.args[:2] == ("POST", "/api/dnsmasq/settings/add_option")
+    ]
+    assert add_calls
+    option = add_calls[0].kwargs["json"]["option"]
+    assert option["tag"] == internal_tag
+    assert option["interface"] == ""
+    assert option["force"] == "1"
+    assert option["value"] == "10.0.2.2,10.0.10.46"
