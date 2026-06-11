@@ -17,6 +17,9 @@ from opnsense_mcp.utils.dhcp_provider import (
     provider_supports_host_move,
     require_host_provider,
 )
+from opnsense_mcp.utils.dhcp_providers.dnsmasq import DnsmasqProvider
+from opnsense_mcp.utils.dhcp_providers.isc import ISCProvider
+from opnsense_mcp.utils.dhcp_providers.kea import KeaProvider
 
 
 class _Supports:
@@ -42,9 +45,6 @@ def test_require_host_provider_raises_for_unsupported():
 def test_require_host_provider_returns_supported():
     p = _Supports()
     assert require_host_provider(p) is p
-
-
-from opnsense_mcp.utils.dhcp_providers.dnsmasq import DnsmasqProvider
 
 
 class FakeRequest:
@@ -385,3 +385,15 @@ async def test_find_host_falls_back_to_full_list_on_fuzzy_miss():
     p = DnsmasqProvider(fake)
     row = await p._find_host("printer")
     assert row is not None and row["uuid"] == "u1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", [ISCProvider, KeaProvider])
+async def test_move_host_unsupported_backends(cls):
+    p = cls(FakeRequest({}))
+    assert getattr(cls, "HOST_MOVE_SUPPORTED", False) is False
+    out = await p.move_host(
+        identifier="x", ipv4_target=2, ipv6_target=None, dry_run=True
+    )
+    assert out["status"] == "error"
+    assert "not supported" in out["error"].lower()
