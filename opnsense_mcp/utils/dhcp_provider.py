@@ -39,6 +39,22 @@ class DHCPProvider(Protocol):
         """Delete a DHCPv6 lease by IP address."""
 
 
+def provider_supports_subnet_dns(provider: DHCPProvider) -> bool:
+    """Return True when the detected provider supports subnet DNS tools."""
+    return bool(getattr(provider, "SUBNET_DNS_SUPPORTED", False))
+
+
+def require_subnet_dns_provider(provider: DHCPProvider) -> Any:
+    """Return provider when subnet DNS is supported, else raise ValueError."""
+    if not provider_supports_subnet_dns(provider):
+        backend = getattr(provider, "name", provider.__class__.__name__)
+        msg = (
+            f"Subnet DNS configuration is not supported for DHCP backend {backend!r}"
+        )
+        raise ValueError(msg)
+    return provider
+
+
 _BACKEND_PROBES: list[tuple[str, type[DHCPProvider]]] = [
     (KeaProvider.SERVICE_STATUS_ENDPOINT, KeaProvider),
     (DnsmasqProvider.SERVICE_STATUS_ENDPOINT, DnsmasqProvider),
