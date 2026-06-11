@@ -72,6 +72,20 @@ class DhcpHostRecord:
             raw=dict(row),
         )
 
+    def to_summary(self) -> dict[str, Any]:
+        """Return a normalized reservation row for MCP list output."""
+        return {
+            "uuid": self.uuid,
+            "host": self.host,
+            "descr": str(self.raw.get("descr") or ""),
+            "hwaddr": self.hwaddr,
+            "client_id": str(self.raw.get("client_id") or ""),
+            "ipv4": self.ipv4,
+            "ipv6_suffix": self.ipv6_suffix,
+            "has_ipv6": bool(self.ipv6_suffix),
+            "ip": str(self.raw.get("ip") or ""),
+        }
+
 
 def apply_v4_suffix(current_ipv4: str, target: int | str) -> str:
     """Return a new IPv4 address: replace the last octet (int target) or

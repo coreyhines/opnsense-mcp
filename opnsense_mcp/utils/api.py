@@ -929,6 +929,14 @@ class OPNsenseClient:
             dry_run=dry_run,
         )
 
+    async def list_dhcp_hosts(self, *, search: str = "") -> list[dict[str, Any]]:
+        """Return dnsmasq host reservation rows (optional API searchPhrase)."""
+        await self._ensure_dhcp_provider()
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
+        provider = require_host_provider(self._dhcp_provider)
+        return await provider.list_hosts(search=search)
+
     async def get_firewall_logs(
         self: "OPNsenseClient", limit: int = 100
     ) -> list[dict[str, Any]]:
