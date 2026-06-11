@@ -4,6 +4,13 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from opnsense_mcp.utils.dhcp_host import (
+    DhcpHostRecord,
+    apply_v4_suffix,
+    apply_v6_suffix,
+    find_ipv4_conflicts,
+    flatten_host_for_write,
+)
 from opnsense_mcp.utils.dhcp_scope import resolve_scope_from_selectors
 from opnsense_mcp.utils.dhcp_subnet_dns import (
     DhcpScope,
@@ -37,6 +44,12 @@ class DnsmasqProvider:
     WRITE_TIMEOUT_SECONDS = 30
     RECONFIGURE_TIMEOUT_SECONDS = 60
     SUBNET_DNS_SUPPORTED = True
+    HOST_SEARCH_ENDPOINT = "/api/dnsmasq/settings/search_host"
+    HOST_GET_ENDPOINT = "/api/dnsmasq/settings/get_host"
+    HOST_ADD_ENDPOINT = "/api/dnsmasq/settings/add_host"
+    HOST_SET_ENDPOINT = "/api/dnsmasq/settings/set_host"
+    HOST_DEL_ENDPOINT = "/api/dnsmasq/settings/del_host"
+    HOST_MOVE_SUPPORTED = True
 
     def __init__(self, make_request: MakeRequestFn) -> None:
         """Initialize provider with request function."""
@@ -420,5 +433,189 @@ class DnsmasqProvider:
             "applied": True,
             "renewal_note": (
                 "DHCP clients keep prior DNS until they renew or reconnect"
+            ),
+        }
+
+    async def list_hosts(self, search: str = "") -> list[dict[str, Any]]:
+        """Return host reservation rows (optionally filtered by searchPhrase)."""
+        response = await self._request(
+            "POST",
+            self.HOST_SEARCH_ENDPOINT,
+            json={"current": 1, "rowCount": -1, "searchPhrase": search},
+        )
+        return extract_rows(response)
+
+    async def get_host(self, uuid: str) -> dict[str, Any]:
+        """Return the form-model host record for a uuid (GET, no body)."""
+        response = await self._request("GET", f"{self.HOST_GET_ENDPOINT}/{uuid}")
+        return response if isinstance(response, dict) else {}
+
+    async def add_host(self, host_payload: dict[str, Any]) -> dict[str, Any]:
+        """Create a host reservation; returns {'result','uuid'}."""
+        response = await self._request(
+            "POST",
+            self.HOST_ADD_ENDPOINT,
+            json={"host": host_payload},
+            timeout=self.WRITE_TIMEOUT_SECONDS,
+        )
+        return response if isinstance(response, dict) else {}
+
+    async def set_host(self, uuid: str, host_payload: dict[str, Any]) -> dict[str, Any]:
+        """Update a host reservation by uuid."""
+        response = await self._request(
+            "POST",
+            f"{self.HOST_SET_ENDPOINT}/{uuid}",
+            json={"host": host_payload},
+            timeout=self.WRITE_TIMEOUT_SECONDS,
+        )
+        return response if isinstance(response, dict) else {}
+
+    async def del_host(self, uuid: str) -> dict[str, Any]:
+        """Delete a host reservation by uuid. Empty JSON body is required."""
+        response = await self._request(
+            "POST",
+            f"{self.HOST_DEL_ENDPOINT}/{uuid}",
+            json={},
+            timeout=self.WRITE_TIMEOUT_SECONDS,
+        )
+        return response if isinstance(response, dict) else {}
+
+    async def _find_host(self, identifier: str) -> dict[str, Any] | None:
+        """Find a single host row by hostname or MAC.
+
+        If multiple rows share the same MAC or hostname, the first match in the
+        returned order is used.
+        """
+        needle = identifier.strip().lower()
+
+        def _match(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+            for row in rows:
+                if str(row.get("host") or "").lower() == needle:
+                    return row
+                if str(row.get("hwaddr") or "").lower() == needle:
+                    return row
+            return None
+
+        # OPNsense server-side search is fuzzy and may return rows that match the
+        # identifier in some other field (e.g. description) but not by host/MAC.
+        # Try the filtered result first, then fall back to the full list if the
+        # exact-match scan finds nothing.
+        match = _match(await self.list_hosts(search=identifier))
+        if match is not None:
+            return match
+        return _match(await self.list_hosts())
+
+    async def move_host(
+        self,
+        *,
+        identifier: str,
+        ipv4_target: int | str | None,
+        ipv6_target: int | str | None,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Move a host reservation to new v4 and/or v6 addresses."""
+        row = await self._find_host(identifier)
+        if row is None:
+            return {
+                "status": "error",
+                "error": f"No host reservation matched {identifier!r}",
+            }
+        rec = DhcpHostRecord.from_row(row)
+
+        new_ipv4 = rec.ipv4
+        new_ipv6 = rec.ipv6_suffix
+        if ipv4_target is not None:
+            if not rec.ipv4:
+                return {
+                    "status": "error",
+                    "error": f"{rec.host} has no IPv4 reservation to move",
+                }
+            new_ipv4 = apply_v4_suffix(rec.ipv4, ipv4_target)
+        if ipv6_target is not None:
+            new_ipv6 = apply_v6_suffix(ipv6_target)
+
+        if new_ipv4 == rec.ipv4 and new_ipv6 == rec.ipv6_suffix:
+            return {
+                "status": "noop",
+                "backend": self.name,
+                "note": "No address changes requested.",
+            }
+
+        all_hosts = await self.list_hosts()
+        leases = self._extract_leases(
+            await self._request(
+                "POST",
+                self.LEASE_ENDPOINT,
+                json={"current": 1, "rowCount": -1, "searchPhrase": ""},
+            )
+        )
+        conflicts: list[dict[str, Any]] = []
+        if new_ipv4 and new_ipv4 != rec.ipv4:
+            conflicts = find_ipv4_conflicts(
+                target_ipv4=new_ipv4,
+                moving_uuid=rec.uuid,
+                hosts=all_hosts,
+                leases=leases,
+            )
+
+        planned = {
+            "host": rec.host,
+            "hwaddr": rec.hwaddr,
+            "ipv4": {"from": rec.ipv4, "to": new_ipv4}
+            if new_ipv4 != rec.ipv4
+            else None,
+            "ipv6": {"from": rec.ipv6_suffix, "to": new_ipv6}
+            if new_ipv6 != rec.ipv6_suffix
+            else None,
+        }
+
+        if conflicts:
+            return {
+                "status": "error",
+                "backend": self.name,
+                "planned": planned,
+                "conflicts": conflicts,
+            }
+
+        if dry_run:
+            return {
+                "status": "dry_run",
+                "backend": self.name,
+                "planned": planned,
+                "note": "No changes applied. Re-run with dry_run=false to apply.",
+            }
+
+        original_payload = flatten_host_for_write(
+            rec, new_ipv4=rec.ipv4, new_ipv6=rec.ipv6_suffix
+        )
+        new_payload = flatten_host_for_write(rec, new_ipv4=new_ipv4, new_ipv6=new_ipv6)
+        try:
+            await self.set_host(rec.uuid, new_payload)
+            await self._reconfigure()
+        except Exception as exc:
+            logger.exception("host move failed; rolling back")
+            restore_error: str | None = None
+            try:
+                await self.set_host(rec.uuid, original_payload)
+                await self._reconfigure()
+            except Exception as restore_exc:
+                restore_error = str(restore_exc)
+                logger.exception("host move rollback failed")
+            return {
+                "status": "error",
+                "backend": self.name,
+                "planned": planned,
+                "error": str(exc),
+                "restored": restore_error is None,
+                "restore_error": restore_error,
+            }
+
+        return {
+            "status": "success",
+            "backend": self.name,
+            "planned": planned,
+            "renewal_note": (
+                "Reservation updated. Client keeps its old address until it "
+                "renews or reboots. IPv6 applies only to stateful-DHCPv6 clients."
             ),
         }

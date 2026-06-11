@@ -18,6 +18,7 @@ class ISCProvider:
     V4_DELETE_ENDPOINT = "/api/dhcpv4/leases/del_lease"
     V6_DELETE_ENDPOINT = "/api/dhcpv6/leases/del_lease"
     SERVICE_STATUS_ENDPOINT_V4 = "/api/dhcpv4/service/status"
+    HOST_MOVE_SUPPORTED = False
 
     def __init__(self, make_request: MakeRequestFn) -> None:
         """Initialize provider with request function."""
@@ -98,3 +99,17 @@ class ISCProvider:
         except Exception as exc:
             logger.exception("ISC: failed to delete DHCPv6 lease %s", ip)
             return {"status": "error", "error": str(exc)}
+
+    async def move_host(
+        self,
+        *,
+        identifier: str,
+        ipv4_target: int | str | None,
+        ipv6_target: int | str | None,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Host move is not supported on this backend yet."""
+        return {
+            "status": "error",
+            "error": f"Host move not supported by {self.name} backend",
+        }

@@ -33,6 +33,7 @@ class KeaProvider:
     V6_SUBNET_SET_ENDPOINT = "/api/kea/dhcpv6/set_subnet"
     RECONFIGURE_ENDPOINT = "/api/kea/service/reconfigure"
     SUBNET_DNS_SUPPORTED = True
+    HOST_MOVE_SUPPORTED = False
 
     def __init__(self, make_request: MakeRequestFn) -> None:
         """Initialize provider with request function."""
@@ -334,4 +335,18 @@ class KeaProvider:
             "renewal_note": (
                 "DHCP clients keep prior DNS until they renew or reconnect"
             ),
+        }
+
+    async def move_host(
+        self,
+        *,
+        identifier: str,
+        ipv4_target: int | str | None,
+        ipv6_target: int | str | None,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Host move is not supported on this backend yet."""
+        return {
+            "status": "error",
+            "error": f"Host move not supported by {self.name} backend",
         }

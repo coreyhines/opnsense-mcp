@@ -122,7 +122,9 @@ class SetDhcpSubnetDnsTool:
         raw_servers = params.get("dns_servers")
         dns_servers: list[str] | None = None
         if isinstance(raw_servers, list):
-            dns_servers = [str(item).strip() for item in raw_servers if str(item).strip()]
+            dns_servers = [
+                str(item).strip() for item in raw_servers if str(item).strip()
+            ]
         slot_raw = params.get("slot")
         slot = int(slot_raw) if slot_raw is not None else None
 
