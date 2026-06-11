@@ -16,7 +16,12 @@ from typing import Any
 import requests
 from urllib3.exceptions import InsecureRequestWarning
 
-from opnsense_mcp.utils.dhcp_provider import DHCPProvider, detect_dhcp_backend
+from opnsense_mcp.utils.dhcp_provider import (
+    DHCPProvider,
+    detect_dhcp_backend,
+    require_subnet_dns_provider,
+)
+from opnsense_mcp.utils.dhcp_subnet_dns import Family, merge_slot_update
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 logger = logging.getLogger(__name__)
@@ -842,6 +847,66 @@ class OPNsenseClient:
         if self._dhcp_provider is None:
             raise RuntimeError("DHCP provider not initialized")
         return await self._dhcp_provider.delete_v6_lease(ip)
+
+    async def list_dhcp_subnet_dns(
+        self,
+        *,
+        subnet: str | None = None,
+        interface: str | None = None,
+    ) -> dict[str, Any]:
+        """List DHCP-provided DNS servers for a subnet scope."""
+        await self._ensure_dhcp_provider()
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
+        provider = require_subnet_dns_provider(self._dhcp_provider)
+        return await provider.list_subnet_dns(subnet=subnet, interface=interface)
+
+    async def set_dhcp_subnet_dns(
+        self,
+        *,
+        subnet: str | None = None,
+        interface: str | None = None,
+        family: str,
+        dns_server: str | None = None,
+        dns_servers: list[str] | None = None,
+        slot: int | None = None,
+    ) -> dict[str, Any]:
+        """Update DHCP-provided DNS servers for one address family."""
+        await self._ensure_dhcp_provider()
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
+        provider = require_subnet_dns_provider(self._dhcp_provider)
+        normalized_family: Family
+        if family.strip().lower() in {"ipv4", "v4", "inet"}:
+            normalized_family = "ipv4"
+        elif family.strip().lower() in {"ipv6", "v6", "inet6"}:
+            normalized_family = "ipv6"
+        else:
+            msg = f"Invalid family {family!r}; expected ipv4 or ipv6"
+            raise ValueError(msg)
+
+        current = await provider.list_subnet_dns(subnet=subnet, interface=interface)
+        current_servers = (
+            current.get("ipv4", [])
+            if normalized_family == "ipv4"
+            else current.get("ipv6", [])
+        )
+        if not isinstance(current_servers, list):
+            current_servers = []
+
+        merged = merge_slot_update(
+            [str(item) for item in current_servers],
+            dns_server=dns_server,
+            dns_servers=dns_servers,
+            slot=slot,
+            family=normalized_family,
+        )
+        return await provider.set_subnet_dns(
+            subnet=subnet,
+            interface=interface,
+            family=normalized_family,
+            servers=merged,
+        )
 
     async def get_firewall_logs(
         self: "OPNsenseClient", limit: int = 100

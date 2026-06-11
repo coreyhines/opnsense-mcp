@@ -85,6 +85,10 @@ from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.arp import ARPTool
 from opnsense_mcp.tools.dhcp import DHCPTool
 from opnsense_mcp.tools.dhcp_lease_delete import DHCPLeaseDeleteTool
+from opnsense_mcp.tools.dhcp_subnet_dns import (
+    ListDhcpSubnetDnsTool,
+    SetDhcpSubnetDnsTool,
+)
 from opnsense_mcp.tools.dns import DNSTool
 from opnsense_mcp.tools.firewall_logs import FirewallLogsTool
 from opnsense_mcp.tools.flush_dns import FlushDnsTool
@@ -191,6 +195,8 @@ async def handle_message(
     arp_tool: ARPTool,
     dhcp_tool: DHCPTool,
     dhcp_lease_delete_tool: DHCPLeaseDeleteTool,
+    list_dhcp_subnet_dns_tool: ListDhcpSubnetDnsTool,
+    set_dhcp_subnet_dns_tool: SetDhcpSubnetDnsTool,
     lldp_tool: LLDPTool,
     system_tool: SystemTool,
     fw_rules_tool: FwRulesTool,
@@ -333,6 +339,19 @@ async def handle_message(
                         {"required": ["mac"]},
                     ],
                 },
+            },
+            {
+                "name": "list_dhcp_subnet_dns",
+                "description": (
+                    "List DHCP-provided DNS servers for a subnet scope "
+                    "(dnsmasq or Kea backends)"
+                ),
+                "inputSchema": ListDhcpSubnetDnsTool.input_schema,
+            },
+            {
+                "name": "set_dhcp_subnet_dns",
+                "description": SetDhcpSubnetDnsTool.description,
+                "inputSchema": SetDhcpSubnetDnsTool.input_schema,
             },
             {
                 "name": "lldp",
@@ -831,6 +850,20 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if tool_name == "list_dhcp_subnet_dns":
+            result = await list_dhcp_subnet_dns_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "set_dhcp_subnet_dns":
+            result = await set_dhcp_subnet_dns_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         if tool_name == "get_logs":
             logs = await firewall_logs.get_logs(
                 limit=arguments.get("limit", 500),
@@ -1037,6 +1070,8 @@ def main() -> None:
     arp_tool = ARPTool(client)
     dhcp_tool = DHCPTool(client)
     dhcp_lease_delete_tool = DHCPLeaseDeleteTool(client)
+    list_dhcp_subnet_dns_tool = ListDhcpSubnetDnsTool(client)
+    set_dhcp_subnet_dns_tool = SetDhcpSubnetDnsTool(client)
     lldp_tool = LLDPTool(client)
     system_tool = SystemTool(client)
     fw_rules_tool = FwRulesTool(client)
@@ -1101,6 +1136,8 @@ def main() -> None:
                     arp_tool,
                     dhcp_tool,
                     dhcp_lease_delete_tool,
+                    list_dhcp_subnet_dns_tool,
+                    set_dhcp_subnet_dns_tool,
                     lldp_tool,
                     system_tool,
                     fw_rules_tool,
