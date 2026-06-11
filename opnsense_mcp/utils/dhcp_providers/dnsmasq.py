@@ -4,6 +4,13 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from opnsense_mcp.utils.dhcp_host import (
+    DhcpHostRecord,
+    apply_v4_suffix,
+    apply_v6_suffix,
+    find_ipv4_conflicts,
+    flatten_host_for_write,
+)
 from opnsense_mcp.utils.dhcp_scope import resolve_scope_from_selectors
 from opnsense_mcp.utils.dhcp_subnet_dns import (
     DhcpScope,
@@ -472,3 +479,124 @@ class DnsmasqProvider:
             timeout=self.WRITE_TIMEOUT_SECONDS,
         )
         return response if isinstance(response, dict) else {}
+
+    async def _find_host(self, identifier: str) -> dict[str, Any] | None:
+        """Find a single host row by hostname or MAC."""
+        needle = identifier.strip().lower()
+        rows = await self.list_hosts(search=identifier)
+        if not rows:
+            rows = await self.list_hosts()
+        for row in rows:
+            if str(row.get("host") or "").lower() == needle:
+                return row
+            if str(row.get("hwaddr") or "").lower() == needle:
+                return row
+        return None
+
+    async def move_host(
+        self,
+        *,
+        identifier: str,
+        ipv4_target: int | str | None,
+        ipv6_target: int | str | None,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Move a host reservation to new v4 and/or v6 addresses."""
+        row = await self._find_host(identifier)
+        if row is None:
+            return {
+                "status": "error",
+                "error": f"No host reservation matched {identifier!r}",
+            }
+        rec = DhcpHostRecord.from_row(row)
+
+        new_ipv4 = rec.ipv4
+        new_ipv6 = rec.ipv6_suffix
+        if ipv4_target is not None:
+            if not rec.ipv4:
+                return {
+                    "status": "error",
+                    "error": f"{rec.host} has no IPv4 reservation to move",
+                }
+            new_ipv4 = apply_v4_suffix(rec.ipv4, ipv4_target)
+        if ipv6_target is not None:
+            new_ipv6 = apply_v6_suffix(ipv6_target)
+
+        all_hosts = await self.list_hosts()
+        leases = self._extract_leases(
+            await self._request(
+                "POST",
+                self.LEASE_ENDPOINT,
+                json={"current": 1, "rowCount": -1, "searchPhrase": ""},
+            )
+        )
+        conflicts: list[dict[str, Any]] = []
+        if new_ipv4 and new_ipv4 != rec.ipv4:
+            conflicts = find_ipv4_conflicts(
+                target_ipv4=new_ipv4,
+                moving_uuid=rec.uuid,
+                hosts=all_hosts,
+                leases=leases,
+            )
+
+        planned = {
+            "host": rec.host,
+            "hwaddr": rec.hwaddr,
+            "ipv4": {"from": rec.ipv4, "to": new_ipv4}
+            if new_ipv4 != rec.ipv4
+            else None,
+            "ipv6": {"from": rec.ipv6_suffix, "to": new_ipv6}
+            if new_ipv6 != rec.ipv6_suffix
+            else None,
+        }
+
+        if conflicts:
+            return {
+                "status": "error",
+                "backend": self.name,
+                "planned": planned,
+                "conflicts": conflicts,
+            }
+
+        if dry_run:
+            return {
+                "status": "dry_run",
+                "backend": self.name,
+                "planned": planned,
+                "note": "No changes applied. Re-run with dry_run=false to apply.",
+            }
+
+        original_payload = flatten_host_for_write(
+            rec, new_ipv4=rec.ipv4, new_ipv6=rec.ipv6_suffix
+        )
+        new_payload = flatten_host_for_write(rec, new_ipv4=new_ipv4, new_ipv6=new_ipv6)
+        try:
+            await self.set_host(rec.uuid, new_payload)
+            await self._reconfigure()
+        except Exception as exc:
+            logger.exception("host move failed; rolling back")
+            restore_error: str | None = None
+            try:
+                await self.set_host(rec.uuid, original_payload)
+                await self._reconfigure()
+            except Exception as restore_exc:
+                restore_error = str(restore_exc)
+                logger.exception("host move rollback failed")
+            return {
+                "status": "error",
+                "backend": self.name,
+                "planned": planned,
+                "error": str(exc),
+                "restored": restore_error is None,
+                "restore_error": restore_error,
+            }
+
+        return {
+            "status": "success",
+            "backend": self.name,
+            "planned": planned,
+            "renewal_note": (
+                "Reservation updated. Client keeps its old address until it "
+                "renews or reboots. IPv6 applies only to stateful-DHCPv6 clients."
+            ),
+        }
