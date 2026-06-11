@@ -1,3 +1,16 @@
+"""Tests for the DHCP host-move provider layer.
+
+Verified-live API contract (Phase 0 spike + Task 1.9, against fw.freeblizz.com):
+- ``GET get_host/{uuid}`` must carry NO JSON body — ``OPNsenseClient._make_request``
+  omits the ``Content-Type`` header when no ``json=`` kwarg is passed (requests
+  default), which the dnsmasq endpoint requires.
+- ``POST del_host/{uuid}`` must send a literal ``{}`` body; an empty body returns
+  HTTP 400 "Invalid JSON syntax".
+- ``_make_request`` raises ``RequestError`` on ``{"result": "failed"}`` responses,
+  so a rejected ``set_host`` propagates and triggers ``move_host`` rollback against
+  the real client (the FakeRequest stubs below do not model this).
+"""
+
 import pytest
 
 from opnsense_mcp.utils.dhcp_provider import (
