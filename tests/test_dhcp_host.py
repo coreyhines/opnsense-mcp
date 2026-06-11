@@ -58,6 +58,23 @@ def test_record_from_search_row():
     assert rec.hwaddr == "c8:a3:e8:dc:1b:b9"
 
 
+def test_record_to_summary():
+    row = {
+        "uuid": "u1",
+        "host": "printer",
+        "ip": "10.0.8.2,::2",
+        "hwaddr": "c8:a3:e8:dc:1b:b9",
+        "client_id": "duid-here",
+        "descr": "VLAN81wifi",
+    }
+    summary = DhcpHostRecord.from_row(row).to_summary()
+    assert summary["ipv4"] == "10.0.8.2"
+    assert summary["ipv6_suffix"] == "::2"
+    assert summary["has_ipv6"] is True
+    assert summary["descr"] == "VLAN81wifi"
+    assert summary["client_id"] == "duid-here"
+
+
 def test_apply_v4_suffix_replaces_last_octet():
     assert apply_v4_suffix("10.0.8.55", 2) == "10.0.8.2"
 
