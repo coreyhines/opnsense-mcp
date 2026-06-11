@@ -481,17 +481,29 @@ class DnsmasqProvider:
         return response if isinstance(response, dict) else {}
 
     async def _find_host(self, identifier: str) -> dict[str, Any] | None:
-        """Find a single host row by hostname or MAC."""
+        """Find a single host row by hostname or MAC.
+
+        If multiple rows share the same MAC or hostname, the first match in the
+        returned order is used.
+        """
         needle = identifier.strip().lower()
-        rows = await self.list_hosts(search=identifier)
-        if not rows:
-            rows = await self.list_hosts()
-        for row in rows:
-            if str(row.get("host") or "").lower() == needle:
-                return row
-            if str(row.get("hwaddr") or "").lower() == needle:
-                return row
-        return None
+
+        def _match(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+            for row in rows:
+                if str(row.get("host") or "").lower() == needle:
+                    return row
+                if str(row.get("hwaddr") or "").lower() == needle:
+                    return row
+            return None
+
+        # OPNsense server-side search is fuzzy and may return rows that match the
+        # identifier in some other field (e.g. description) but not by host/MAC.
+        # Try the filtered result first, then fall back to the full list if the
+        # exact-match scan finds nothing.
+        match = _match(await self.list_hosts(search=identifier))
+        if match is not None:
+            return match
+        return _match(await self.list_hosts())
 
     async def move_host(
         self,
@@ -521,6 +533,13 @@ class DnsmasqProvider:
             new_ipv4 = apply_v4_suffix(rec.ipv4, ipv4_target)
         if ipv6_target is not None:
             new_ipv6 = apply_v6_suffix(ipv6_target)
+
+        if new_ipv4 == rec.ipv4 and new_ipv6 == rec.ipv6_suffix:
+            return {
+                "status": "noop",
+                "backend": self.name,
+                "note": "No address changes requested.",
+            }
 
         all_hosts = await self.list_hosts()
         leases = self._extract_leases(

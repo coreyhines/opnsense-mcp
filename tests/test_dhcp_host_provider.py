@@ -226,6 +226,9 @@ async def test_move_host_applies_and_reconfigures():
     assert any("reconfigure" in e for e in endpoints)
     set_call = next(c for c in fake.calls if "set_host" in c[1])
     assert set_call[2]["json"]["host"]["ip"] == "10.0.8.2,::2"
+    assert (
+        len([c for c in fake.calls if "set_host" in c[1]]) == 1
+    )  # no spurious rollback
 
 
 @pytest.mark.asyncio
@@ -275,3 +278,97 @@ async def test_move_host_rolls_back_on_reconfigure_failure():
     assert out["status"] == "error"
     set_calls = [c for c in fake.calls if "set_host" in c[1]]
     assert set_calls[-1][2]["json"]["host"]["ip"] == "10.0.8.55,::55"
+
+
+@pytest.mark.asyncio
+async def test_move_host_noop_when_no_change():
+    # ip field uses "::37" because apply_v6_suffix(55) -> "::37" (55 decimal = 0x37)
+    fake = FakeRequest(
+        {
+            "search_host": {
+                "rows": [
+                    {
+                        "uuid": "u1",
+                        "host": "printer",
+                        "ip": "10.0.8.55,::37",
+                        "hwaddr": "AA",
+                        "descr": "",
+                        "domain": "",
+                        "local": "0",
+                        "cnames": "",
+                        "client_id": "",
+                        "lease_time": "",
+                        "ignore": "0",
+                        "set_tag": "",
+                        "comments": "",
+                        "aliases": "",
+                    }
+                ],
+                "total": 1,
+            },
+        }
+    )
+    p = DnsmasqProvider(fake)
+    # ipv4_target=55 -> "10.0.8.55" (same); ipv6_target=55 -> "::37" (same) -> no change
+    out = await p.move_host(
+        identifier="printer", ipv4_target=55, ipv6_target=55, dry_run=False
+    )
+    assert out["status"] == "noop"
+    assert not any("set_host" in c[1] or "reconfigure" in c[1] for c in fake.calls)
+
+
+@pytest.mark.asyncio
+async def test_move_host_not_found_returns_error():
+    fake = FakeRequest({"search_host": {"rows": [], "total": 0}})
+    p = DnsmasqProvider(fake)
+    out = await p.move_host(
+        identifier="ghost", ipv4_target=2, ipv6_target=None, dry_run=True
+    )
+    assert out["status"] == "error"
+    assert "ghost" in out["error"]
+
+
+@pytest.mark.asyncio
+async def test_find_host_falls_back_to_full_list_on_fuzzy_miss():
+    # First call (with search=) returns a non-matching row (matched on descr);
+    # second call (full list) returns the real host. The endpoint substring is
+    # identical for both, so use a stateful fake that returns different payloads
+    # per call count.
+    class SeqRequest:
+        def __init__(self):
+            self.calls = []
+            self._n = 0
+
+        async def __call__(self, method, endpoint, **kwargs):
+            self.calls.append((method, endpoint, kwargs))
+            if "search_host" in endpoint:
+                self._n += 1
+                if self._n == 1:
+                    return {
+                        "rows": [
+                            {
+                                "uuid": "x",
+                                "host": "other",
+                                "ip": "10.0.8.9,::9",
+                                "hwaddr": "ZZ",
+                                "descr": "printer rack",
+                            }
+                        ]
+                    }
+                return {
+                    "rows": [
+                        {
+                            "uuid": "u1",
+                            "host": "printer",
+                            "ip": "10.0.8.55,::55",
+                            "hwaddr": "AA",
+                            "descr": "",
+                        }
+                    ]
+                }
+            return {}
+
+    fake = SeqRequest()
+    p = DnsmasqProvider(fake)
+    row = await p._find_host("printer")
+    assert row is not None and row["uuid"] == "u1"
