@@ -293,9 +293,33 @@ Inspecting the live lease table (118 leases: 81 v4, 37 v6) corrected the initial
 - **It is inert for SLAAC/privacy clients.** The VLAN81wifi reserved hosts `printer`
   (`::2`) and `bose-familyroom` (`::3`) have **only v4 leases** — no v6 lease at all.
   Wifi/IoT devices that don't take a stateful DHCPv6 lease ignore the reservation.
-- MAC-keyed v6 reservations only resolve because these DUIDs are DUID-LL (MAC
-  embedded). A client with DUID-LLT/DUID-UUID would not be matched by a MAC-only
-  reservation; that case needs a DUID-based reservation (`client_id` field).
+- MAC-keyed v6 reservations resolve whenever the client's DUID **contains the
+  link-layer address** — both **DUID-LL** (type 3) and **DUID-LLT** (type 1, observed
+  on the Apple TVs and macOS) embed the MAC, so dnsmasq matches both. Only a
+  **DUID-UUID** (type 4) client would fail a MAC-only reservation and need a
+  `client_id`-based reservation. None were observed in this environment.
+
+#### Live move test — empirical proof (2026-06-11)
+
+Ran an actual create-reservation + renew cycle on a user-controlled MacBook Pro
+(`50:f2:65:e9:7c:b0`, dynamic at `10.0.8.133`), targeting `10.0.8.96,::96`:
+
+| Family | Before | After reservation + DHCP renew | Verdict |
+|--------|--------|-------------------------------|---------|
+| IPv4 | `10.0.8.133` (dynamic) | **`10.0.8.96`**, `is_reserved=['hwaddr']` | reservation honored |
+| IPv6 | `…b508::ce3a` (SLAAC privacy) | **still `…b508::ce3a`** | reservation **inert** |
+
+The v6 lease flipped to `is_reserved=['hwaddr']` (dnsmasq knows the reservation
+exists) yet the device stayed on its SLAAC **privacy** address — macOS never sent a
+stateful DHCPv6 address request, so `::96` was never assigned. This confirms on real
+hardware: **IPv4 reservation moves are reliable; IPv6 `::N` moves are a config-only
+no-op for SLAAC/privacy clients (macOS), effective only for stateful-DHCPv6 devices
+(Apple TV, Synology observed).** Also validated live: `add_host` promotes a
+dynamic host to a reservation, and `reconfigure` returns `{"status":"ok"}` quickly.
+Cleanup via `del_host` (`{}` body) confirmed.
+
+**`move_dhcp_host` MUST therefore classify and report IPv6 effect** (applied /
+pending-renew / inert-SLAAC) rather than implying the v6 change took effect.
 
 **Design implications:**
 
