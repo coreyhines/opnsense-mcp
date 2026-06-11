@@ -84,6 +84,7 @@ from opnsense_mcp.build_info import get_build_info
 from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.arp import ARPTool
 from opnsense_mcp.tools.dhcp import DHCPTool
+from opnsense_mcp.tools.dhcp_host_move import MoveDhcpHostTool
 from opnsense_mcp.tools.dhcp_lease_delete import DHCPLeaseDeleteTool
 from opnsense_mcp.tools.dhcp_subnet_dns import (
     ListDhcpSubnetDnsTool,
@@ -197,6 +198,7 @@ async def handle_message(
     dhcp_lease_delete_tool: DHCPLeaseDeleteTool,
     list_dhcp_subnet_dns_tool: ListDhcpSubnetDnsTool,
     set_dhcp_subnet_dns_tool: SetDhcpSubnetDnsTool,
+    move_dhcp_host_tool: MoveDhcpHostTool,
     lldp_tool: LLDPTool,
     system_tool: SystemTool,
     fw_rules_tool: FwRulesTool,
@@ -352,6 +354,11 @@ async def handle_message(
                 "name": "set_dhcp_subnet_dns",
                 "description": SetDhcpSubnetDnsTool.description,
                 "inputSchema": SetDhcpSubnetDnsTool.input_schema,
+            },
+            {
+                "name": MoveDhcpHostTool.name,
+                "description": MoveDhcpHostTool.description,
+                "inputSchema": MoveDhcpHostTool.input_schema,
             },
             {
                 "name": "lldp",
@@ -864,6 +871,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if tool_name == "move_dhcp_host":
+            result = await move_dhcp_host_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         if tool_name == "get_logs":
             logs = await firewall_logs.get_logs(
                 limit=arguments.get("limit", 500),
@@ -1072,6 +1086,7 @@ def main() -> None:
     dhcp_lease_delete_tool = DHCPLeaseDeleteTool(client)
     list_dhcp_subnet_dns_tool = ListDhcpSubnetDnsTool(client)
     set_dhcp_subnet_dns_tool = SetDhcpSubnetDnsTool(client)
+    move_dhcp_host_tool = MoveDhcpHostTool(client)
     lldp_tool = LLDPTool(client)
     system_tool = SystemTool(client)
     fw_rules_tool = FwRulesTool(client)
@@ -1138,6 +1153,7 @@ def main() -> None:
                     dhcp_lease_delete_tool,
                     list_dhcp_subnet_dns_tool,
                     set_dhcp_subnet_dns_tool,
+                    move_dhcp_host_tool,
                     lldp_tool,
                     system_tool,
                     fw_rules_tool,
