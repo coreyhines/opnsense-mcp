@@ -619,3 +619,56 @@ class DnsmasqProvider:
                 "renews or reboots. IPv6 applies only to stateful-DHCPv6 clients."
             ),
         }
+
+    async def _resolve_host_row(self, identifier: str) -> dict[str, Any] | None:
+        """Find a host row by hostname, MAC, or reservation uuid."""
+        row = await self._find_host(identifier)
+        if row is not None:
+            return row
+        needle = identifier.strip().lower()
+        for candidate in await self.list_hosts():
+            if str(candidate.get("uuid") or "").lower() == needle:
+                return candidate
+        return None
+
+    async def delete_host(
+        self,
+        *,
+        identifier: str,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Delete a host reservation by hostname, MAC, or uuid."""
+        row = await self._resolve_host_row(identifier)
+        if row is None:
+            return {
+                "status": "error",
+                "error": f"No host reservation matched {identifier!r}",
+            }
+        rec = DhcpHostRecord.from_row(row)
+        planned = rec.to_summary()
+
+        if dry_run:
+            return {
+                "status": "dry_run",
+                "backend": self.name,
+                "planned": planned,
+                "note": "No changes applied. Re-run with dry_run=false to apply.",
+            }
+
+        try:
+            await self.del_host(rec.uuid)
+            await self._reconfigure()
+        except Exception as exc:
+            logger.exception("host delete failed for %s", rec.host)
+            return {
+                "status": "error",
+                "backend": self.name,
+                "planned": planned,
+                "error": str(exc),
+            }
+
+        return {
+            "status": "success",
+            "backend": self.name,
+            "deleted": planned,
+        }
