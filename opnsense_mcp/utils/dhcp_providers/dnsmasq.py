@@ -37,6 +37,12 @@ class DnsmasqProvider:
     WRITE_TIMEOUT_SECONDS = 30
     RECONFIGURE_TIMEOUT_SECONDS = 60
     SUBNET_DNS_SUPPORTED = True
+    HOST_SEARCH_ENDPOINT = "/api/dnsmasq/settings/search_host"
+    HOST_GET_ENDPOINT = "/api/dnsmasq/settings/get_host"
+    HOST_ADD_ENDPOINT = "/api/dnsmasq/settings/add_host"
+    HOST_SET_ENDPOINT = "/api/dnsmasq/settings/set_host"
+    HOST_DEL_ENDPOINT = "/api/dnsmasq/settings/del_host"
+    HOST_MOVE_SUPPORTED = True
 
     def __init__(self, make_request: MakeRequestFn) -> None:
         """Initialize provider with request function."""
@@ -422,3 +428,47 @@ class DnsmasqProvider:
                 "DHCP clients keep prior DNS until they renew or reconnect"
             ),
         }
+
+    async def list_hosts(self, search: str = "") -> list[dict[str, Any]]:
+        """Return host reservation rows (optionally filtered by searchPhrase)."""
+        response = await self._request(
+            "POST",
+            self.HOST_SEARCH_ENDPOINT,
+            json={"current": 1, "rowCount": -1, "searchPhrase": search},
+        )
+        return extract_rows(response)
+
+    async def get_host(self, uuid: str) -> dict[str, Any]:
+        """Return the form-model host record for a uuid (GET, no body)."""
+        response = await self._request("GET", f"{self.HOST_GET_ENDPOINT}/{uuid}")
+        return response if isinstance(response, dict) else {}
+
+    async def add_host(self, host_payload: dict[str, Any]) -> dict[str, Any]:
+        """Create a host reservation; returns {'result','uuid'}."""
+        response = await self._request(
+            "POST",
+            self.HOST_ADD_ENDPOINT,
+            json={"host": host_payload},
+            timeout=self.WRITE_TIMEOUT_SECONDS,
+        )
+        return response if isinstance(response, dict) else {}
+
+    async def set_host(self, uuid: str, host_payload: dict[str, Any]) -> dict[str, Any]:
+        """Update a host reservation by uuid."""
+        response = await self._request(
+            "POST",
+            f"{self.HOST_SET_ENDPOINT}/{uuid}",
+            json={"host": host_payload},
+            timeout=self.WRITE_TIMEOUT_SECONDS,
+        )
+        return response if isinstance(response, dict) else {}
+
+    async def del_host(self, uuid: str) -> dict[str, Any]:
+        """Delete a host reservation by uuid. Empty JSON body is required."""
+        response = await self._request(
+            "POST",
+            f"{self.HOST_DEL_ENDPOINT}/{uuid}",
+            json={},
+            timeout=self.WRITE_TIMEOUT_SECONDS,
+        )
+        return response if isinstance(response, dict) else {}
