@@ -147,7 +147,9 @@ async def resolve_scope_from_selectors(
             description=str(description) if description else None,
         )
 
-    assert normalized_subnet is not None
+    if normalized_subnet is None:
+        msg = "subnet selector is required when interface is not provided"
+        raise ValueError(msg)
     response = await make_request("GET", range_search_endpoint)
     rows = extract_rows(response)
     for row in rows:
@@ -229,7 +231,9 @@ async def resolve_kea_scope(
         msg = f"No Kea {family} subnet found for {normalized_subnet}"
         raise ValueError(msg)
 
-    assert resolved_interface is not None
+    if resolved_interface is None:
+        msg = "interface selector is required when subnet is not provided"
+        raise ValueError(msg)
     if not overview:
         overview = await load_interface_overview(make_request)
     iface_subnet = interface_ipv4_network(resolved_interface, overview)
