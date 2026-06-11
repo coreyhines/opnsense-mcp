@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import ipaddress  # noqa: F401 # used by later helpers
+import ipaddress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -71,3 +71,39 @@ class DhcpHostRecord:
             hwaddr=str(row.get("hwaddr") or "").lower(),
             raw=dict(row),
         )
+
+
+def apply_v4_suffix(current_ipv4: str, target: int | str) -> str:
+    """Return a new IPv4 address: replace the last octet (int target) or
+    validate a full address (str target) within the current /24-style network.
+    """
+    base = ipaddress.ip_address(current_ipv4.strip())
+    if base.version != 4:
+        msg = f"Not an IPv4 address: {current_ipv4!r}"
+        raise ValueError(msg)
+    if isinstance(target, int) or str(target).isdigit():
+        octet = int(target)
+        if not 1 <= octet <= 254:
+            msg = f"IPv4 host octet out of range (1-254): {octet}"
+            raise ValueError(msg)
+        prefix = ".".join(current_ipv4.split(".")[:3])
+        return f"{prefix}.{octet}"
+    candidate = ipaddress.ip_address(str(target).strip())
+    if candidate.version != 4:
+        msg = f"Expected IPv4 address, got {target!r}"
+        raise ValueError(msg)
+    return str(candidate)
+
+
+def apply_v6_suffix(target: int | str) -> str:
+    """Return a normalized '::N' IPv6 suffix from an int or string form."""
+    if isinstance(target, int) or str(target).isdigit():
+        return f"::{int(target):x}"
+    raw = str(target).strip()
+    if raw.startswith("::0x"):
+        return f"::{int(raw[4:], 16):x}"
+    ipaddress.ip_address(raw)
+    if not raw.startswith("::"):
+        msg = f"IPv6 reservation must be a '::N' suffix, got {raw!r}"
+        raise ValueError(msg)
+    return raw
