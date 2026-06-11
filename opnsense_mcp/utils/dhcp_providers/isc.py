@@ -113,3 +113,15 @@ class ISCProvider:
             "status": "error",
             "error": f"Host move not supported by {self.name} backend",
         }
+
+    async def delete_host(
+        self,
+        *,
+        identifier: str,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Host delete is not supported on this backend yet."""
+        return {
+            "status": "error",
+            "error": f"Host delete not supported by {self.name} backend",
+        }

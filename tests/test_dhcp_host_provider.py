@@ -397,3 +397,91 @@ async def test_move_host_unsupported_backends(cls):
     )
     assert out["status"] == "error"
     assert "not supported" in out["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_delete_host_dry_run_does_not_write():
+    fake = FakeRequest(
+        {
+            "search_host": {
+                "rows": [
+                    {
+                        "uuid": "u1",
+                        "host": "chines",
+                        "ip": "10.0.2.4,::4",
+                        "hwaddr": "98:fd:b4:9a:05:53",
+                        "descr": "VLAN2wired",
+                    }
+                ],
+                "total": 1,
+            },
+        }
+    )
+    p = DnsmasqProvider(fake)
+    out = await p.delete_host(identifier="chines", dry_run=True)
+    assert out["status"] == "dry_run"
+    assert out["planned"]["host"] == "chines"
+    assert not any("del_host" in c[1] or "reconfigure" in c[1] for c in fake.calls)
+
+
+@pytest.mark.asyncio
+async def test_delete_host_applies_and_reconfigures():
+    fake = FakeRequest(
+        {
+            "search_host": {
+                "rows": [
+                    {
+                        "uuid": "u1",
+                        "host": "chines",
+                        "ip": "10.0.2.4,::4",
+                        "hwaddr": "98:fd:b4:9a:05:53",
+                        "descr": "VLAN2wired",
+                    }
+                ],
+                "total": 1,
+            },
+            "del_host": {"result": "deleted"},
+            "reconfigure": {"status": "ok"},
+        }
+    )
+    p = DnsmasqProvider(fake)
+    out = await p.delete_host(identifier="chines", dry_run=False)
+    assert out["status"] == "success"
+    assert out["deleted"]["host"] == "chines"
+    endpoints = [c[1] for c in fake.calls]
+    assert any("del_host/u1" in e for e in endpoints)
+    assert any("reconfigure" in e for e in endpoints)
+
+
+@pytest.mark.asyncio
+async def test_delete_host_finds_by_uuid():
+    fake = FakeRequest(
+        {
+            "search_host": {
+                "rows": [
+                    {
+                        "uuid": "u1",
+                        "host": "chines",
+                        "ip": "10.0.2.4,::4",
+                        "hwaddr": "98:fd:b4:9a:05:53",
+                    }
+                ],
+                "total": 1,
+            },
+            "del_host": {"result": "deleted"},
+            "reconfigure": {"status": "ok"},
+        }
+    )
+    p = DnsmasqProvider(fake)
+    out = await p.delete_host(identifier="u1", dry_run=False)
+    assert out["status"] == "success"
+    assert any("del_host/u1" in c[1] for c in fake.calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", [ISCProvider, KeaProvider])
+async def test_delete_host_unsupported_backends(cls):
+    p = cls(FakeRequest({}))
+    out = await p.delete_host(identifier="x", dry_run=True)
+    assert out["status"] == "error"
+    assert "not supported" in out["error"].lower()
