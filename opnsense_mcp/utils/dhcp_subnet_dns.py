@@ -135,7 +135,9 @@ def merge_slot_update(
         else:
             slots[0], slots[1] = validated[0], validated[1]
     else:
-        assert dns_server is not None
+        if dns_server is None:
+            msg = "dns_server or dns_servers is required"
+            raise ValueError(msg)
         validated_one = validate_address(dns_server, family)
         target = slot or 1
         if target not in (1, 2):

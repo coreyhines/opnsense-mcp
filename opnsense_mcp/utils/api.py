@@ -19,6 +19,7 @@ from urllib3.exceptions import InsecureRequestWarning
 from opnsense_mcp.utils.dhcp_provider import (
     DHCPProvider,
     detect_dhcp_backend,
+    require_host_provider,
     require_subnet_dns_provider,
 )
 from opnsense_mcp.utils.dhcp_subnet_dns import Family, merge_slot_update
@@ -906,6 +907,26 @@ class OPNsenseClient:
             interface=interface,
             family=normalized_family,
             servers=merged,
+        )
+
+    async def move_dhcp_host(
+        self,
+        *,
+        identifier: str,
+        ipv4: int | str | None = None,
+        ipv6: int | str | None = None,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Move a DHCP host reservation to new v4/v6 addresses (dnsmasq only)."""
+        await self._ensure_dhcp_provider()
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
+        provider = require_host_provider(self._dhcp_provider)
+        return await provider.move_host(
+            identifier=identifier,
+            ipv4_target=ipv4,
+            ipv6_target=ipv6,
+            dry_run=dry_run,
         )
 
     async def get_firewall_logs(
