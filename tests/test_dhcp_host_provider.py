@@ -295,7 +295,6 @@ async def test_move_host_rolls_back_on_reconfigure_failure():
 
 @pytest.mark.asyncio
 async def test_move_host_noop_when_no_change():
-    # ip field uses "::37" because apply_v6_suffix(55) -> "::37" (55 decimal = 0x37)
     fake = FakeRequest(
         {
             "search_host": {
@@ -303,7 +302,7 @@ async def test_move_host_noop_when_no_change():
                     {
                         "uuid": "u1",
                         "host": "printer",
-                        "ip": "10.0.8.55,::37",
+                        "ip": "10.0.8.55,::55",
                         "hwaddr": "AA",
                         "descr": "",
                         "domain": "",
@@ -322,7 +321,7 @@ async def test_move_host_noop_when_no_change():
         }
     )
     p = DnsmasqProvider(fake)
-    # ipv4_target=55 -> "10.0.8.55" (same); ipv6_target=55 -> "::37" (same) -> no change
+    # ipv4_target=55 -> "10.0.8.55" (same); ipv6_target=55 -> "::55" (same) -> no change
     out = await p.move_host(
         identifier="printer", ipv4_target=55, ipv6_target=55, dry_run=False
     )

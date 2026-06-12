@@ -110,12 +110,16 @@ def apply_v4_suffix(current_ipv4: str, target: int | str) -> str:
 
 
 def apply_v6_suffix(target: int | str) -> str:
-    """Return a normalized '::N' IPv6 suffix from an int or string form."""
+    """Return a normalized '::N' IPv6 suffix from an int or string form.
+
+    Integer targets use **decimal** ``::N`` to match dnsmasq host reservations
+    (e.g. ``10.0.8.15,::15`` — last octet and suffix align).
+    """
     if isinstance(target, int) or str(target).isdigit():
-        return f"::{int(target):x}"
+        return f"::{int(target)}"
     raw = str(target).strip()
     if raw.startswith("::0x"):
-        return f"::{int(raw[4:], 16):x}"
+        return f"::{int(raw[4:], 16)}"
     ipaddress.ip_address(raw)
     if not raw.startswith("::"):
         msg = f"IPv6 reservation must be a '::N' suffix, got {raw!r}"
