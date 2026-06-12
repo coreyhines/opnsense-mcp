@@ -511,6 +511,7 @@ class DnsmasqProvider:
         identifier: str,
         ipv4_target: int | str | None,
         ipv6_target: int | str | None,
+        new_hostname: str | None = None,
         dry_run: bool = True,
     ) -> dict[str, Any]:
         """Move a host reservation to new v4 and/or v6 addresses."""
@@ -534,11 +535,25 @@ class DnsmasqProvider:
         if ipv6_target is not None:
             new_ipv6 = apply_v6_suffix(ipv6_target)
 
-        if new_ipv4 == rec.ipv4 and new_ipv6 == rec.ipv6_suffix:
+        new_host = rec.host
+        if new_hostname is not None:
+            stripped = new_hostname.strip()
+            if not stripped:
+                return {
+                    "status": "error",
+                    "error": "new_hostname must be non-empty when provided",
+                }
+            new_host = stripped
+
+        if (
+            new_ipv4 == rec.ipv4
+            and new_ipv6 == rec.ipv6_suffix
+            and new_host == rec.host
+        ):
             return {
                 "status": "noop",
                 "backend": self.name,
-                "note": "No address changes requested.",
+                "note": "No address or hostname changes requested.",
             }
 
         all_hosts = await self.list_hosts()
@@ -561,6 +576,9 @@ class DnsmasqProvider:
         planned = {
             "host": rec.host,
             "hwaddr": rec.hwaddr,
+            "hostname": {"from": rec.host, "to": new_host}
+            if new_host != rec.host
+            else None,
             "ipv4": {"from": rec.ipv4, "to": new_ipv4}
             if new_ipv4 != rec.ipv4
             else None,
@@ -589,6 +607,8 @@ class DnsmasqProvider:
             rec, new_ipv4=rec.ipv4, new_ipv6=rec.ipv6_suffix
         )
         new_payload = flatten_host_for_write(rec, new_ipv4=new_ipv4, new_ipv6=new_ipv6)
+        if new_host != rec.host:
+            new_payload["host"] = new_host
         try:
             await self.set_host(rec.uuid, new_payload)
             await self._reconfigure()

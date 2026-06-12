@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import shlex
+import shutil
 import subprocess  # nosec B404 — subprocess required for local process management
 import time
 from pathlib import Path
@@ -45,42 +46,50 @@ class PacketCaptureTool2:
     def _get_client(self) -> paramiko.SSHClient:
         return self._ssh.get_ssh_client()
 
+    def _dev_workspace(self) -> bool:
+        """True when running from a local git checkout (not a deployed container image)."""
+        if os.getenv("OPNSENSE_MCP_INSTALL_ROOT"):
+            return False
+        cwd = Path.cwd()
+        return (cwd / "pyproject.toml").is_file() and (cwd / "opnsense_mcp").is_dir()
+
     def _detect_mcp_server_issues(self) -> dict[str, Any]:
         """Detect common MCP server issues and provide solutions."""
         issues = []
         solutions = []
 
-        # Check if MCP server process is running
-        try:
-            result = subprocess.run(
-                ["pgrep", "-f", "opnsense_mcp/server.py"],
-                capture_output=True,
-                text=True,
-            )  # nosec B603 B607 — hardcoded command, no user input
-            if result.returncode != 0:
-                # Try alternative process detection
-                result2 = subprocess.run(
-                    ["ps", "aux"],
+        # Dev-only: local MCP server process (containers often lack pgrep).
+        if self._dev_workspace() and shutil.which("pgrep"):
+            try:
+                result = subprocess.run(
+                    ["pgrep", "-f", "opnsense_mcp/server.py"],
                     capture_output=True,
                     text=True,
                 )  # nosec B603 B607 — hardcoded command, no user input
-                if "opnsense_mcp/server.py" in result2.stdout:
-                    # Process is running but pgrep didn't find it
-                    pass
-                else:
-                    issues.append("OPNsense MCP server is not running")
-                    solutions.append("Restart the MCP server using: ./mcp_start.sh")
-        except Exception as e:
-            issues.append(f"Could not check MCP server status: {e}")
-            solutions.append("Manually check if the MCP server is running")
+                if result.returncode != 0:
+                    result2 = subprocess.run(
+                        ["ps", "aux"],
+                        capture_output=True,
+                        text=True,
+                    )  # nosec B603 B607 — hardcoded command, no user input
+                    if "opnsense_mcp/server.py" not in result2.stdout:
+                        issues.append("OPNsense MCP server is not running")
+                        solutions.append(
+                            "Restart the MCP server using: ./mcp_start.sh"
+                        )
+            except Exception as e:
+                issues.append(f"Could not check MCP server status: {e}")
+                solutions.append("Manually check if the MCP server is running")
 
-        # Check if virtual environment exists
-        venv_path = Path.cwd() / ".venv"
-        if not venv_path.exists():
-            issues.append("Virtual environment (.venv) is missing")
-            solutions.append(
-                "Recreate virtual environment: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
-            )
+        # Dev-only: uv/venv layout for local Cursor stdio runs.
+        if self._dev_workspace():
+            venv_path = Path.cwd() / ".venv"
+            if not venv_path.exists():
+                issues.append("Virtual environment (.venv) is missing")
+                solutions.append(
+                    "Recreate virtual environment: python3 -m venv .venv && "
+                    "source .venv/bin/activate && pip install -r requirements.txt"
+                )
 
         # Check if required dependencies are installed
         try:
@@ -111,44 +120,45 @@ class PacketCaptureTool2:
         }
 
     def _auto_correct_issues(self) -> dict[str, Any]:
-        """Attempt to automatically correct detected issues."""
-        corrections = []
-        errors = []
+        """Attempt to automatically correct detected issues (dev workspace only)."""
+        corrections: list[str] = []
+        errors: list[str] = []
 
-        # Try to restart MCP server if not running
-        try:
-            result = subprocess.run(
-                ["pgrep", "-f", "opnsense_mcp/server.py"],
-                capture_output=True,
-                text=True,
-            )  # nosec B603 B607 — hardcoded command, no user input
-            if result.returncode != 0:
-                # Try alternative process detection
-                result2 = subprocess.run(
-                    ["ps", "aux"],
+        if not self._dev_workspace():
+            return {
+                "corrections_applied": corrections,
+                "errors": errors,
+                "success": True,
+            }
+
+        if shutil.which("pgrep"):
+            try:
+                result = subprocess.run(
+                    ["pgrep", "-f", "opnsense_mcp/server.py"],
                     capture_output=True,
                     text=True,
                 )  # nosec B603 B607 — hardcoded command, no user input
-                if "opnsense_mcp/server.py" in result2.stdout:
-                    # Process is running but pgrep didn't find it
-                    pass
-                else:
-                    # Try to start the MCP server
-                    try:
-                        subprocess.run(
-                            ["./mcp_start.sh"],
-                            cwd=Path.cwd(),
-                            timeout=10,
-                            capture_output=True,
-                        )  # nosec B603 B607 — hardcoded command, no user input
-                        corrections.append("Attempted to restart MCP server")
-                        time.sleep(2)  # Give it time to start
-                    except Exception as e:
-                        errors.append(f"Failed to restart MCP server: {e}")
-        except Exception as e:
-            errors.append(f"Could not check MCP server status: {e}")
+                if result.returncode != 0:
+                    result2 = subprocess.run(
+                        ["ps", "aux"],
+                        capture_output=True,
+                        text=True,
+                    )  # nosec B603 B607 — hardcoded command, no user input
+                    if "opnsense_mcp/server.py" not in result2.stdout:
+                        try:
+                            subprocess.run(
+                                ["./mcp_start.sh"],
+                                cwd=Path.cwd(),
+                                timeout=10,
+                                capture_output=True,
+                            )  # nosec B603 B607 — hardcoded command, no user input
+                            corrections.append("Attempted to restart MCP server")
+                            time.sleep(2)
+                        except Exception as e:
+                            errors.append(f"Failed to restart MCP server: {e}")
+            except Exception as e:
+                errors.append(f"Could not check MCP server status: {e}")
 
-        # Try to recreate virtual environment if missing
         venv_path = Path.cwd() / ".venv"
         if not venv_path.exists():
             try:
@@ -159,8 +169,6 @@ class PacketCaptureTool2:
                     capture_output=True,
                 )  # nosec B603 B607 — hardcoded command, no user input
                 corrections.append("Recreated virtual environment")
-
-                # Try to install dependencies
                 try:
                     subprocess.run(
                         [
@@ -366,18 +374,43 @@ class PacketCaptureTool2:
             inner = " ".join(p for p in cmd_parts if p)
             return f"/bin/sh -c {shlex.quote(inner)}"
 
+        def _wait_and_read(
+            stdout: Any, stderr: Any, wait_seconds: int
+        ) -> tuple[bytes, str]:
+            """Wait for remote tcpdump to finish, then read stdout/stderr."""
+            channel = stdout.channel
+            channel.settimeout(max(wait_seconds + 10, 15))
+            channel.recv_exit_status()
+            out = stdout.read(preview_bytes)
+            err = stderr.read().decode(errors="replace")
+            return out, err
+
+        wait_seconds = duration if duration else (5 if count else 30)
+
         if mode == "raw":
             # Raw pcap output (binary/hex preview)
-            if stream:
-                if count and not duration:
-                    cmd_parts = (
-                        ["sudo", "timeout", "5", "tcpdump", "-U", "-i", safe_iface]
-                        + count_arg
-                        + ["-w", "-"]
-                        + filter_arg
-                    )
-                elif duration and not count:
-                    cmd_parts = [
+            if count and not duration:
+                cmd_parts = (
+                    ["sudo", "timeout", "5", "tcpdump", "-U", "-i", safe_iface]
+                    + count_arg
+                    + ["-w", "-"]
+                    + filter_arg
+                )
+            elif duration and not count:
+                cmd_parts = [
+                    "sudo",
+                    "timeout",
+                    str(duration),
+                    "tcpdump",
+                    "-U",
+                    "-i",
+                    safe_iface,
+                    "-w",
+                    "-",
+                ] + filter_arg
+            elif duration and count:
+                cmd_parts = (
+                    [
                         "sudo",
                         "timeout",
                         str(duration),
@@ -385,106 +418,54 @@ class PacketCaptureTool2:
                         "-U",
                         "-i",
                         safe_iface,
-                        "-w",
-                        "-",
-                    ] + filter_arg
-                elif duration and count:
-                    cmd_parts = (
-                        [
-                            "sudo",
-                            "timeout",
-                            str(duration),
-                            "tcpdump",
-                            "-U",
-                            "-i",
-                            safe_iface,
-                        ]
-                        + count_arg
-                        + ["-w", "-"]
-                        + filter_arg
-                    )
-                else:
-                    cmd_parts = [
-                        "sudo",
-                        "timeout",
-                        "5",
-                        "tcpdump",
-                        "-U",
-                        "-i",
-                        safe_iface,
-                        "-w",
-                        "-",
-                    ] + filter_arg
-                cmd = build_cmd(cmd_parts)
-                try:
-                    client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
-                    pcap_data = stdout.read(preview_bytes)
-                    err = stderr.read().decode(errors="replace")
-                    client.close()
-                    return {
-                        "status": "success",
-                        "mode": "raw",
-                        "pcap_preview": pcap_data.hex(),
-                        "bytes": len(pcap_data),
-                        "requested_interface": requested_iface,
-                        "resolved_interface": resolved_iface,
-                        "command": cmd,
-                        "stderr": err,
-                    }
-                except Exception as e:
-                    return {
-                        "status": "error",
-                        "error": str(e),
-                        "requested_interface": requested_iface,
-                        "resolved_interface": resolved_iface,
-                        "command": cmd,
-                        "guidance": "Raw mode capture failed. Try 'text' mode for human-readable output, or check if the interface is active and has traffic.",
-                    }
+                    ]
+                    + count_arg
+                    + ["-w", "-"]
+                    + filter_arg
+                )
+            else:
+                cmd_parts = [
+                    "sudo",
+                    "timeout",
+                    "5",
+                    "tcpdump",
+                    "-U",
+                    "-i",
+                    safe_iface,
+                    "-w",
+                    "-",
+                ] + filter_arg
+            cmd = build_cmd(cmd_parts)
+            try:
+                client = self._get_client()
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
+                pcap_data, err = _wait_and_read(stdout, stderr, wait_seconds)
+                client.close()
+                return {
+                    "status": "success",
+                    "mode": "raw",
+                    "pcap_preview": pcap_data.hex(),
+                    "bytes": len(pcap_data),
+                    "requested_interface": requested_iface,
+                    "resolved_interface": resolved_iface,
+                    "command": cmd,
+                    "stderr": err,
+                }
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "error": str(e),
+                    "requested_interface": requested_iface,
+                    "resolved_interface": resolved_iface,
+                    "command": cmd,
+                    "guidance": "Raw mode capture failed. Try 'text' mode for human-readable output, or check if the interface is active and has traffic.",
+                }
         elif mode == "text":
             # Human-readable tcpdump output (-nnevvv)
             vflags = "-nnevvv"
-            if stream:
-                if count and not duration:
-                    cmd_parts = (
-                        [
-                            "sudo",
-                            "timeout",
-                            "5",
-                            "tcpdump",
-                            vflags,
-                            "-i",
-                            safe_iface,
-                        ]
-                        + count_arg
-                        + filter_arg
-                    )
-                elif duration and not count:
-                    cmd_parts = [
-                        "sudo",
-                        "timeout",
-                        str(duration),
-                        "tcpdump",
-                        vflags,
-                        "-i",
-                        safe_iface,
-                    ] + filter_arg
-                elif duration and count:
-                    cmd_parts = (
-                        [
-                            "sudo",
-                            "timeout",
-                            str(duration),
-                            "tcpdump",
-                            vflags,
-                            "-i",
-                            safe_iface,
-                        ]
-                        + count_arg
-                        + filter_arg
-                    )
-                else:
-                    cmd_parts = [
+            if count and not duration:
+                cmd_parts = (
+                    [
                         "sudo",
                         "timeout",
                         "5",
@@ -492,39 +473,74 @@ class PacketCaptureTool2:
                         vflags,
                         "-i",
                         safe_iface,
-                    ] + filter_arg
-                cmd = build_cmd(cmd_parts)
-                try:
-                    client = self._get_client()
-                    stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
-                    text_out = stdout.read(preview_bytes).decode(errors="replace")
-                    err = stderr.read().decode(errors="replace")
-                    client.close()
-                    # Optionally, parse flows from text_out
-                    flows = []
-                    for line in text_out.splitlines():
-                        # Simple flow parsing: look for src > dst or IP proto/port patterns
-                        if " > " in line:
-                            flows.append(line.strip())
-                    return {
-                        "status": "success",
-                        "mode": "text",
-                        "tcpdump_output": text_out,
-                        "flows": flows,
-                        "requested_interface": requested_iface,
-                        "resolved_interface": resolved_iface,
-                        "command": cmd,
-                        "stderr": err,
-                    }
-                except Exception as e:
-                    return {
-                        "status": "error",
-                        "error": str(e),
-                        "requested_interface": requested_iface,
-                        "resolved_interface": resolved_iface,
-                        "command": cmd,
-                        "guidance": "Text mode capture failed. Check if the interface is active, try a different interface, or verify SSH permissions.",
-                    }
+                    ]
+                    + count_arg
+                    + filter_arg
+                )
+            elif duration and not count:
+                cmd_parts = [
+                    "sudo",
+                    "timeout",
+                    str(duration),
+                    "tcpdump",
+                    vflags,
+                    "-i",
+                    safe_iface,
+                ] + filter_arg
+            elif duration and count:
+                cmd_parts = (
+                    [
+                        "sudo",
+                        "timeout",
+                        str(duration),
+                        "tcpdump",
+                        vflags,
+                        "-i",
+                        safe_iface,
+                    ]
+                    + count_arg
+                    + filter_arg
+                )
+            else:
+                cmd_parts = [
+                    "sudo",
+                    "timeout",
+                    "5",
+                    "tcpdump",
+                    vflags,
+                    "-i",
+                    safe_iface,
+                ] + filter_arg
+            cmd = build_cmd(cmd_parts)
+            try:
+                client = self._get_client()
+                stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
+                raw_out, err = _wait_and_read(stdout, stderr, wait_seconds)
+                text_out = raw_out.decode(errors="replace")
+                client.close()
+                flows = []
+                for line in text_out.splitlines():
+                    if " > " in line:
+                        flows.append(line.strip())
+                return {
+                    "status": "success",
+                    "mode": "text",
+                    "tcpdump_output": text_out,
+                    "flows": flows,
+                    "requested_interface": requested_iface,
+                    "resolved_interface": resolved_iface,
+                    "command": cmd,
+                    "stderr": err,
+                }
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "error": str(e),
+                    "requested_interface": requested_iface,
+                    "resolved_interface": resolved_iface,
+                    "command": cmd,
+                    "guidance": "Text mode capture failed. Check if the interface is active, try a different interface, or verify SSH permissions.",
+                }
         else:
             return {
                 "status": "error",
@@ -626,14 +642,12 @@ class PacketCaptureTool2:
                     "guidance": "Use 'text' mode for human-readable output, 'raw' for binary data.",
                 }
 
-            # Detect and auto-correct any infrastructure issues
+            # Detect infrastructure issues (SSH is blocking; dev-only checks are advisory).
             issues = self._detect_mcp_server_issues()
             if issues["has_issues"]:
-                # Try to auto-correct issues
                 corrections = self._auto_correct_issues()
-
-                # If auto-correction failed, return diagnostic information
-                if not corrections["success"]:
+                issues = self._detect_mcp_server_issues()
+                if issues["has_issues"]:
                     return {
                         "status": "error",
                         "error": "MCP server issues detected and auto-correction failed",
@@ -643,9 +657,6 @@ class PacketCaptureTool2:
                         "auto_correction_errors": corrections["errors"],
                         "guidance": "Please manually fix the issues above, then try again. You can also use action='diagnose' for detailed diagnostics.",
                     }
-
-                # If auto-correction succeeded, retry the operation
-                return await self._retry_after_correction(params)
 
             # Test SSH connection first
             try:
@@ -689,9 +700,10 @@ class PacketCaptureTool2:
                 stdin, stdout, stderr = client.exec_command(
                     f"ifconfig {shlex.quote(interface)}"
                 )  # nosec B601 — inputs sanitized via shlex.quote
+                ifconfig_err = stderr.read().decode()
                 if (
-                    "not found" in stderr.read().decode()
-                    or "No such interface" in stderr.read().decode()
+                    "not found" in ifconfig_err
+                    or "No such interface" in ifconfig_err
                 ):
                     client.close()
                     return {

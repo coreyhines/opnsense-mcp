@@ -915,9 +915,10 @@ class OPNsenseClient:
         identifier: str,
         ipv4: int | str | None = None,
         ipv6: int | str | None = None,
+        new_hostname: str | None = None,
         dry_run: bool = True,
     ) -> dict[str, Any]:
-        """Move a DHCP host reservation to new v4/v6 addresses (dnsmasq only)."""
+        """Move/rename a DHCP host reservation (dnsmasq only)."""
         await self._ensure_dhcp_provider()
         if self._dhcp_provider is None:
             raise RuntimeError("DHCP provider not initialized")
@@ -926,6 +927,7 @@ class OPNsenseClient:
             identifier=identifier,
             ipv4_target=ipv4,
             ipv6_target=ipv6,
+            new_hostname=new_hostname,
             dry_run=dry_run,
         )
 

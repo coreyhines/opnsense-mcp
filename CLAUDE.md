@@ -81,6 +81,12 @@ Never use bare `cat` in a commit message heredoc.
 
 When displaying results from OPNsense MCP tools, summarize the data in a human-readable format (tables, bullet points, or prose). Do not show raw JSON unless the user explicitly asks for it.
 
+## MCP-first live operations
+
+For homelab changes (DHCP, DNS, firewall), **use MCP tools** against the deployed server — not `uv run python` with `get_opnsense_client()` in this repo. See `.cursor/rules/mcp-first.mdc`. Fallback only when MCP is errored or no tool exists; say why.
+
+**Testing MCP:** agent sessions using MCP tools (primary), `python benchmark_performance.py` (live smoke), `uv run pytest tests/` (unit). Workspace Python bypasses the MCP protocol path.
+
 ## Code Standards
 
 - Python 3.12+, typing annotations and docstrings on all functions/classes
