@@ -92,7 +92,8 @@ def test_apply_v4_full_address_validates():
 
 def test_apply_v6_suffix_normalizes():
     assert apply_v6_suffix(2) == "::2"
-    assert apply_v6_suffix("::0x10") == "::10"
+    assert apply_v6_suffix(10) == "::10"
+    assert apply_v6_suffix("::0x10") == "::16"
 
 
 def test_apply_v6_full_suffix_passthrough():
