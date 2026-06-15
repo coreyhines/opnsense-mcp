@@ -44,3 +44,17 @@ async def test_fastmcp_server_tool_count():
         tools = await client.list_tools()
 
     assert len(tools) == 26
+
+
+def test_main_argparser_accepts_transport():
+    """main.py argparser must accept --transport with streamable-http option."""
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [sys.executable, "main.py", "--help"],
+        capture_output=True,
+        text=True,
+        cwd="/Users/corey/code/opnsense-mcp",
+    )
+    assert "--transport" in result.stdout
+    assert "streamable-http" in result.stdout
