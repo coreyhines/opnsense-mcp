@@ -52,11 +52,12 @@ def test_main_argparser_accepts_transport():
     """main.py argparser must accept --transport with streamable-http option."""
     import subprocess
     import sys
+    from pathlib import Path
     result = subprocess.run(
         [sys.executable, "main.py", "--help"],
         capture_output=True,
         text=True,
-        cwd="/Users/corey/code/opnsense-mcp",
+        cwd=str(Path(__file__).parent.parent),
     )
     assert "--transport" in result.stdout
     assert "streamable-http" in result.stdout
