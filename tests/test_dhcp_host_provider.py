@@ -330,6 +330,92 @@ async def test_move_host_noop_when_no_change():
 
 
 @pytest.mark.asyncio
+async def test_move_host_reorders_ip_field_when_v6_before_v4():
+    fake = FakeRequest(
+        {
+            "search_host": {
+                "rows": [
+                    {
+                        "uuid": "u1",
+                        "host": "hermes",
+                        "ip": "::13,10.0.3.13",
+                        "hwaddr": "52:54:00:ab:cd:01",
+                        "descr": "",
+                        "domain": "",
+                        "local": "0",
+                        "cnames": "",
+                        "client_id": "",
+                        "lease_time": "",
+                        "ignore": "0",
+                        "set_tag": "",
+                        "comments": "",
+                        "aliases": "",
+                    }
+                ],
+                "total": 1,
+            },
+            "leases/search": {"rows": []},
+            "set_host": {"result": "saved"},
+            "reconfigure": {"status": "ok"},
+        }
+    )
+    p = DnsmasqProvider(fake)
+    out = await p.move_host(
+        identifier="hermes",
+        ipv4_target="10.0.3.13",
+        ipv6_target=13,
+        dry_run=False,
+    )
+    assert out["status"] == "success"
+    set_calls = [c for c in fake.calls if "set_host" in c[1]]
+    assert len(set_calls) == 1
+    assert set_calls[0][2]["json"]["host"]["ip"] == "10.0.3.13,::13"
+
+
+@pytest.mark.asyncio
+async def test_move_host_can_set_client_id_only():
+    fake = FakeRequest(
+        {
+            "search_host": {
+                "rows": [
+                    {
+                        "uuid": "u1",
+                        "host": "hermes",
+                        "ip": "10.0.3.13,::13",
+                        "hwaddr": "52:54:00:ab:cd:01",
+                        "client_id": "",
+                        "descr": "",
+                        "domain": "",
+                        "local": "0",
+                        "cnames": "",
+                        "lease_time": "",
+                        "ignore": "0",
+                        "set_tag": "",
+                        "comments": "",
+                        "aliases": "",
+                    }
+                ],
+                "total": 1,
+            },
+            "leases/search": {"rows": []},
+            "set_host": {"result": "saved"},
+            "reconfigure": {"status": "ok"},
+        }
+    )
+    p = DnsmasqProvider(fake)
+    out = await p.move_host(
+        identifier="hermes",
+        ipv4_target=None,
+        ipv6_target=None,
+        client_id="00:03:00:01:52:54:00:ab:cd:01",
+        dry_run=False,
+    )
+    assert out["status"] == "success"
+    set_call = next(c for c in fake.calls if "set_host" in c[1])
+    assert set_call[2]["json"]["host"]["client_id"] == "00:03:00:01:52:54:00:ab:cd:01"
+
+
+@pytest.mark.asyncio
 async def test_move_host_not_found_returns_error():
     fake = FakeRequest({"search_host": {"rows": [], "total": 0}})
     p = DnsmasqProvider(fake)
