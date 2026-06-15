@@ -9,7 +9,6 @@ It redirects to the actual MCP server implementation in opnsense_mcp.server.
 import argparse
 import os
 
-from opnsense_mcp.server import main as mcp_main
 from opnsense_mcp.utils.logging import setup_logging
 
 
@@ -17,8 +16,7 @@ def main() -> None:
     """
     Start the OPNsense MCP Server.
 
-    This function parses command line arguments and starts the MCP server.
-    The server communicates over stdio using the Model Context Protocol.
+    Supports stdio (default) and streamable-http transports.
     """
     parser = argparse.ArgumentParser(description="OPNsense MCP Server")
     parser.add_argument("--log-file", type=str, help="Path to log file (optional)")
@@ -29,27 +27,53 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging level",
     )
+    parser.add_argument(
+        "--transport",
+        type=str,
+        default="stdio",
+        choices=["stdio", "streamable-http", "http", "sse"],
+        help="MCP transport protocol (default: stdio)",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="Host to bind for HTTP transport (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="Port to bind for HTTP transport (default: 8765)",
+    )
 
     args = parser.parse_args()
 
-    # Setup logging
     setup_logging(args.log_file, args.log_level)
 
-    # Set environment variable for JWT secret key if not set
     if not os.environ.get("MCP_SECRET_KEY"):
-        # NOTE: Hardcoded secret key for development only. Change in production!
-        # Bandit: # nosec
         os.environ["MCP_SECRET_KEY"] = (
             "development-secret-key"  # pragma: allowlist secret
         )
 
-    # Set up MCP environment
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["PYTHONIOENCODING"] = "utf-8"
-    os.environ["MCP_TRANSPORT"] = "stdio"
 
-    # Run the MCP server
-    mcp_main()
+    if args.transport == "stdio":
+        os.environ["MCP_TRANSPORT"] = "stdio"
+        from opnsense_mcp.server import main as mcp_main
+
+        mcp_main()
+    else:
+        from opnsense_mcp.fastmcp_server import build_mcp_server
+
+        mcp = build_mcp_server()
+        mcp.run(
+            transport=args.transport,
+            host=args.host,
+            port=args.port,
+            show_banner=False,
+        )
 
 
 if __name__ == "__main__":
