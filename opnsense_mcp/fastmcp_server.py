@@ -444,13 +444,9 @@ def build_mcp_server() -> FastMCP:
         protocol: str | None = None,
     ) -> str:
         """Get firewall logs with optional filtering."""
-        logs = await firewall_logs_tool.get_logs(
-            limit=limit,
-            action=action,
-            src_ip=src_ip,
-            dst_ip=dst_ip,
-            protocol=protocol,
+        result = await firewall_logs_tool.execute(
+            {"limit": limit, "action": action, "src_ip": src_ip, "dst_ip": dst_ip, "protocol": protocol}
         )
-        return str(logs)
+        return str(result)
 
     return mcp
