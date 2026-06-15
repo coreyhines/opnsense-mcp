@@ -7,6 +7,7 @@ from opnsense_mcp.utils.dhcp_providers.dnsmasq import DnsmasqProvider
 
 def _make_provider(responses: dict):
     """Return a DnsmasqProvider backed by a fake request function."""
+
     async def fake_request(method, endpoint, **kwargs):
         return responses.get(endpoint, {})
 
@@ -179,6 +180,60 @@ async def test_ipv6_only_dry_run():
     assert result["status"] == "dry_run"
     assert result["planned"]["ipv6_suffix"] == "::50"
     assert result["planned"]["ipv4"] is None
+
+
+@pytest.mark.asyncio
+async def test_apply_includes_client_id():
+    captured = {}
+
+    async def fake_request(method, endpoint, **kwargs):
+        if endpoint == _HOST_SEARCH_ENDPOINT:
+            return _search_response([])
+        if endpoint == _LEASE_ENDPOINT:
+            return {"rows": []}
+        if endpoint == _HOST_ADD_ENDPOINT:
+            captured["payload"] = kwargs.get("json", {}).get("host", {})
+            return {"result": "saved", "uuid": "new-uuid"}
+        return {}
+
+    provider = DnsmasqProvider(fake_request)
+    result = await provider.create_host(
+        hostname="hermes",
+        mac="52:54:00:ab:cd:01",
+        ipv4="10.0.3.13",
+        ipv6=13,
+        client_id="00:03:00:01:52:54:00:ab:cd:01",
+        dry_run=False,
+    )
+    assert result["status"] == "success"
+    assert captured["payload"]["ip"] == "10.0.3.13,::13"
+    assert captured["payload"]["client_id"] == "00:03:00:01:52:54:00:ab:cd:01"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_client_id_blocked():
+    existing = {
+        **_EXISTING_ROW,
+        "client_id": "00:03:00:01:52:54:00:ab:cd:01",
+    }
+
+    async def fake_request(method, endpoint, **kwargs):
+        if endpoint == _HOST_SEARCH_ENDPOINT:
+            return _search_response([existing])
+        if endpoint == _LEASE_ENDPOINT:
+            return {"rows": []}
+        return {}
+
+    provider = DnsmasqProvider(fake_request)
+    result = await provider.create_host(
+        hostname="newhost",
+        mac="aa:bb:cc:dd:ee:ff",
+        ipv4="10.0.8.50",
+        client_id="00:03:00:01:52:54:00:ab:cd:01",
+        dry_run=False,
+    )
+    assert result["status"] == "error"
+    assert any(c["reason"] == "duplicate client_id" for c in result["conflicts"])
 
 
 @pytest.mark.asyncio

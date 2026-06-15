@@ -1,5 +1,6 @@
 """dnsmasq DHCP provider for OPNsense."""
 
+import ipaddress
 import logging
 import re
 from collections.abc import Callable, Coroutine
@@ -12,6 +13,7 @@ from opnsense_mcp.utils.dhcp_host import (
     find_ipv4_conflicts,
     flatten_host_for_write,
     format_ip_field,
+    normalize_client_id,
     parse_ip_field,
 )
 from opnsense_mcp.utils.dhcp_scope import resolve_scope_from_selectors
@@ -243,9 +245,9 @@ class DnsmasqProvider:
         payload: dict[str, Any] = {
             "uuid": str(row.get("uuid") or ""),
             "type": str(row.get("type") or "set"),
-            "interface": ""
-            if use_tag
-            else str(row.get("interface") or scope.interface),
+            "interface": (
+                "" if use_tag else str(row.get("interface") or scope.interface)
+            ),
             "tag": use_tag,
             "set_tag": str(row.get("set_tag") or ""),
             "value": value,
@@ -525,6 +527,7 @@ class DnsmasqProvider:
         ipv4_target: int | str | None,
         ipv6_target: int | str | None,
         new_hostname: str | None = None,
+        client_id: str | None = None,
         dry_run: bool = True,
     ) -> dict[str, Any]:
         """Move a host reservation to new v4 and/or v6 addresses."""
@@ -539,12 +542,20 @@ class DnsmasqProvider:
         new_ipv4 = rec.ipv4
         new_ipv6 = rec.ipv6_suffix
         if ipv4_target is not None:
-            if not rec.ipv4:
-                return {
-                    "status": "error",
-                    "error": f"{rec.host} has no IPv4 reservation to move",
-                }
-            new_ipv4 = apply_v4_suffix(rec.ipv4, ipv4_target)
+            if rec.ipv4:
+                new_ipv4 = apply_v4_suffix(rec.ipv4, ipv4_target)
+            else:
+                raw = str(ipv4_target).strip()
+                if "." in raw:
+                    new_ipv4 = str(ipaddress.ip_address(raw))
+                else:
+                    return {
+                        "status": "error",
+                        "error": (
+                            f"{rec.host} has no IPv4 reservation; "
+                            "provide a full address (e.g. 10.0.3.13)"
+                        ),
+                    }
         if ipv6_target is not None:
             new_ipv6 = apply_v6_suffix(ipv6_target)
 
@@ -558,10 +569,24 @@ class DnsmasqProvider:
                 }
             new_host = stripped
 
+        current_client_id = normalize_client_id(str(rec.raw.get("client_id") or ""))
+        new_client_id = current_client_id
+        if client_id is not None:
+            try:
+                new_client_id = normalize_client_id(client_id)
+            except ValueError as exc:
+                return {"status": "error", "error": str(exc)}
+
+        raw_ip = str(rec.raw.get("ip") or "")
+        canonical_ip = format_ip_field(new_ipv4, new_ipv6)
+        needs_ip_rewrite = bool(canonical_ip and raw_ip != canonical_ip)
+
         if (
             new_ipv4 == rec.ipv4
             and new_ipv6 == rec.ipv6_suffix
             and new_host == rec.host
+            and new_client_id == current_client_id
+            and not needs_ip_rewrite
         ):
             return {
                 "status": "noop",
@@ -585,19 +610,41 @@ class DnsmasqProvider:
                 hosts=all_hosts,
                 leases=leases,
             )
+        if new_client_id and new_client_id != current_client_id:
+            for row in all_hosts:
+                if str(row.get("uuid") or "") == rec.uuid:
+                    continue
+                existing = normalize_client_id(str(row.get("client_id") or ""))
+                if existing and existing == new_client_id:
+                    conflicts.append(
+                        {
+                            "kind": "reservation",
+                            "reason": "duplicate client_id",
+                            "host": str(row.get("host") or ""),
+                            "client_id": new_client_id,
+                            "uuid": str(row.get("uuid") or ""),
+                        }
+                    )
 
         planned = {
             "host": rec.host,
             "hwaddr": rec.hwaddr,
-            "hostname": {"from": rec.host, "to": new_host}
-            if new_host != rec.host
-            else None,
-            "ipv4": {"from": rec.ipv4, "to": new_ipv4}
-            if new_ipv4 != rec.ipv4
-            else None,
-            "ipv6": {"from": rec.ipv6_suffix, "to": new_ipv6}
-            if new_ipv6 != rec.ipv6_suffix
-            else None,
+            "hostname": (
+                {"from": rec.host, "to": new_host} if new_host != rec.host else None
+            ),
+            "ipv4": (
+                {"from": rec.ipv4, "to": new_ipv4} if new_ipv4 != rec.ipv4 else None
+            ),
+            "ipv6": (
+                {"from": rec.ipv6_suffix, "to": new_ipv6}
+                if new_ipv6 != rec.ipv6_suffix
+                else None
+            ),
+            "client_id": (
+                {"from": current_client_id or None, "to": new_client_id or None}
+                if new_client_id != current_client_id
+                else None
+            ),
         }
 
         if conflicts:
@@ -619,7 +666,12 @@ class DnsmasqProvider:
         original_payload = flatten_host_for_write(
             rec, new_ipv4=rec.ipv4, new_ipv6=rec.ipv6_suffix
         )
-        new_payload = flatten_host_for_write(rec, new_ipv4=new_ipv4, new_ipv6=new_ipv6)
+        new_payload = flatten_host_for_write(
+            rec,
+            new_ipv4=new_ipv4,
+            new_ipv6=new_ipv6,
+            new_client_id=new_client_id,
+        )
         if new_host != rec.host:
             new_payload["host"] = new_host
         try:
@@ -660,6 +712,7 @@ class DnsmasqProvider:
         mac: str,
         ipv4: str | None = None,
         ipv6: int | str | None = None,
+        client_id: str | None = None,
         descr: str = "",
         domain: str = "",
         dry_run: bool = True,
@@ -678,9 +731,13 @@ class DnsmasqProvider:
             raw = str(ipv4).strip()
             try:
                 import ipaddress as _ipaddress
+
                 addr = _ipaddress.ip_address(raw)
                 if addr.version != 4:
-                    return {"status": "error", "error": f"Expected IPv4 address, got {raw!r}"}
+                    return {
+                        "status": "error",
+                        "error": f"Expected IPv4 address, got {raw!r}",
+                    }
                 normalized_ipv4 = str(addr)
             except ValueError:
                 return {"status": "error", "error": f"Invalid IPv4 address: {raw!r}"}
@@ -693,7 +750,17 @@ class DnsmasqProvider:
                 return {"status": "error", "error": str(exc)}
 
         if normalized_ipv4 is None and normalized_ipv6 is None:
-            return {"status": "error", "error": "At least one of ipv4 or ipv6 is required"}
+            return {
+                "status": "error",
+                "error": "At least one of ipv4 or ipv6 is required",
+            }
+
+        normalized_client_id = ""
+        if client_id is not None:
+            try:
+                normalized_client_id = normalize_client_id(client_id)
+            except ValueError as exc:
+                return {"status": "error", "error": str(exc)}
 
         all_hosts = await self.list_hosts()
         leases = self._extract_leases(
@@ -707,26 +774,45 @@ class DnsmasqProvider:
         conflicts: list[dict[str, Any]] = []
         for row in all_hosts:
             if str(row.get("hwaddr") or "").lower() == normalized_mac:
-                conflicts.append({
-                    "kind": "reservation",
-                    "reason": "duplicate MAC",
-                    "host": str(row.get("host") or ""),
-                    "hwaddr": normalized_mac,
-                    "uuid": str(row.get("uuid") or ""),
-                })
+                conflicts.append(
+                    {
+                        "kind": "reservation",
+                        "reason": "duplicate MAC",
+                        "host": str(row.get("host") or ""),
+                        "hwaddr": normalized_mac,
+                        "uuid": str(row.get("uuid") or ""),
+                    }
+                )
+        if normalized_client_id:
+            for row in all_hosts:
+                existing = normalize_client_id(str(row.get("client_id") or ""))
+                if existing and existing == normalized_client_id:
+                    conflicts.append(
+                        {
+                            "kind": "reservation",
+                            "reason": "duplicate client_id",
+                            "host": str(row.get("host") or ""),
+                            "client_id": normalized_client_id,
+                            "uuid": str(row.get("uuid") or ""),
+                        }
+                    )
         if normalized_ipv4:
-            conflicts.extend(find_ipv4_conflicts(
-                target_ipv4=normalized_ipv4,
-                moving_uuid="",
-                hosts=all_hosts,
-                leases=leases,
-            ))
+            conflicts.extend(
+                find_ipv4_conflicts(
+                    target_ipv4=normalized_ipv4,
+                    moving_uuid="",
+                    hosts=all_hosts,
+                    leases=leases,
+                    promoting_mac=normalized_mac,
+                )
+            )
 
         planned = {
             "host": hostname.strip(),
             "hwaddr": normalized_mac,
             "ipv4": normalized_ipv4,
             "ipv6_suffix": normalized_ipv6,
+            "client_id": normalized_client_id or None,
             "descr": descr,
             "domain": domain,
         }
@@ -755,7 +841,7 @@ class DnsmasqProvider:
             "descr": descr,
             "local": "",
             "cnames": "",
-            "client_id": "",
+            "client_id": normalized_client_id,
             "lease_time": "",
             "ignore": "0",
             "set_tag": "",

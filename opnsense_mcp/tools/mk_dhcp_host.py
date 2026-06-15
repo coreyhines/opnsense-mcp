@@ -19,6 +19,8 @@ class MkDhcpHostTool:
         "Create a DHCP host reservation in the dnsmasq host table "
         "(Services → DHCPv4 → Hosts). Requires hostname and MAC; at least one "
         "of ipv4 or ipv6 suffix must be provided. "
+        "Optional client_id (DUID) improves stateful DHCPv6 matching when MAC "
+        "alone is insufficient — copy from the dhcp tool v6 lease client_id. "
         "Defaults to a dry run; pass apply=true to write and reconfigure dnsmasq."
     )
     input_schema = {
@@ -39,6 +41,13 @@ class MkDhcpHostTool:
             "ipv6": {
                 "type": ["integer", "string"],
                 "description": "IPv6 suffix: integer (e.g. 50 → ::50) or '::abcd'",
+            },
+            "client_id": {
+                "type": "string",
+                "description": (
+                    "Optional DHCP client identifier / DUID for IPv6 (e.g. "
+                    "'00:03:00:01:52:54:00:ab:cd:01'). Accepts optional 'id:' prefix."
+                ),
             },
             "descr": {
                 "type": "string",
@@ -83,6 +92,7 @@ class MkDhcpHostTool:
         if ipv4 is None and ipv6 is None:
             return {"status": "error", "error": "Provide ipv4 and/or ipv6"}
 
+        client_id = params.get("client_id")
         descr = str(params.get("descr") or "").strip()
         domain = str(params.get("domain") or "").strip()
         apply = bool(params.get("apply", False))
@@ -93,6 +103,7 @@ class MkDhcpHostTool:
                 mac=mac,
                 ipv4=str(ipv4).strip() if ipv4 is not None else None,
                 ipv6=ipv6,
+                client_id=str(client_id).strip() if client_id is not None else None,
                 descr=descr,
                 domain=domain,
                 dry_run=not apply,
