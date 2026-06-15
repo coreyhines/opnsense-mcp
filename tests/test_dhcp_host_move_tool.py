@@ -45,6 +45,14 @@ async def test_tool_passes_apply_flag():
 
 
 @pytest.mark.asyncio
+async def test_tool_passes_new_hostname():
+    client = FakeClient()
+    tool = MoveDhcpHostTool(client)
+    await tool.execute({"host": "printer", "new_hostname": "printer2"})
+    assert client.called["new_hostname"] == "printer2"
+
+
+@pytest.mark.asyncio
 async def test_tool_no_client():
     tool = MoveDhcpHostTool(None)
     out = await tool.execute({"host": "printer", "ipv4": 2})

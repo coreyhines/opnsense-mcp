@@ -16,7 +16,7 @@ class MoveDhcpHostTool:
 
     name = "move_dhcp_host"
     description = (
-        "Move a DHCP host reservation (dnsmasq) to a new IPv4 and/or IPv6 address. "
+        "Move or rename a DHCP host reservation (dnsmasq). "
         "IPv4 is the reliable contract; IPv6 (::N suffix) applies only to "
         "stateful-DHCPv6 clients. Defaults to a dry run; pass apply=true to write. "
         "The client keeps its old address until it renews or reboots."
@@ -36,13 +36,21 @@ class MoveDhcpHostTool:
                 "type": ["integer", "string"],
                 "description": "New IPv6 suffix: e.g. 2 -> ::2, or '::abcd'",
             },
+            "new_hostname": {
+                "type": "string",
+                "description": "New dnsmasq host reservation name (optional rename)",
+            },
             "apply": {
                 "type": "boolean",
                 "description": "Apply the change. Omit/false = dry run.",
             },
         },
         "required": ["host"],
-        "anyOf": [{"required": ["ipv4"]}, {"required": ["ipv6"]}],
+        "anyOf": [
+            {"required": ["ipv4"]},
+            {"required": ["ipv6"]},
+            {"required": ["new_hostname"]},
+        ],
     }
 
     def __init__(self, client: OPNsenseClient | None) -> None:
@@ -61,8 +69,12 @@ class MoveDhcpHostTool:
 
         ipv4 = params.get("ipv4")
         ipv6 = params.get("ipv6")
-        if ipv4 is None and ipv6 is None:
-            return {"status": "error", "error": "Provide ipv4 and/or ipv6 target"}
+        new_hostname = params.get("new_hostname")
+        if ipv4 is None and ipv6 is None and not str(new_hostname or "").strip():
+            return {
+                "status": "error",
+                "error": "Provide ipv4, ipv6, and/or new_hostname",
+            }
 
         apply = bool(params.get("apply", False))
         try:
@@ -70,6 +82,7 @@ class MoveDhcpHostTool:
                 identifier=identifier,
                 ipv4=ipv4,
                 ipv6=ipv6,
+                new_hostname=str(new_hostname).strip() if new_hostname else None,
                 dry_run=not apply,
             )
         except Exception as exc:
