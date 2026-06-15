@@ -952,6 +952,32 @@ class OPNsenseClient:
         provider = require_host_provider(self._dhcp_provider)
         return await provider.delete_host(identifier=identifier, dry_run=dry_run)
 
+    async def add_dhcp_host(
+        self,
+        *,
+        hostname: str,
+        mac: str,
+        ipv4: str | None = None,
+        ipv6: int | str | None = None,
+        descr: str = "",
+        domain: str = "",
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Create a new dnsmasq host reservation."""
+        await self._ensure_dhcp_provider()
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
+        provider = require_host_provider(self._dhcp_provider)
+        return await provider.create_host(
+            hostname=hostname,
+            mac=mac,
+            ipv4=ipv4,
+            ipv6=ipv6,
+            descr=descr,
+            domain=domain,
+            dry_run=dry_run,
+        )
+
     async def get_firewall_logs(
         self: "OPNsenseClient", limit: int = 100
     ) -> list[dict[str, Any]]:
