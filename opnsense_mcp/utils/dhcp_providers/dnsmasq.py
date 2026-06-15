@@ -1,6 +1,7 @@
 """dnsmasq DHCP provider for OPNsense."""
 
 import logging
+import re
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -10,6 +11,8 @@ from opnsense_mcp.utils.dhcp_host import (
     apply_v6_suffix,
     find_ipv4_conflicts,
     flatten_host_for_write,
+    format_ip_field,
+    parse_ip_field,
 )
 from opnsense_mcp.utils.dhcp_scope import resolve_scope_from_selectors
 from opnsense_mcp.utils.dhcp_subnet_dns import (
@@ -26,6 +29,16 @@ logger = logging.getLogger(__name__)
 
 MakeRequestFn = Callable[..., Coroutine[Any, Any, dict[str, Any] | list[Any]]]
 _UNSET: object = object()
+_MAC_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.IGNORECASE)
+
+
+def _normalize_mac(mac: str) -> str:
+    """Return lowercase colon-separated MAC address, or raise ValueError."""
+    normalized = mac.strip().lower().replace("-", ":")
+    if not _MAC_RE.match(normalized):
+        msg = f"Invalid MAC address: {mac!r}"
+        raise ValueError(msg)
+    return normalized
 
 
 class DnsmasqProvider:
@@ -511,6 +524,7 @@ class DnsmasqProvider:
         identifier: str,
         ipv4_target: int | str | None,
         ipv6_target: int | str | None,
+        new_hostname: str | None = None,
         dry_run: bool = True,
     ) -> dict[str, Any]:
         """Move a host reservation to new v4 and/or v6 addresses."""
@@ -534,11 +548,25 @@ class DnsmasqProvider:
         if ipv6_target is not None:
             new_ipv6 = apply_v6_suffix(ipv6_target)
 
-        if new_ipv4 == rec.ipv4 and new_ipv6 == rec.ipv6_suffix:
+        new_host = rec.host
+        if new_hostname is not None:
+            stripped = new_hostname.strip()
+            if not stripped:
+                return {
+                    "status": "error",
+                    "error": "new_hostname must be non-empty when provided",
+                }
+            new_host = stripped
+
+        if (
+            new_ipv4 == rec.ipv4
+            and new_ipv6 == rec.ipv6_suffix
+            and new_host == rec.host
+        ):
             return {
                 "status": "noop",
                 "backend": self.name,
-                "note": "No address changes requested.",
+                "note": "No address or hostname changes requested.",
             }
 
         all_hosts = await self.list_hosts()
@@ -561,6 +589,9 @@ class DnsmasqProvider:
         planned = {
             "host": rec.host,
             "hwaddr": rec.hwaddr,
+            "hostname": {"from": rec.host, "to": new_host}
+            if new_host != rec.host
+            else None,
             "ipv4": {"from": rec.ipv4, "to": new_ipv4}
             if new_ipv4 != rec.ipv4
             else None,
@@ -589,6 +620,8 @@ class DnsmasqProvider:
             rec, new_ipv4=rec.ipv4, new_ipv6=rec.ipv6_suffix
         )
         new_payload = flatten_host_for_write(rec, new_ipv4=new_ipv4, new_ipv6=new_ipv6)
+        if new_host != rec.host:
+            new_payload["host"] = new_host
         try:
             await self.set_host(rec.uuid, new_payload)
             await self._reconfigure()
@@ -618,6 +651,141 @@ class DnsmasqProvider:
                 "Reservation updated. Client keeps its old address until it "
                 "renews or reboots. IPv6 applies only to stateful-DHCPv6 clients."
             ),
+        }
+
+    async def create_host(
+        self,
+        *,
+        hostname: str,
+        mac: str,
+        ipv4: str | None = None,
+        ipv6: int | str | None = None,
+        descr: str = "",
+        domain: str = "",
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Create a new dnsmasq host reservation."""
+        try:
+            normalized_mac = _normalize_mac(mac)
+        except ValueError as exc:
+            return {"status": "error", "error": str(exc)}
+
+        if not hostname.strip():
+            return {"status": "error", "error": "hostname is required"}
+
+        normalized_ipv4: str | None = None
+        if ipv4 is not None:
+            raw = str(ipv4).strip()
+            try:
+                import ipaddress as _ipaddress
+                addr = _ipaddress.ip_address(raw)
+                if addr.version != 4:
+                    return {"status": "error", "error": f"Expected IPv4 address, got {raw!r}"}
+                normalized_ipv4 = str(addr)
+            except ValueError:
+                return {"status": "error", "error": f"Invalid IPv4 address: {raw!r}"}
+
+        normalized_ipv6: str | None = None
+        if ipv6 is not None:
+            try:
+                normalized_ipv6 = apply_v6_suffix(ipv6)
+            except ValueError as exc:
+                return {"status": "error", "error": str(exc)}
+
+        if normalized_ipv4 is None and normalized_ipv6 is None:
+            return {"status": "error", "error": "At least one of ipv4 or ipv6 is required"}
+
+        all_hosts = await self.list_hosts()
+        leases = self._extract_leases(
+            await self._request(
+                "POST",
+                self.LEASE_ENDPOINT,
+                json={"current": 1, "rowCount": -1, "searchPhrase": ""},
+            )
+        )
+
+        conflicts: list[dict[str, Any]] = []
+        for row in all_hosts:
+            if str(row.get("hwaddr") or "").lower() == normalized_mac:
+                conflicts.append({
+                    "kind": "reservation",
+                    "reason": "duplicate MAC",
+                    "host": str(row.get("host") or ""),
+                    "hwaddr": normalized_mac,
+                    "uuid": str(row.get("uuid") or ""),
+                })
+        if normalized_ipv4:
+            conflicts.extend(find_ipv4_conflicts(
+                target_ipv4=normalized_ipv4,
+                moving_uuid="",
+                hosts=all_hosts,
+                leases=leases,
+            ))
+
+        planned = {
+            "host": hostname.strip(),
+            "hwaddr": normalized_mac,
+            "ipv4": normalized_ipv4,
+            "ipv6_suffix": normalized_ipv6,
+            "descr": descr,
+            "domain": domain,
+        }
+
+        if conflicts:
+            return {
+                "status": "error",
+                "backend": self.name,
+                "planned": planned,
+                "conflicts": conflicts,
+            }
+
+        if dry_run:
+            return {
+                "status": "dry_run",
+                "backend": self.name,
+                "planned": planned,
+                "note": "No changes applied. Re-run with apply=true to create.",
+            }
+
+        host_payload: dict[str, Any] = {
+            "host": hostname.strip(),
+            "hwaddr": normalized_mac,
+            "ip": format_ip_field(normalized_ipv4, normalized_ipv6),
+            "domain": domain,
+            "descr": descr,
+            "local": "",
+            "cnames": "",
+            "client_id": "",
+            "lease_time": "",
+            "ignore": "0",
+            "set_tag": "",
+            "comments": "",
+            "aliases": "",
+        }
+
+        try:
+            result = await self.add_host(host_payload)
+            if result.get("result") != "saved":
+                return {
+                    "status": "error",
+                    "backend": self.name,
+                    "planned": planned,
+                    "error": f"API returned: {result}",
+                }
+            await self._reconfigure()
+        except Exception as exc:
+            logger.exception("create_host failed for %s", hostname)
+            return {
+                "status": "error",
+                "backend": self.name,
+                "planned": planned,
+                "error": str(exc),
+            }
+
+        return {
+            "status": "success",
+            "backend": self.name,
+            "created": {**planned, "uuid": str(result.get("uuid", ""))},
         }
 
     async def _resolve_host_row(self, identifier: str) -> dict[str, Any] | None:

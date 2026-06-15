@@ -98,6 +98,7 @@ from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.gateway_status import GatewayStatusTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
 from opnsense_mcp.tools.lldp import LLDPTool
+from opnsense_mcp.tools.mk_dhcp_host import MkDhcpHostTool
 from opnsense_mcp.tools.mkdns import MkdnsTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
 from opnsense_mcp.tools.packet_capture import PacketCaptureTool2 as PacketCaptureTool
@@ -203,6 +204,7 @@ async def handle_message(
     move_dhcp_host_tool: MoveDhcpHostTool,
     list_dhcp_hosts_tool: ListDhcpHostsTool,
     rm_dhcp_host_tool: RmDhcpHostTool,
+    mk_dhcp_host_tool: MkDhcpHostTool,
     lldp_tool: LLDPTool,
     system_tool: SystemTool,
     fw_rules_tool: FwRulesTool,
@@ -373,6 +375,11 @@ async def handle_message(
                 "name": RmDhcpHostTool.name,
                 "description": RmDhcpHostTool.description,
                 "inputSchema": RmDhcpHostTool.input_schema,
+            },
+            {
+                "name": MkDhcpHostTool.name,
+                "description": MkDhcpHostTool.description,
+                "inputSchema": MkDhcpHostTool.input_schema,
             },
             {
                 "name": "lldp",
@@ -906,6 +913,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if tool_name == "mk_dhcp_host":
+            result = await mk_dhcp_host_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         if tool_name == "get_logs":
             logs = await firewall_logs.get_logs(
                 limit=arguments.get("limit", 500),
@@ -1117,6 +1131,7 @@ def main() -> None:
     move_dhcp_host_tool = MoveDhcpHostTool(client)
     list_dhcp_hosts_tool = ListDhcpHostsTool(client)
     rm_dhcp_host_tool = RmDhcpHostTool(client)
+    mk_dhcp_host_tool = MkDhcpHostTool(client)
     lldp_tool = LLDPTool(client)
     system_tool = SystemTool(client)
     fw_rules_tool = FwRulesTool(client)
@@ -1186,6 +1201,7 @@ def main() -> None:
                     move_dhcp_host_tool,
                     list_dhcp_hosts_tool,
                     rm_dhcp_host_tool,
+                    mk_dhcp_host_tool,
                     lldp_tool,
                     system_tool,
                     fw_rules_tool,
