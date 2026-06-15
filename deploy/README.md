@@ -1,6 +1,6 @@
-# Deploying OPNsense MCP (SSE Mode)
+# Deploying OPNsense MCP (Streamable HTTP Mode)
 
-This folder is for the centralized `SSE` deployment path.
+This folder is for the centralized `Streamable HTTP` deployment path.
 
 For local IDE usage (`STDIO`), use the root quickstart instead:
 [`../docs/GETTING_STARTED.md`](../docs/GETTING_STARTED.md).
@@ -19,13 +19,13 @@ sudo bash deploy/install.sh
 After TLS and DNS are in place, clients connect to:
 
 ```text
-https://<your-hostname>/sse
+https://<your-hostname>/mcp
 ```
 
 ## Runtime Summary
 
-- App container runs `mcp-proxy` in `SSE -> stdio` mode against `python3 main.py`.
-- App listens on HTTP `8765` inside the pod/network.
+- App container runs FastMCP natively (`python3 main.py --transport streamable-http --host 0.0.0.0 --port 8765`).
+- App listens on HTTP `8765` inside the pod/network; MCP endpoint is `/mcp` (Streamable HTTP, MCP spec 2025-03-26).
 - TLS is terminated by Caddy (`deploy/TLS.md`).
 
 ## Required Follow-ups

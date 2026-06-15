@@ -1,4 +1,4 @@
-# OPNsense MCP — Caddy terminates TLS; mcp-proxy serves MCP (SSE) at http://127.0.0.1:8765 in the same pod.
+# OPNsense MCP — Caddy terminates TLS; FastMCP serves Streamable HTTP at http://127.0.0.1:8765/mcp in the same pod.
 #
 # Install copies this to $OPNSENSE_MCP_INSTALL_ROOT/Caddyfile (e.g. /opt/containerdata/opnsense-mcp/Caddyfile).
 # PEM paths must exist on the host and match OPNSENSE_MCP_TLS_CERTS (default: /opt/certs/wild).

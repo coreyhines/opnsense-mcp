@@ -171,7 +171,7 @@ write_opnsense_mcp_quadlet() {
   local pod_quadlet_file=$3
   {
     printf '%s\n' '[Unit]'
-    printf '%s\n' 'Description=OPNsense MCP (Podman quadlet, mcp-proxy SSE)'
+    printf '%s\n' 'Description=OPNsense MCP (Podman quadlet, FastMCP Streamable HTTP)'
     printf '%s\n' "After=network-online.target ${pod_svc}"
     printf '%s\n' 'Wants=network-online.target'
     printf '%s\n' "Requires=${pod_svc}"
