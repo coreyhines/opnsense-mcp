@@ -14,6 +14,7 @@ async def test_fastmcp_server_imports():
 async def test_fastmcp_server_lists_tools():
     """Server must expose all expected tools."""
     from fastmcp.client import Client
+
     from opnsense_mcp.fastmcp_server import build_mcp_server
 
     mcp = build_mcp_server()
@@ -37,6 +38,7 @@ async def test_fastmcp_server_lists_tools():
 async def test_fastmcp_server_tool_count():
     """Server must expose exactly 26 tools."""
     from fastmcp.client import Client
+
     from opnsense_mcp.fastmcp_server import build_mcp_server
 
     mcp = build_mcp_server()

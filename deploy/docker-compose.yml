@@ -1,4 +1,5 @@
 # Docker Compose (Linux amd64). TLS: Caddy terminates HTTPS; MCP is HTTP on loopback.
+# MCP endpoint: http://localhost:8765/mcp (Streamable HTTP, MCP spec 2025-03-26)
 # Used by deploy/install.sh --runtime docker. Copy or run from a checkout of this repo.
 
 services:
