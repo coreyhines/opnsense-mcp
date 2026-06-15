@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from dataclasses import dataclass, field
 from typing import Any
+
+_CLIENT_ID_RE = re.compile(r"^([0-9a-f]{2}:)+[0-9a-f]{2}$", re.IGNORECASE)
 
 # Fields preserved verbatim when rewriting a host record back to the API.
 _PASSTHROUGH_FIELDS = (
@@ -46,6 +49,26 @@ def format_ip_field(ipv4: str | None, ipv6: str | None) -> str:
     """Join (ipv4, ipv6) back into a dnsmasq ``ip`` field, v4 first."""
     parts = [p for p in (ipv4, ipv6) if p]
     return ",".join(parts)
+
+
+def normalize_client_id(value: str | None) -> str:
+    """Return a lowercase colon-separated DHCP client identifier (DUID).
+
+    Accepts dnsmasq ``id:`` prefixes; empty/whitespace returns ``""``.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.lower().startswith("id:"):
+        raw = raw[3:].strip()
+    normalized = raw.lower().replace("-", ":")
+    if not _CLIENT_ID_RE.match(normalized):
+        msg = (
+            "Invalid client_id; expected colon-separated hex bytes "
+            f"(DUID), got {value!r}"
+        )
+        raise ValueError(msg)
+    return normalized
 
 
 @dataclass
@@ -132,6 +155,7 @@ def flatten_host_for_write(
     *,
     new_ipv4: str | None,
     new_ipv6: str | None,
+    new_client_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a flat host payload (inner object for ``{"host": ...}``) preserving
     all original fields and replacing only the ``ip`` field.
@@ -140,6 +164,8 @@ def flatten_host_for_write(
         key: str(record.raw.get(key, "") or "") for key in _PASSTHROUGH_FIELDS
     }
     payload["ip"] = format_ip_field(new_ipv4, new_ipv6)
+    if new_client_id is not None:
+        payload["client_id"] = new_client_id
     return payload
 
 
@@ -149,11 +175,15 @@ def find_ipv4_conflicts(
     moving_uuid: str,
     hosts: list[dict[str, Any]],
     leases: list[dict[str, Any]],
+    promoting_mac: str = "",
 ) -> list[dict[str, Any]]:
     """Return conflicts for ``target_ipv4``: other reservations or active leases
     already holding the address. The host being moved (``moving_uuid``) is ignored.
+    When ``promoting_mac`` is set, active leases on ``target_ipv4`` for that MAC
+    are allowed (dynamic → static promotion).
     """
     conflicts: list[dict[str, Any]] = []
+    promote = promoting_mac.strip().lower()
     for row in hosts:
         if str(row.get("uuid") or "") == moving_uuid:
             continue
@@ -169,13 +199,17 @@ def find_ipv4_conflicts(
             )
     for lease in leases:
         addr = str(lease.get("address") or lease.get("ip") or "")
-        if addr == target_ipv4:
-            conflicts.append(
-                {
-                    "kind": "lease",
-                    "address": target_ipv4,
-                    "hostname": str(lease.get("hostname") or ""),
-                    "hwaddr": str(lease.get("hwaddr") or ""),
-                }
-            )
+        if addr != target_ipv4:
+            continue
+        lease_mac = str(lease.get("hwaddr") or "").lower()
+        if promote and lease_mac == promote:
+            continue
+        conflicts.append(
+            {
+                "kind": "lease",
+                "address": target_ipv4,
+                "hostname": str(lease.get("hostname") or ""),
+                "hwaddr": lease_mac,
+            }
+        )
     return conflicts

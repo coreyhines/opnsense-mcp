@@ -7,6 +7,7 @@ from opnsense_mcp.utils.dhcp_host import (
     find_ipv4_conflicts,
     flatten_host_for_write,
     format_ip_field,
+    normalize_client_id,
     parse_ip_field,
 )
 
@@ -154,6 +155,25 @@ def test_find_ipv4_conflicts_active_lease():
     assert any(c["kind"] == "lease" and c["address"] == "10.0.8.9" for c in conflicts)
 
 
+def test_find_ipv4_conflicts_allows_same_mac_promotion():
+    hosts: list[dict] = []
+    leases = [
+        {
+            "address": "10.0.3.13",
+            "hwaddr": "52:54:00:ab:cd:01",
+            "hostname": "hermes",
+        }
+    ]
+    conflicts = find_ipv4_conflicts(
+        target_ipv4="10.0.3.13",
+        moving_uuid="",
+        hosts=hosts,
+        leases=leases,
+        promoting_mac="52:54:00:ab:cd:01",
+    )
+    assert conflicts == []
+
+
 def test_find_ipv4_conflicts_none_when_free():
     hosts = [{"uuid": "u1", "host": "printer", "ip": "10.0.8.2,::2", "hwaddr": "AA"}]
     assert (
@@ -165,3 +185,45 @@ def test_find_ipv4_conflicts_none_when_free():
         )
         == []
     )
+
+
+def test_normalize_client_id_accepts_duid():
+    assert (
+        normalize_client_id("00:03:00:01:52:54:00:ab:cd:01")
+        == "00:03:00:01:52:54:00:ab:cd:01"
+    )
+
+
+def test_normalize_client_id_strips_id_prefix():
+    assert normalize_client_id("id:00:03:00:01:aa:bb:cc:dd:ee:ff") == (
+        "00:03:00:01:aa:bb:cc:dd:ee:ff"
+    )
+
+
+def test_normalize_client_id_empty():
+    assert normalize_client_id("") == ""
+    assert normalize_client_id(None) == ""
+
+
+def test_normalize_client_id_rejects_invalid():
+    with pytest.raises(ValueError, match="Invalid client_id"):
+        normalize_client_id("not-a-duid")
+
+
+def test_flatten_host_for_write_can_replace_client_id():
+    rec = DhcpHostRecord.from_row(
+        {
+            "uuid": "u1",
+            "host": "hermes",
+            "ip": "10.0.3.13,::13",
+            "hwaddr": "52:54:00:ab:cd:01",
+            "client_id": "",
+        }
+    )
+    payload = flatten_host_for_write(
+        rec,
+        new_ipv4="10.0.3.13",
+        new_ipv6="::13",
+        new_client_id="00:03:00:01:52:54:00:ab:cd:01",
+    )
+    assert payload["client_id"] == "00:03:00:01:52:54:00:ab:cd:01"

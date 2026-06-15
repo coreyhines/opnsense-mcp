@@ -40,6 +40,13 @@ class MoveDhcpHostTool:
                 "type": "string",
                 "description": "New dnsmasq host reservation name (optional rename)",
             },
+            "client_id": {
+                "type": "string",
+                "description": (
+                    "Set or replace DHCP client identifier / DUID for IPv6 (e.g. "
+                    "'00:03:00:01:52:54:00:ab:cd:01'). Accepts optional 'id:' prefix."
+                ),
+            },
             "apply": {
                 "type": "boolean",
                 "description": "Apply the change. Omit/false = dry run.",
@@ -50,6 +57,7 @@ class MoveDhcpHostTool:
             {"required": ["ipv4"]},
             {"required": ["ipv6"]},
             {"required": ["new_hostname"]},
+            {"required": ["client_id"]},
         ],
     }
 
@@ -70,10 +78,16 @@ class MoveDhcpHostTool:
         ipv4 = params.get("ipv4")
         ipv6 = params.get("ipv6")
         new_hostname = params.get("new_hostname")
-        if ipv4 is None and ipv6 is None and not str(new_hostname or "").strip():
+        client_id = params.get("client_id")
+        if (
+            ipv4 is None
+            and ipv6 is None
+            and not str(new_hostname or "").strip()
+            and client_id is None
+        ):
             return {
                 "status": "error",
-                "error": "Provide ipv4, ipv6, and/or new_hostname",
+                "error": "Provide ipv4, ipv6, client_id, and/or new_hostname",
             }
 
         apply = bool(params.get("apply", False))
@@ -83,6 +97,7 @@ class MoveDhcpHostTool:
                 ipv4=ipv4,
                 ipv6=ipv6,
                 new_hostname=str(new_hostname).strip() if new_hostname else None,
+                client_id=str(client_id).strip() if client_id is not None else None,
                 dry_run=not apply,
             )
         except Exception as exc:
