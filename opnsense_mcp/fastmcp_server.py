@@ -139,6 +139,7 @@ def build_mcp_server() -> FastMCP:
         ipv4: str | None = None,
         ipv6: str | None = None,
         new_hostname: str | None = None,
+        client_id: str | None = None,
         apply: bool = False,
     ) -> str:
         """Move a DHCP host reservation to a different subnet."""
@@ -148,6 +149,7 @@ def build_mcp_server() -> FastMCP:
                 "ipv4": ipv4,
                 "ipv6": ipv6,
                 "new_hostname": new_hostname,
+                "client_id": client_id,
                 "apply": apply,
             }
         )
@@ -177,6 +179,7 @@ def build_mcp_server() -> FastMCP:
         mac: str,
         ipv4: str | None = None,
         ipv6: str | None = None,
+        client_id: str | None = None,
         descr: str = "",
         domain: str = "",
         apply: bool = False,
@@ -188,6 +191,7 @@ def build_mcp_server() -> FastMCP:
                 "mac": mac,
                 "ipv4": ipv4,
                 "ipv6": ipv6,
+                "client_id": client_id,
                 "descr": descr,
                 "domain": domain,
                 "apply": apply,
@@ -445,7 +449,13 @@ def build_mcp_server() -> FastMCP:
     ) -> str:
         """Get firewall logs with optional filtering."""
         result = await firewall_logs_tool.execute(
-            {"limit": limit, "action": action, "src_ip": src_ip, "dst_ip": dst_ip, "protocol": protocol}
+            {
+                "limit": limit,
+                "action": action,
+                "src_ip": src_ip,
+                "dst_ip": dst_ip,
+                "protocol": protocol,
+            }
         )
         return str(result)
 

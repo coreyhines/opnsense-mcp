@@ -916,6 +916,7 @@ class OPNsenseClient:
         ipv4: int | str | None = None,
         ipv6: int | str | None = None,
         new_hostname: str | None = None,
+        client_id: str | None = None,
         dry_run: bool = True,
     ) -> dict[str, Any]:
         """Move/rename a DHCP host reservation (dnsmasq only)."""
@@ -928,6 +929,7 @@ class OPNsenseClient:
             ipv4_target=ipv4,
             ipv6_target=ipv6,
             new_hostname=new_hostname,
+            client_id=client_id,
             dry_run=dry_run,
         )
 
@@ -959,6 +961,7 @@ class OPNsenseClient:
         mac: str,
         ipv4: str | None = None,
         ipv6: int | str | None = None,
+        client_id: str | None = None,
         descr: str = "",
         domain: str = "",
         dry_run: bool = True,
@@ -973,6 +976,7 @@ class OPNsenseClient:
             mac=mac,
             ipv4=ipv4,
             ipv6=ipv6,
+            client_id=client_id,
             descr=descr,
             domain=domain,
             dry_run=dry_run,

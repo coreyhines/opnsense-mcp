@@ -55,7 +55,12 @@ async def test_tool_passes_apply_flag():
     client = FakeClient({"status": "success", "created": {}})
     tool = MkDhcpHostTool(client)
     await tool.execute(
-        {"hostname": "myhost", "mac": "aa:bb:cc:dd:ee:ff", "ipv4": "10.0.8.50", "apply": True}
+        {
+            "hostname": "myhost",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "ipv4": "10.0.8.50",
+            "apply": True,
+        }
     )
     assert client.called["dry_run"] is False
 
@@ -65,7 +70,12 @@ async def test_tool_passes_ipv6():
     client = FakeClient()
     tool = MkDhcpHostTool(client)
     await tool.execute(
-        {"hostname": "myhost", "mac": "aa:bb:cc:dd:ee:ff", "ipv4": "10.0.8.50", "ipv6": 50}
+        {
+            "hostname": "myhost",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "ipv4": "10.0.8.50",
+            "ipv6": 50,
+        }
     )
     assert client.called["ipv6"] == 50
 
@@ -85,6 +95,22 @@ async def test_tool_passes_descr_and_domain():
     )
     assert client.called["descr"] == "test device"
     assert client.called["domain"] == "lan"
+
+
+@pytest.mark.asyncio
+async def test_tool_passes_client_id():
+    client = FakeClient()
+    tool = MkDhcpHostTool(client)
+    await tool.execute(
+        {
+            "hostname": "hermes",
+            "mac": "52:54:00:ab:cd:01",
+            "ipv4": "10.0.3.13",
+            "ipv6": 13,
+            "client_id": "00:03:00:01:52:54:00:ab:cd:01",
+        }
+    )
+    assert client.called["client_id"] == "00:03:00:01:52:54:00:ab:cd:01"
 
 
 @pytest.mark.asyncio
