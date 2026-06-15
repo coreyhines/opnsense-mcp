@@ -16,7 +16,7 @@ PodName=opnsense-mcp-pod
 # IP6=2601:441:8400:b7e1::50
 # DNS=10.0.2.2
 # DNS=10.0.10.4
-# No PublishPort: with macvlan (or similar) the pod has its own IP; Caddy :443 and mcp-proxy :8765 bind on the pod network.
+# No PublishPort: with macvlan (or similar) the pod has its own IP; Caddy :443 and FastMCP :8765 bind on the pod network.
 
 [Service]
 Restart=on-failure
