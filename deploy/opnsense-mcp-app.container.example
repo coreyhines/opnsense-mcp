@@ -1,9 +1,9 @@
-# Podman quadlet: OPNsense MCP app (mcp-proxy SSE on 8765).
+# Podman quadlet: OPNsense MCP app (FastMCP Streamable HTTP on 8765).
 # Used inside a pod (see opnsense-mcp.pod.example); Pod= references the .pod filename.
 # Quadlet unit: opnsense-mcp-app.service. Pod unit: opnsense-mcp-pod.service (from opnsense-mcp.pod).
 
 [Unit]
-Description=OPNsense MCP (Podman quadlet, mcp-proxy SSE)
+Description=OPNsense MCP (Podman quadlet, FastMCP Streamable HTTP)
 After=network-online.target opnsense-mcp-pod.service
 Wants=network-online.target
 Requires=opnsense-mcp-pod.service
