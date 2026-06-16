@@ -2,11 +2,10 @@
 # OPNsense MCP centralized install (Linux amd64). Pulls a pinned image from hub.freeblizz.com.
 # Idempotent: safe to re-run (refresh quadlets, pull image, systemd reload).
 #
-#   sudo OPNSENSE_MCP_IMAGE_TAG=<git-short-sha> bash deploy/install.sh
+#   sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh
 #
-# One-liner (set tag from latest main CI build):
-#   curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | \
-#     sudo env OPNSENSE_MCP_IMAGE_TAG=82646d9 bash
+# One-liner (auto tag from pyproject + git sha on main):
+#   curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | sudo bash
 #
 # Local dev build (does not push):
 #   sudo OPNSENSE_MCP_IMAGE_TAG=dev-$(git rev-parse --short HEAD) bash deploy/install.sh --build-local
@@ -122,8 +121,22 @@ collect_image_settings() {
     normalize_image_repo
   fi
 
-  if is_interactive_shell && [[ -z "${IMAGE_TAG}" ]]; then
-    read -r -p "Pinned image tag (git short SHA from CI, not 'latest'): " IMAGE_TAG <"${tty_device}" || true
+  if [[ -z "${IMAGE_TAG}" && -f "${SRC_DIR}/pyproject.toml" ]]; then
+    IMAGE_TAG="$(default_image_tag_for_tree "${SRC_DIR}")"
+    echo "Auto-selected image tag: ${IMAGE_TAG}" >&2
+  fi
+
+  if is_interactive_shell && [[ -z "${EXPLICIT_IMAGE_TAG}" ]]; then
+    local suggested="${IMAGE_TAG:-}"
+    if [[ -z "${suggested}" && -f "${SRC_DIR}/pyproject.toml" ]]; then
+      suggested="$(default_image_tag_for_tree "${SRC_DIR}")"
+    fi
+    read -r -p "Pinned image tag [${suggested}]: " _tag <"${tty_device}" || true
+    if [[ -n "${_tag}" ]]; then
+      IMAGE_TAG="${_tag}"
+    else
+      IMAGE_TAG="${suggested}"
+    fi
   fi
 
   validate_pinned_image_tag "${IMAGE_TAG}"

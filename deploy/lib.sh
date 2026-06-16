@@ -58,14 +58,29 @@ validate_pinned_image_tag() {
   local tag=$1
   if [[ -z "${tag}" ]]; then
     echo "error: OPNSENSE_MCP_IMAGE_TAG must be set to a pinned tag (not empty)." >&2
-    echo "  CI pushes hub.freeblizz.com/opnsense-mcp:<git-short-sha> on main." >&2
-    echo "  Example: sudo OPNSENSE_MCP_IMAGE_TAG=82646d9 bash deploy/install.sh" >&2
+    echo "  Releases: hub.freeblizz.com/opnsense-mcp:<semver> (git tag vX.Y.Z)." >&2
+    echo "  Main builds: <semver>-dev.<short-sha> from deploy/ci/compute-image-tag.sh" >&2
+    echo "  Example: sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh" >&2
     exit 1
   fi
   if [[ "${tag}" == "latest" ]]; then
-    echo "error: OPNSENSE_MCP_IMAGE_TAG must not be 'latest' (use a git SHA or semver tag)." >&2
+    echo "error: OPNSENSE_MCP_IMAGE_TAG must not be 'latest' (use a semver release or -dev tag)." >&2
     exit 1
   fi
+  if [[ ! "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-dev\.[a-zA-Z0-9._-]+)?$ ]]; then
+    echo "error: OPNSENSE_MCP_IMAGE_TAG must be semver X.Y.Z or X.Y.Z-dev.<sha> (got: ${tag})." >&2
+    exit 1
+  fi
+}
+
+read_pyproject_version() {
+  local pyproject=$1
+  sed -n 's/^version = "\([^"]*\)"/\1/p' "${pyproject}" | head -1
+}
+
+default_image_tag_for_tree() {
+  local src_dir=$1
+  bash "${src_dir}/deploy/ci/compute-image-tag.sh"
 }
 
 normalize_image_repo() {
