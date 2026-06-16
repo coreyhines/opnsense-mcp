@@ -18,13 +18,11 @@ readonly GIT_REF="${OPNSENSE_MCP_GIT_REF:-main}"
 readonly INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
 readonly SRC_DIR="${INSTALL_ROOT}/src"
 readonly CADDYFILE_HOST="${INSTALL_ROOT}/Caddyfile"
-readonly DEFAULT_IMAGE_REPO="hub.freeblizz.com/opnsense-mcp"
-readonly DEFAULT_CADDY_IMAGE="docker.io/library/caddy:2.9.1-alpine"
 
-IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-${DEFAULT_IMAGE_REPO}}"
+IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-hub.freeblizz.com/opnsense-mcp}"
 EXPLICIT_IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-}"
 IMAGE_TAG="${EXPLICIT_IMAGE_TAG}"
-CADDY_IMAGE="${OPNSENSE_MCP_CADDY_IMAGE:-${DEFAULT_CADDY_IMAGE}}"
+CADDY_IMAGE="${OPNSENSE_MCP_CADDY_IMAGE:-docker.io/library/caddy:2.9.1-alpine}"
 RUNTIME="${OPNSENSE_MCP_RUNTIME:-podman}"
 SKIP_IMAGE=0
 BUILD_LOCAL=0
@@ -33,14 +31,13 @@ BUILD_PUSH=0
 usage() {
   echo "Usage: $0 [--runtime podman|docker] [--skip-image] [--build-local] [--build-push]" >&2
   echo "  Default: pull hub.freeblizz.com/opnsense-mcp:\$OPNSENSE_MCP_IMAGE_TAG (pinned tag required)." >&2
-  echo "  Env: OPNSENSE_MCP_IMAGE_REPO (default ${DEFAULT_IMAGE_REPO})" >&2
+  echo "  Env: OPNSENSE_MCP_IMAGE_REPO (default hub.freeblizz.com/opnsense-mcp)" >&2
   echo "       OPNSENSE_MCP_IMAGE_TAG (required unless already in environment file)" >&2
-  echo "       OPNSENSE_MCP_CADDY_IMAGE (default ${DEFAULT_CADDY_IMAGE})" >&2
+  echo "       OPNSENSE_MCP_CADDY_IMAGE (default docker.io/library/caddy:2.9.1-alpine)" >&2
   echo "       OPNSENSE_MCP_REPO_URL, OPNSENSE_MCP_GIT_REF, OPNSENSE_MCP_INSTALL_ROOT" >&2
   echo "  Quadlet: OPNSENSE_MCP_POD_NAME, OPNSENSE_MCP_CONTAINER_NAME," >&2
   echo "    OPNSENSE_MCP_CADDY_CONTAINER_NAME, OPNSENSE_MCP_NETWORK, OPNSENSE_MCP_IP," >&2
   echo "    OPNSENSE_MCP_IP6, OPNSENSE_MCP_DNS, OPNSENSE_MCP_TLS_CERTS" >&2
-  echo "  Run 'podman login hub.freeblizz.com' before install if the registry requires auth." >&2
 }
 
 while [[ $# -gt 0 ]]; do
