@@ -11,7 +11,7 @@ Requires=opnsense-mcp-app.service
 
 [Container]
 Pod=opnsense-mcp.pod
-Image=docker.io/library/caddy:2-alpine
+Image=docker.io/library/caddy:2.9.1-alpine
 ContainerName=opnsense-mcp-caddy
 
 Volume=/opt/certs/wild:/opt/certs/wild:ro,Z
