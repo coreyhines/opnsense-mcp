@@ -1,34 +1,46 @@
 #!/usr/bin/env bash
-# OPNsense MCP centralized install (Linux amd64). GitLab is the default clone source.
-# Idempotent: safe to re-run (git pull, rebuild, systemd reload).
+# OPNsense MCP centralized install (Linux amd64). Pulls a pinned image from hub.freeblizz.com.
+# Idempotent: safe to re-run (refresh quadlets, pull image, systemd reload).
 #
-#   curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | sudo bash
-# Optional: clone a different ref (fork, release branch, etc.):
-#   sudo env OPNSENSE_MCP_GIT_REF=my-branch bash deploy/install.sh
-# Override clone URL:
-#   sudo OPNSENSE_MCP_REPO_URL='https://gitlab.../opensense-mcp.git' bash deploy/install.sh
+#   sudo OPNSENSE_MCP_IMAGE_TAG=<git-short-sha> bash deploy/install.sh
+#
+# One-liner (set tag from latest main CI build):
+#   curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | \
+#     sudo env OPNSENSE_MCP_IMAGE_TAG=82646d9 bash
+#
+# Local dev build (does not push):
+#   sudo OPNSENSE_MCP_IMAGE_TAG=dev-$(git rev-parse --short HEAD) bash deploy/install.sh --build-local
 #
 set -euo pipefail
 
 readonly DEFAULT_REPO_URL="${OPNSENSE_MCP_REPO_URL:-https://gitlab.freeblizz.com/coreyhines/opensense-mcp.git}"
-# Default git ref is main (see docs/CENTRALIZED_DEPLOY_SPEC.md); override with OPNSENSE_MCP_GIT_REF.
 readonly GIT_REF="${OPNSENSE_MCP_GIT_REF:-main}"
-# Default matches strongpod-style layout under /opt/containerdata (override with OPNSENSE_MCP_INSTALL_ROOT).
 readonly INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
 readonly SRC_DIR="${INSTALL_ROOT}/src"
 readonly CADDYFILE_HOST="${INSTALL_ROOT}/Caddyfile"
-readonly IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-localhost/opnsense-mcp}"
-readonly IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-latest}"
+readonly DEFAULT_IMAGE_REPO="hub.freeblizz.com/opnsense-mcp"
+readonly DEFAULT_CADDY_IMAGE="docker.io/library/caddy:2.9.1-alpine"
+
+IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-${DEFAULT_IMAGE_REPO}}"
+EXPLICIT_IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-}"
+IMAGE_TAG="${EXPLICIT_IMAGE_TAG}"
+CADDY_IMAGE="${OPNSENSE_MCP_CADDY_IMAGE:-${DEFAULT_CADDY_IMAGE}}"
 RUNTIME="${OPNSENSE_MCP_RUNTIME:-podman}"
+SKIP_IMAGE=0
+BUILD_LOCAL=0
+BUILD_PUSH=0
 
 usage() {
-  echo "Usage: $0 [--runtime podman|docker]" >&2
-  echo "  Env: OPNSENSE_MCP_REPO_URL, OPNSENSE_MCP_GIT_REF, OPNSENSE_MCP_INSTALL_ROOT," >&2
-  echo "       OPNSENSE_MCP_IMAGE_REPO, OPNSENSE_MCP_IMAGE_TAG" >&2
-  echo "  Quadlet (Podman): OPNSENSE_MCP_POD_NAME, OPNSENSE_MCP_CONTAINER_NAME," >&2
+  echo "Usage: $0 [--runtime podman|docker] [--skip-image] [--build-local] [--build-push]" >&2
+  echo "  Default: pull hub.freeblizz.com/opnsense-mcp:\$OPNSENSE_MCP_IMAGE_TAG (pinned tag required)." >&2
+  echo "  Env: OPNSENSE_MCP_IMAGE_REPO (default ${DEFAULT_IMAGE_REPO})" >&2
+  echo "       OPNSENSE_MCP_IMAGE_TAG (required unless already in environment file)" >&2
+  echo "       OPNSENSE_MCP_CADDY_IMAGE (default ${DEFAULT_CADDY_IMAGE})" >&2
+  echo "       OPNSENSE_MCP_REPO_URL, OPNSENSE_MCP_GIT_REF, OPNSENSE_MCP_INSTALL_ROOT" >&2
+  echo "  Quadlet: OPNSENSE_MCP_POD_NAME, OPNSENSE_MCP_CONTAINER_NAME," >&2
   echo "    OPNSENSE_MCP_CADDY_CONTAINER_NAME, OPNSENSE_MCP_NETWORK, OPNSENSE_MCP_IP," >&2
-  echo "    OPNSENSE_MCP_IP6, OPNSENSE_MCP_DNS (space-separated), OPNSENSE_MCP_TLS_CERTS" >&2
-  echo "  Interactive prompts run only when stdin is a TTY (not when using curl|bash)." >&2
+  echo "    OPNSENSE_MCP_IP6, OPNSENSE_MCP_DNS, OPNSENSE_MCP_TLS_CERTS" >&2
+  echo "  Run 'podman login hub.freeblizz.com' before install if the registry requires auth." >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -38,6 +50,9 @@ while [[ $# -gt 0 ]]; do
       if [[ -z "${RUNTIME}" ]]; then echo "--runtime needs a value" >&2; exit 1; fi
       shift 2
       ;;
+    --skip-image) SKIP_IMAGE=1; shift ;;
+    --build-local) BUILD_LOCAL=1; shift ;;
+    --build-push) BUILD_PUSH=1; shift ;;
     -h | --help)
       usage
       exit 0
@@ -56,14 +71,18 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
-echo "opnsense-mcp install: INSTALL_ROOT=${INSTALL_ROOT} SRC_DIR=${SRC_DIR} GIT_REF=${GIT_REF} RUNTIME=${RUNTIME}" >&2
+if [[ "${BUILD_LOCAL}" -eq 1 && "${BUILD_PUSH}" -eq 1 ]]; then
+  echo "error: use only one of --build-local or --build-push" >&2
+  exit 1
+fi
+
+echo "opnsense-mcp install: INSTALL_ROOT=${INSTALL_ROOT} SRC_DIR=${SRC_DIR} GIT_REF=${GIT_REF} RUNTIME=${RUNTIME} IMAGE=${IMAGE_REPO}:${IMAGE_TAG:-<unset>}" >&2
 
 mkdir -p "${INSTALL_ROOT}" /etc/containers/systemd/opnsense-mcp
 
 if [[ ! -d "${SRC_DIR}/.git" ]]; then
   git clone --depth 1 --branch "${GIT_REF}" "${DEFAULT_REPO_URL}" "${SRC_DIR}"
 else
-  # Install-managed tree: always match remote (avoids diverged shallow clones breaking pull --ff-only).
   git -C "${SRC_DIR}" fetch origin "${GIT_REF}" --depth 1
   git -C "${SRC_DIR}" reset --hard "origin/${GIT_REF}"
 fi
@@ -91,11 +110,32 @@ verify_deploy_tree() {
 
 verify_deploy_tree
 
-# --- Quadlet: container names, optional Podman network/static IPs, TLS cert host path ---
+# shellcheck source=lib.sh
+source "${SRC_DIR}/deploy/lib.sh"
+normalize_image_repo
+
+collect_image_settings() {
+  local tty_device=/dev/tty
+
+  if [[ -z "${IMAGE_TAG}" && -f "${ENV_HOST_PATH}" ]]; then
+    load_environment_file "${ENV_HOST_PATH}"
+    IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-}"
+    IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-${IMAGE_REPO}}"
+    CADDY_IMAGE="${OPNSENSE_MCP_CADDY_IMAGE:-${CADDY_IMAGE}}"
+    normalize_image_repo
+  fi
+
+  if is_interactive_shell && [[ -z "${IMAGE_TAG}" ]]; then
+    read -r -p "Pinned image tag (git short SHA from CI, not 'latest'): " IMAGE_TAG <"${tty_device}" || true
+  fi
+
+  validate_pinned_image_tag "${IMAGE_TAG}"
+}
+
 collect_quadlet_settings() {
   local tty_device=/dev/tty
   local interactive=0
-  if [[ -t 0 ]] && [[ -e "${tty_device}" ]] && [[ -r "${tty_device}" ]]; then
+  if is_interactive_shell; then
     interactive=1
   fi
 
@@ -130,7 +170,6 @@ collect_quadlet_settings() {
   OPNSENSE_MCP_CONTAINER_NAME=${OPNSENSE_MCP_CONTAINER_NAME:-opnsense-mcp-app}
   OPNSENSE_MCP_CADDY_CONTAINER_NAME=${OPNSENSE_MCP_CADDY_CONTAINER_NAME:-opnsense-mcp-caddy}
   OPNSENSE_MCP_TLS_CERTS=${OPNSENSE_MCP_TLS_CERTS:-/opt/certs/wild}
-  # set -u: optional quadlet keys must be bound even when not in the shell env or install file.
   OPNSENSE_MCP_NETWORK=${OPNSENSE_MCP_NETWORK:-}
   OPNSENSE_MCP_IP=${OPNSENSE_MCP_IP:-}
   OPNSENSE_MCP_IP6=${OPNSENSE_MCP_IP6:-}
@@ -213,7 +252,7 @@ write_caddy_quadlet() {
     printf '%s\n' ''
     printf '%s\n' '[Container]'
     printf '%s\n' "Pod=${pod_quadlet_file}"
-    printf '%s\n' 'Image=docker.io/library/caddy:2-alpine'
+    printf '%s\n' "Image=${CADDY_IMAGE}"
     printf '%s\n' "ContainerName=${OPNSENSE_MCP_CADDY_CONTAINER_NAME}"
     printf '%s\n' "Volume=${OPNSENSE_MCP_TLS_CERTS}:/opt/certs/wild:ro,Z"
     printf '%s\n' "Volume=${CADDYFILE_HOST}:/etc/caddy/Caddyfile:ro,Z"
@@ -227,6 +266,32 @@ write_caddy_quadlet() {
     printf '%s\n' 'WantedBy=multi-user.target'
   } >"${out}"
   chmod 644 "${out}"
+}
+
+build_image() {
+  local version_full="${IMAGE_REPO}:${IMAGE_TAG}"
+  local build_git_commit
+  local build_time
+  build_git_commit="$(git -C "${SRC_DIR}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
+  build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "Building ${version_full} (git_commit=${build_git_commit} git_ref=${GIT_REF} build_time=${build_time})..." >&2
+  "${RUNTIME}" build -f "${SRC_DIR}/deploy/Containerfile" -t "${version_full}" \
+    --build-arg "GIT_COMMIT=${build_git_commit}" \
+    --build-arg "GIT_REF=${GIT_REF}" \
+    --build-arg "BUILD_TIME=${build_time}" \
+    "${SRC_DIR}"
+}
+
+push_image() {
+  local version_full="${IMAGE_REPO}:${IMAGE_TAG}"
+  echo "Pushing ${version_full}..." >&2
+  "${RUNTIME}" push "${version_full}"
+}
+
+pull_image() {
+  local version_full="${IMAGE_REPO}:${IMAGE_TAG}"
+  echo "Pulling ${version_full}..." >&2
+  "${RUNTIME}" pull "${version_full}"
 }
 
 ENV_HOST_PATH="${INSTALL_ROOT}/environment"
@@ -248,25 +313,17 @@ if [[ "$RUNTIME" == "podman" ]]; then
     echo "podman not found in PATH (install podman or use --runtime docker)." >&2
     exit 1
   fi
-  # Pick up OPNSENSE_MCP_* quadlet settings from the install env file (e.g. re-run or curl|bash without exporting).
   if [[ -f "${ENV_HOST_PATH}" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    . "${ENV_HOST_PATH}"
-    set +a
+    load_environment_file "${ENV_HOST_PATH}"
   fi
+  collect_image_settings
   collect_quadlet_settings
   POD_NAME="${OPNSENSE_MCP_POD_NAME}"
-  # Quadlet appends "-pod" to the .pod stem to form the unit name: opnsense-mcp.pod → opnsense-mcp-pod.service.
-  # So the file is always "opnsense-mcp.pod" (PodName= inside sets the Podman name independently).
   POD_QUADLET_FILE="opnsense-mcp.pod"
   POD_SVC="opnsense-mcp-pod.service"
-  # Top-level only: Podman before 4.7 does not recurse into subdirs under /etc/containers/systemd/ (podman#20236).
-  # Older installs used .../systemd/opnsense-mcp/ — remove those so 4.7+ never sees duplicate quadlets.
   readonly QUADLET_DIR=/etc/containers/systemd
   readonly LEGACY_QUADLET_SUBDIR=/etc/containers/systemd/opnsense-mcp
   mkdir -p "${QUADLET_DIR}"
-  # Quadlet basenames → systemd units (must match Caddy Requires=/After=).
   readonly MCP_QUADLET_BASENAME=opnsense-mcp-app
   readonly CADDY_QUADLET_BASENAME=opnsense-mcp-caddy
   MCP_APP_SVC="${MCP_QUADLET_BASENAME}.service"
@@ -281,29 +338,33 @@ if [[ "$RUNTIME" == "podman" ]]; then
   rmdir "${LEGACY_QUADLET_SUBDIR}" 2>/dev/null || true
   rm -f "${QUADLET_DIR}/opnsense-mcp.container" "${QUADLET_DIR}/caddy-opnsense-mcp.container" \
     "${QUADLET_DIR}/opnsense-mcp-pod.pod"
-  echo "Quadlet: dir=${QUADLET_DIR} file=${POD_QUADLET_FILE} PodName=${POD_NAME} systemd=${POD_SVC} MCP=${OPNSENSE_MCP_CONTAINER_NAME} Caddy=${OPNSENSE_MCP_CADDY_CONTAINER_NAME} Image=${IMAGE_REPO}:${IMAGE_TAG} Network=${OPNSENSE_MCP_NETWORK:-} IP=${OPNSENSE_MCP_IP:-} IP6=${OPNSENSE_MCP_IP6:-} DNS=${OPNSENSE_MCP_DNS:-} TLS=${OPNSENSE_MCP_TLS_CERTS}" >&2
+  echo "Quadlet: dir=${QUADLET_DIR} file=${POD_QUADLET_FILE} PodName=${POD_NAME} systemd=${POD_SVC} MCP=${OPNSENSE_MCP_CONTAINER_NAME} Caddy=${OPNSENSE_MCP_CADDY_CONTAINER_NAME} Image=${IMAGE_REPO}:${IMAGE_TAG} CaddyImage=${CADDY_IMAGE} Network=${OPNSENSE_MCP_NETWORK:-} IP=${OPNSENSE_MCP_IP:-} IP6=${OPNSENSE_MCP_IP6:-} DNS=${OPNSENSE_MCP_DNS:-} TLS=${OPNSENSE_MCP_TLS_CERTS}" >&2
   write_opnsense_mcp_pod "${QUADLET_DIR}/${POD_QUADLET_FILE}" "${POD_NAME}"
   write_opnsense_mcp_quadlet "${QUADLET_DIR}/${MCP_QUADLET_BASENAME}.container" "${POD_SVC}" "${POD_QUADLET_FILE}"
   write_caddy_quadlet "${QUADLET_DIR}/${CADDY_QUADLET_BASENAME}.container" "${POD_SVC}" "${MCP_APP_SVC}" "${POD_QUADLET_FILE}"
-  BUILD_GIT_COMMIT=$(
-    git -C "${SRC_DIR}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown
-  )
-  BUILD_GIT_REF="${GIT_REF}"
-  BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  echo "Building image with git_commit=${BUILD_GIT_COMMIT} git_ref=${BUILD_GIT_REF} build_time=${BUILD_TIME}" >&2
-  "${RUNTIME}" build -f "${SRC_DIR}/deploy/Containerfile" -t "${IMAGE_REPO}:${IMAGE_TAG}" \
-    --build-arg "GIT_COMMIT=${BUILD_GIT_COMMIT}" \
-    --build-arg "GIT_REF=${BUILD_GIT_REF}" \
-    --build-arg "BUILD_TIME=${BUILD_TIME}" \
-    "${SRC_DIR}"
+
+  update_env_key "${ENV_HOST_PATH}" "OPNSENSE_MCP_IMAGE_REPO" "${IMAGE_REPO}"
+  update_env_key "${ENV_HOST_PATH}" "OPNSENSE_MCP_IMAGE_TAG" "${IMAGE_TAG}"
+  update_env_key "${ENV_HOST_PATH}" "OPNSENSE_MCP_CADDY_IMAGE" "${CADDY_IMAGE}"
+
+  if [[ "${SKIP_IMAGE}" -eq 1 ]]; then
+    echo "Skipping image pull/build (--skip-image)." >&2
+  elif [[ "${BUILD_PUSH}" -eq 1 ]]; then
+    build_image
+    push_image
+  elif [[ "${BUILD_LOCAL}" -eq 1 ]]; then
+    build_image
+  else
+    pull_image
+    "${RUNTIME}" pull "${CADDY_IMAGE}" || true
+  fi
+
   systemctl daemon-reload
   _pod_load_state=$(systemctl show -p LoadState --value "${POD_SVC}" 2>/dev/null || echo "unknown")
   if [[ "${_pod_load_state}" != "loaded" ]]; then
     echo "warning: ${POD_SVC} not loaded after daemon-reload (LoadState=${_pod_load_state})." >&2
     echo "  Install podman + quadlet support (often package podman-quadlet); check: podman --version (4.4+), journal for quadlet." >&2
   fi
-  # Quadlet: enabling the generated .service by name often fails ("transient or generated").
-  # Prefer enabling the .container unit files; fall back to start-only.
   enable_or_start_quadlet() {
     local cfile=$1
     local sname=$2
