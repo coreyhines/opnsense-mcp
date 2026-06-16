@@ -9,7 +9,8 @@ Single planning/implementation reference for the **network service** path. **IDE
 - **One MCP core** (same tools, same Python package) for stdio and centralized use.
 - **Centralized:** long-lived service, **Linux amd64** only for now (no macOS/ARM in scope).
 - **Installer:** **`curl | bash`** loading the script from **raw on `main`** (treat merges as production).
-- **Source / build:** **GitLab is primary** for clone or archive URLs; **build the image on the host** from this repo’s `deploy/Containerfile` (no registry pull required for v1).
+- **Source:** **GitLab** for clone URLs and CI image builds.
+- **Images:** **GitLab CI (Kaniko)** pushes **`hub.freeblizz.com/opnsense-mcp:<git-short-sha>`** on `main`. Host install **pulls** a pinned tag (no `:latest`).
 - **Podman** is the blessed server path (**rootful**, **UID 1000** convention for volume ownership where it matters).
 - **Docker:** supported as a first-class alternative; **do not** force Podman on Docker users.
 - **TLS:** **Caddy** in front; **TLS by default**; works with **real CA PEMs** or **self-signed** (paths to `fullchain` + `privkey` — client trust is the operator’s problem for self-signed).
@@ -45,19 +46,21 @@ Single planning/implementation reference for the **network service** path. **IDE
 - **Scripts:** `deploy/install.sh`, `deploy/uninstall.sh` (run as **root**).
 - **Default clone URL (GitLab):** `https://gitlab.freeblizz.com/coreyhines/opensense-mcp.git` — override with **`OPNSENSE_MCP_REPO_URL`**.
 - **Default git ref:** **`main`** (override with **`OPNSENSE_MCP_GIT_REF`** for forks or release branches).
-- **Install root:** **`OPNSENSE_MCP_INSTALL_ROOT`** (default **`/opt/containerdata/opnsense-mcp`**); checkout lives at **`$INSTALL_ROOT/src`**.
-- **Image tag (Podman):** **`OPNSENSE_MCP_IMAGE_REPO`** (default **`localhost/opnsense-mcp`**) and **`OPNSENSE_MCP_IMAGE_TAG`** (default **`latest`**) control the `podman build` tag and the quadlet `Image=` line.
-- **Podman (default):** clones/updates repo, **`podman build`**, installs **`<PodName>.pod`** (default **`opnsense-mcp-pod.pod`** when **`OPNSENSE_MCP_POD_NAME`** is unset or **`opnsense-mcp-pod`**), **`opnsense-mcp-app.container`**, and **`opnsense-mcp-caddy.container`** **directly under** **`/etc/containers/systemd/`** (not in a subdirectory: Podman before **4.7** does not recurse, so nested paths never produce units). Creates **`$INSTALL_ROOT/environment`** and **`$INSTALL_ROOT/Caddyfile`** if missing, then **`systemctl enable`** on those paths (or **`start`** if the distro rejects `enable` on generated quadlet services — see Red Hat / Podman quadlet notes). Re-run install removes prior copies under **`/etc/containers/systemd/opnsense-mcp/`** to avoid duplicate quadlets on 4.7+.
+- **Install root:** **`OPNSENSE_MCP_INSTALL_ROOT`** (default **`/opt/containerdata/opnsense-mcp`**); checkout lives at **`$INSTALL_ROOT/src`** (config templates only; app runs from registry image).
+- **Image (Podman):** **`OPNSENSE_MCP_IMAGE_REPO`** (default **`hub.freeblizz.com/opnsense-mcp`**) and **`OPNSENSE_MCP_IMAGE_TAG`** (**required**, must not be **`latest`**). CI pushes **`:$CI_COMMIT_SHORT_SHA`** on `main`. Installer **pulls** by default; **`--build-local`** / **`--build-push`** for dev or manual releases.
+- **Caddy image:** **`OPNSENSE_MCP_CADDY_IMAGE`** (default **`docker.io/library/caddy:2.9.1-alpine`**).
+- **Podman (default):** clones/updates repo for deploy assets, **pulls** pinned image, installs quadlets under **`/etc/containers/systemd/`**, creates **`$INSTALL_ROOT/environment`** and **`$INSTALL_ROOT/Caddyfile`** if missing, then **`systemctl enable`** / **`start`**.
 - **Docker:** `deploy/install.sh --runtime docker` runs **`docker compose -p opnsense-mcp -f deploy/docker-compose.yml up -d --build`** from the checkout.
 - **One-liner (raw script on `main`):**
   ```bash
-  curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | sudo bash
+  curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | \
+    sudo env OPNSENSE_MCP_IMAGE_TAG=<git-short-sha> bash
   ```
 - **Uninstall:** `sudo bash deploy/uninstall.sh` (from checkout) or copy the script to the host. **Docker:** `--runtime docker`. Optional **`--purge-env`** removes **`$INSTALL_ROOT/environment`**.
 
 ### Manual uninstall (no script)
 
-- **Podman:** `systemctl disable --now opnsense-mcp-caddy.service opnsense-mcp-app.service opnsense-mcp-pod.service opnsense-mcp.service caddy-opnsense-mcp.service` (also **`opnsense-mcp-pod-pod.service`**, **`pod-opnsense-mcp.service`**, **`pod-opnsense-mcp-pod.service`** for legacy installs); remove **`opnsense-mcp.pod`**, **`opnsense-mcp-pod.pod`**, **`opnsense-mcp-app.container`**, **`opnsense-mcp-caddy.container`** from **`/etc/containers/systemd/`** and any copies under **`/etc/containers/systemd/opnsense-mcp/`**; `systemctl daemon-reload`; `podman rmi localhost/opnsense-mcp:latest` if desired.
+- **Podman:** `systemctl disable --now opnsense-mcp-caddy.service opnsense-mcp-app.service opnsense-mcp-pod.service opnsense-mcp.service caddy-opnsense-mcp.service` (also **`opnsense-mcp-pod-pod.service`**, **`pod-opnsense-mcp.service`**, **`pod-opnsense-mcp-pod.service`** for legacy installs); remove **`opnsense-mcp.pod`**, **`opnsense-mcp-pod.pod`**, **`opnsense-mcp-app.container`**, **`opnsense-mcp-caddy.container`** from **`/etc/containers/systemd/`** and any copies under **`/etc/containers/systemd/opnsense-mcp/`**; `systemctl daemon-reload`; remove local images if desired (`podman rmi hub.freeblizz.com/opnsense-mcp:<tag>`).
 - **Docker:** from the git checkout, `docker compose -p opnsense-mcp -f deploy/docker-compose.yml down --rmi local`.
 - Remove or edit **`/opt/containerdata/opnsense-mcp/environment`** (or **`$INSTALL_ROOT/environment`**), **`$INSTALL_ROOT/Caddyfile`**, and the clone under **`/opt/containerdata/opnsense-mcp/src`** (default) as needed.
 
@@ -75,14 +78,29 @@ Set via **environment** before running `install.sh`, add the same keys to **`$IN
 | `OPNSENSE_MCP_IP6` | Podman `IP6=` static IPv6 on the **pod** (optional). |
 | `OPNSENSE_MCP_DNS` | Space-separated resolvers → multiple `DNS=` lines on the **pod** (optional). |
 | `OPNSENSE_MCP_TLS_CERTS` | Host directory with PEMs, mounted at `/opt/certs/wild` in containers (default `/opt/certs/wild`). |
+| `OPNSENSE_MCP_IMAGE_REPO` | Registry image (default `hub.freeblizz.com/opnsense-mcp`). |
+| `OPNSENSE_MCP_IMAGE_TAG` | **Required** pinned tag (git short SHA from CI or semver). |
+| `OPNSENSE_MCP_CADDY_IMAGE` | Pinned Caddy image (default `docker.io/library/caddy:2.9.1-alpine`). |
 
 The installer does **not** set **`PublishPort`** on the pod (typical **macvlan** / static **`IP=`** setups expose **443** and **8765** on the pod’s address instead of mapping host ports). Both containers set **`Pod=<PodName>.pod`** (default **`opnsense-mcp-pod.pod`**). Add **`PublishPort=`** in the generated **`<PodName>.pod`** only if you use bridge/NAT and need host port forwarding.
 
 **Example (non-interactive):**
 
 ```bash
-sudo env OPNSENSE_MCP_NETWORK=net-10 OPNSENSE_MCP_IP=10.0.10.50 OPNSENSE_MCP_TLS_CERTS=/opt/certs/wild bash deploy/install.sh
+sudo env OPNSENSE_MCP_IMAGE_TAG=82646d9 \
+  OPNSENSE_MCP_NETWORK=net-10 OPNSENSE_MCP_IP=10.0.10.50 \
+  OPNSENSE_MCP_TLS_CERTS=/opt/certs/wild bash deploy/install.sh
 ```
+
+### GitLab CI (registry + deploy)
+
+| CI/CD variable | Purpose |
+|----------------|---------|
+| `HUB_FREEBLIZZ_USER` / `HUB_FREEBLIZZ_PASSWORD` | Kaniko push to `hub.freeblizz.com` |
+| `OPNSENSE_MCP_DEPLOY_HOST` | strongpod hostname/IP for `deploy:strongpod` |
+| `OPNSENSE_MCP_DEPLOY_SSH_KEY_B64` | Root SSH key (base64) for deploy job |
+
+`build:image` runs on **`main`** (and git tags). **`deploy:strongpod`** is **manual** on `main` after a successful build.
 
 ### Install troubleshooting (strongpod / quadlet)
 
@@ -116,8 +134,8 @@ sudo env OPNSENSE_MCP_NETWORK=net-10 OPNSENSE_MCP_IP=10.0.10.50 OPNSENSE_MCP_TLS
 
 ## Deferred / later
 
-- **CI push** to a container registry and **pull-only** install (optional; not v1).
 - **Option B** (native HTTP in-process) — out of scope unless revisited.
+- **Semver release tags** on git tags (CI already builds on `CI_COMMIT_TAG`).
 
 ---
 

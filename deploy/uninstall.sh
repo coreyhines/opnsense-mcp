@@ -54,6 +54,7 @@ if [[ "$RUNTIME" == "podman" ]]; then
   rmdir "${LEGACY_QUADLET_SUBDIR}" 2>/dev/null || true
   systemctl daemon-reload
   podman rmi localhost/opnsense-mcp:latest 2>/dev/null || true
+  podman rmi hub.freeblizz.com/opnsense-mcp:latest 2>/dev/null || true
 elif [[ "$RUNTIME" == "docker" ]]; then
   if [[ -d "${SRC_DIR}/deploy" ]]; then
     (cd "${SRC_DIR}" && docker compose -p opnsense-mcp -f deploy/docker-compose.yml down --rmi local 2>/dev/null) || true

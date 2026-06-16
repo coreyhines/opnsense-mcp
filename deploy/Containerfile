@@ -1,5 +1,5 @@
 # Build from repository root:
-#   podman build -f deploy/Containerfile -t localhost/opnsense-mcp:test .
+#   podman build -f deploy/Containerfile -t hub.freeblizz.com/opnsense-mcp:<tag> .
 # The MCP listener is HTTP only. Terminate TLS on the host (see deploy/TLS.md + Caddy examples).
 # Clients connect to /mcp path (Streamable HTTP, MCP spec 2025-03-26).
 

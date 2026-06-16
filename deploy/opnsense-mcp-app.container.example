@@ -10,7 +10,7 @@ Requires=opnsense-mcp-pod.service
 
 [Container]
 Pod=opnsense-mcp.pod
-Image=localhost/opnsense-mcp:latest
+Image=hub.freeblizz.com/opnsense-mcp:<tag>
 ContainerName=opnsense-mcp-app
 Environment=OPNSENSE_MCP_INSTALL_ROOT=/opt/containerdata/opnsense-mcp
 
