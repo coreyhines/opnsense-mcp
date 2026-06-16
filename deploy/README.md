@@ -13,7 +13,6 @@ Canonical reference:
 On the host (as root):
 
 ```bash
-podman login hub.freeblizz.com   # if required
 sudo OPNSENSE_MCP_IMAGE_TAG=<git-short-sha> bash deploy/install.sh
 ```
 
