@@ -13,11 +13,11 @@ Canonical reference:
 On the host (as root):
 
 ```bash
-sudo OPNSENSE_MCP_IMAGE_TAG=<git-short-sha> bash deploy/install.sh
+sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh
 ```
 
-GitLab CI on `main` builds and pushes `hub.freeblizz.com/opnsense-mcp:$CI_COMMIT_SHORT_SHA`.
-Use the manual **deploy:strongpod** job or re-run install with that tag.
+GitLab CI on `main` pushes `hub.freeblizz.com/opnsense-mcp:<version>-dev.<sha>` (version from `pyproject.toml`).
+Git tag `v1.0.0` publishes `hub.freeblizz.com/opnsense-mcp:1.0.0`.
 
 After TLS and DNS are in place, clients connect to:
 
@@ -29,8 +29,8 @@ https://opnsense-mcp.freeblizz.com/mcp
 
 | Mode | Command |
 |------|---------|
-| Pull from registry (default) | `sudo OPNSENSE_MCP_IMAGE_TAG=82646d9 bash deploy/install.sh` |
-| Refresh quadlets only | `sudo OPNSENSE_MCP_IMAGE_TAG=82646d9 bash deploy/install.sh --skip-image` |
+| Pull from registry (default) | `sudo bash deploy/install.sh` (auto tag) or `sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh` |
+| Refresh quadlets only | `sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh --skip-image` |
 | Local dev build | `sudo OPNSENSE_MCP_IMAGE_TAG=dev-test bash deploy/install.sh --build-local` |
 | Build and push to registry | `sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh --build-push` |
 
