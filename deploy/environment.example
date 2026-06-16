@@ -8,7 +8,8 @@ OPNSENSE_MCP_INSTALL_ROOT=/opt/containerdata/opnsense-mcp
 
 # Pinned container images (installer writes these; do not use :latest).
 OPNSENSE_MCP_IMAGE_REPO=hub.freeblizz.com/opnsense-mcp
-OPNSENSE_MCP_IMAGE_TAG=
+# Release: 1.0.0 (git tag v1.0.0). Main CI: 1.0.0-dev.<short-sha>
+OPNSENSE_MCP_IMAGE_TAG=1.0.0
 OPNSENSE_MCP_CADDY_IMAGE=docker.io/library/caddy:2.9.1-alpine
 
 OPNSENSE_FIREWALL_HOST=firewall.example.com

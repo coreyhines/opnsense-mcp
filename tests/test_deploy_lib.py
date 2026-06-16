@@ -1,4 +1,4 @@
-"""Tests for deploy/lib.sh helpers."""
+"""Tests for deploy/lib.sh and deploy/ci/compute-image-tag.sh."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LIB_SH = REPO_ROOT / "deploy" / "lib.sh"
+COMPUTE_TAG = REPO_ROOT / "deploy" / "ci" / "compute-image-tag.sh"
 
 
 def _run_lib_snippet(snippet: str) -> subprocess.CompletedProcess[str]:
@@ -31,8 +32,18 @@ def test_validate_pinned_image_tag_rejects_empty() -> None:
     assert "OPNSENSE_MCP_IMAGE_TAG" in result.stderr
 
 
-def test_validate_pinned_image_tag_accepts_sha() -> None:
-    result = _run_lib_snippet('validate_pinned_image_tag "82646d9"')
+def test_validate_pinned_image_tag_rejects_raw_sha() -> None:
+    result = _run_lib_snippet('validate_pinned_image_tag "6845616"')
+    assert result.returncode != 0
+
+
+def test_validate_pinned_image_tag_accepts_release() -> None:
+    result = _run_lib_snippet('validate_pinned_image_tag "1.0.0"')
+    assert result.returncode == 0
+
+
+def test_validate_pinned_image_tag_accepts_dev_build() -> None:
+    result = _run_lib_snippet('validate_pinned_image_tag "1.0.0-dev.6845616"')
     assert result.returncode == 0
 
 
@@ -44,3 +55,17 @@ def test_normalize_image_repo_defaults_to_hub() -> None:
     )
     assert result.returncode == 0
     assert result.stdout == "hub.freeblizz.com/opnsense-mcp"
+
+
+def test_compute_image_tag_uses_pyproject_dev_suffix() -> None:
+    result = subprocess.run(
+        ["bash", str(COMPUTE_TAG)],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0
+    tag = result.stdout.strip()
+    assert tag.startswith("1.0.0-dev.")
+    assert len(tag.split(".")[-1]) >= 7
