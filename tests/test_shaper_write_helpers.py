@@ -1,0 +1,74 @@
+"""Tests for opnsense_mcp/utils/shaper_write_helpers.py — bucket 4b."""
+
+from __future__ import annotations
+
+from opnsense_mcp.utils.shaper_types import TOOL_STATUS_SUCCESS
+from opnsense_mcp.utils.shaper_write_helpers import (
+    build_mutation_response,
+    detect_idempotent_set,
+    issue_delete_confirm_token,
+    pending_apply_fields,
+    validate_delete_confirm_token,
+    validate_pipe_bandwidth,
+    warn_lan_interface,
+)
+
+
+def test_delete_confirm_token_round_trip() -> None:
+    issued = issue_delete_confirm_token("pipe", "abc-uuid")
+    assert "token" in issued
+    token = issued["token"]
+    assert validate_delete_confirm_token("pipe", "abc-uuid", token) is True
+    assert validate_delete_confirm_token("pipe", "abc-uuid", token) is False
+
+
+def test_delete_confirm_wrong_token() -> None:
+    issue_delete_confirm_token("queue", "q1")
+    assert validate_delete_confirm_token("queue", "q1", "bad") is False
+
+
+def test_detect_idempotent_pipe() -> None:
+    flat = {
+        "uuid": "u1",
+        "bandwidth": 100,
+        "bandwidth_metric": "Mbit",
+        "scheduler": "fq_codel",
+        "enabled": True,
+    }
+    assert detect_idempotent_set(flat, dict(flat)) is True
+    changed = dict(flat)
+    changed["bandwidth"] = 200
+    assert detect_idempotent_set(flat, changed) is False
+
+
+def test_validate_pipe_bandwidth_errors() -> None:
+    hints = validate_pipe_bandwidth(2000, 1000)
+    assert any("error" in h for h in hints)
+
+
+def test_validate_pipe_bandwidth_isp_warning() -> None:
+    hints = validate_pipe_bandwidth(100, 1000, isp_rate_mbit=100)
+    assert any("warning" in h for h in hints)
+
+
+def test_warn_lan_interface() -> None:
+    assert warn_lan_interface("lan") is not None
+    assert warn_lan_interface("wan") is None
+
+
+def test_build_mutation_response() -> None:
+    resp = build_mutation_response(
+        {"ok": True},
+        "Done",
+        snapshot_id="snap-1",
+        hints=["hint"],
+    )
+    assert resp["status"] == TOOL_STATUS_SUCCESS
+    assert resp["snapshot_id"] == "snap-1"
+
+
+def test_pending_apply_fields() -> None:
+    pending = pending_apply_fields(False)
+    assert pending["pending_changes"] is True
+    applied = pending_apply_fields(True, {"status": "ok"})
+    assert applied["applied"] is True
