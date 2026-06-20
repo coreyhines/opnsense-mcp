@@ -31,6 +31,15 @@ from opnsense_mcp.tools.rm_dhcp_host import RmDhcpHostTool
 from opnsense_mcp.tools.rmdns import RmdnsTool
 from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
 from opnsense_mcp.tools.set_fw_rule import SetFwRuleTool
+from opnsense_mcp.tools.shaper_audit import (
+    AuditShaperConfigTool,
+    ExplainShaperConfigTool,
+)
+from opnsense_mcp.tools.shaper_pipes import GetShaperPipeTool, ListShaperPipesTool
+from opnsense_mcp.tools.shaper_queues import GetShaperQueueTool, ListShaperQueuesTool
+from opnsense_mcp.tools.shaper_rules import GetShaperRuleTool, ListShaperRulesTool
+from opnsense_mcp.tools.shaper_service import ShaperStatisticsTool
+from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
@@ -69,6 +78,16 @@ def build_mcp_server() -> FastMCP:
     aliases_tool = AliasesTool(client)
     gateway_status_tool = GatewayStatusTool(client)
     firewall_logs_tool = FirewallLogsTool(client)
+    list_shaper_pipes_tool = ListShaperPipesTool(client)
+    get_shaper_pipe_tool = GetShaperPipeTool(client)
+    list_shaper_queues_tool = ListShaperQueuesTool(client)
+    get_shaper_queue_tool = GetShaperQueueTool(client)
+    list_shaper_rules_tool = ListShaperRulesTool(client)
+    get_shaper_rule_tool = GetShaperRuleTool(client)
+    get_shaper_settings_tool = GetShaperSettingsTool(client)
+    shaper_statistics_tool = ShaperStatisticsTool(client)
+    audit_shaper_config_tool = AuditShaperConfigTool(client)
+    explain_shaper_config_tool = ExplainShaperConfigTool(client)
 
     mcp = FastMCP("opnsense-mcp")
 
@@ -456,6 +475,113 @@ def build_mcp_server() -> FastMCP:
                 "dst_ip": dst_ip,
                 "protocol": protocol,
             }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def list_shaper_pipes(
+        enabled: bool | None = None,
+        description: str | None = None,
+    ) -> str:
+        """List traffic shaper pipes with optional enabled/description filters."""
+        result = await list_shaper_pipes_tool.execute(
+            {"enabled": enabled, "description": description}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def get_shaper_pipe(
+        uuid: str | None = None,
+        description: str | None = None,
+    ) -> str:
+        """Get one traffic shaper pipe by uuid or description substring."""
+        result = await get_shaper_pipe_tool.execute(
+            {"uuid": uuid, "description": description}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def list_shaper_queues(
+        enabled: bool | None = None,
+        description: str | None = None,
+    ) -> str:
+        """List traffic shaper queues with optional enabled/description filters."""
+        result = await list_shaper_queues_tool.execute(
+            {"enabled": enabled, "description": description}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def get_shaper_queue(
+        uuid: str | None = None,
+        description: str | None = None,
+    ) -> str:
+        """Get one traffic shaper queue by uuid or description substring."""
+        result = await get_shaper_queue_tool.execute(
+            {"uuid": uuid, "description": description}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def list_shaper_rules(
+        enabled: bool | None = None,
+        description: str | None = None,
+        interface: str | None = None,
+    ) -> str:
+        """List traffic shaper rules with optional filters."""
+        result = await list_shaper_rules_tool.execute(
+            {
+                "enabled": enabled,
+                "description": description,
+                "interface": interface,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def get_shaper_rule(
+        uuid: str | None = None,
+        description: str | None = None,
+    ) -> str:
+        """Get one traffic shaper rule by uuid or description substring."""
+        result = await get_shaper_rule_tool.execute(
+            {"uuid": uuid, "description": description}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def get_shaper_settings() -> str:
+        """Get global traffic shaper settings and normalized pipe/queue/rule summary."""
+        result = await get_shaper_settings_tool.execute({})
+        return str(result)
+
+    @mcp.tool()
+    async def shaper_statistics(baseline_id: str | None = None) -> str:
+        """Get traffic shaper runtime statistics with structured hints."""
+        result = await shaper_statistics_tool.execute({"baseline_id": baseline_id})
+        return str(result)
+
+    @mcp.tool()
+    async def audit_shaper_config(
+        isp_download_mbit: float | None = None,
+        isp_upload_mbit: float | None = None,
+        wan_line_rate_mbit: float | None = None,
+    ) -> str:
+        """Audit traffic shaper configuration against best practices."""
+        result = await audit_shaper_config_tool.execute(
+            {
+                "isp_download_mbit": isp_download_mbit,
+                "isp_upload_mbit": isp_upload_mbit,
+                "wan_line_rate_mbit": wan_line_rate_mbit,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def explain_shaper_config(include_audit: bool = True) -> str:
+        """Explain traffic shaper configuration in plain language."""
+        result = await explain_shaper_config_tool.execute(
+            {"include_audit": include_audit}
         )
         return str(result)
 

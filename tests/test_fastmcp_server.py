@@ -30,13 +30,17 @@ async def test_fastmcp_server_lists_tools():
         "packet_capture", "dns", "mkdns", "rmdns", "flush_dns",
         "toggle_fw_rule", "set_fw_rule", "aliases", "gateway_status",
         "get_logs",
+        "list_shaper_pipes", "get_shaper_pipe", "list_shaper_queues",
+        "get_shaper_queue", "list_shaper_rules", "get_shaper_rule",
+        "get_shaper_settings", "shaper_statistics", "audit_shaper_config",
+        "explain_shaper_config",
     }
     assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
 
 
 @pytest.mark.asyncio
 async def test_fastmcp_server_tool_count():
-    """Server must expose exactly 26 tools."""
+    """Server must expose exactly 36 tools."""
     from fastmcp.client import Client
 
     from opnsense_mcp.fastmcp_server import build_mcp_server
@@ -45,7 +49,7 @@ async def test_fastmcp_server_tool_count():
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    assert len(tools) == 26
+    assert len(tools) == 36
 
 
 def test_main_argparser_accepts_transport():

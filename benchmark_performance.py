@@ -33,6 +33,15 @@ from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.get_logs import GetLogsTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
 from opnsense_mcp.tools.lldp import LLDPTool
+from opnsense_mcp.tools.shaper_audit import (
+    AuditShaperConfigTool,
+    ExplainShaperConfigTool,
+)
+from opnsense_mcp.tools.shaper_pipes import ListShaperPipesTool
+from opnsense_mcp.tools.shaper_queues import ListShaperQueuesTool
+from opnsense_mcp.tools.shaper_rules import ListShaperRulesTool
+from opnsense_mcp.tools.shaper_service import ShaperStatisticsTool
+from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.tools.system import SystemTool
 
 
@@ -156,6 +165,13 @@ class PerformanceBenchmark:
             ("interface_list", InterfaceListTool, {}),
             ("fw_rules", FwRulesTool, {"limit": 10}),
             ("firewall_logs", GetLogsTool, {"limit": 10}),
+            ("list_shaper_pipes", ListShaperPipesTool, {}),
+            ("list_shaper_queues", ListShaperQueuesTool, {}),
+            ("list_shaper_rules", ListShaperRulesTool, {}),
+            ("get_shaper_settings", GetShaperSettingsTool, {}),
+            ("shaper_statistics", ShaperStatisticsTool, {}),
+            ("audit_shaper_config", AuditShaperConfigTool, {}),
+            ("explain_shaper_config", ExplainShaperConfigTool, {}),
         ]
 
         # Test each tool
