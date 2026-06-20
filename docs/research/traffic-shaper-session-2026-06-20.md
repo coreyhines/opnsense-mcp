@@ -46,8 +46,35 @@
 - **Files:** `fastmcp_server.py`, `benchmark_performance.py`, register tests
 - **Notes:** 10 shaper tools registered (36 total MCP tools)
 
-### Next buckets
+### Next buckets (Phase 2 — bucketized 2026-06-20)
+
+**Capacity:** Claude usage API 429; Ollama cloud week 91% → local GPU primary; Cursor 8%.
 
 | Bucket | Owner | Model | Blocked by | Action |
 |--------|-------|-------|------------|--------|
-| Phase 2 write | TBD | — | bucketize | CRUD, snapshot, apply, presets |
+### Wave 1 complete (2026-06-20 experiment)
+
+| Bucket | Owner | Result | Commit | Tests | Coordinator gate |
+|--------|-------|--------|--------|-------|------------------|
+| 4a Snapshot | Ollama qwen3.6:35b | merged | `a5a7baa` | 10 | indent + tests |
+| 4b Helpers | Ollama qwen3.6:35b | merged | `274e776` | 8 | tests only |
+| 4c Mock write | Ollama qwen3.6:35b | merged | `b5b6464` | 7+4 | tests + pytest-asyncio |
+
+**Experiment notes:** [traffic-shaper-parallel-experiment-2026-06-20.md](traffic-shaper-parallel-experiment-2026-06-20.md)
+
+### Wave 2 queue
+
+| Bucket | Owner | Model | Blocked by | Action |
+|--------|-------|-------|------------|--------|
+| 4d Pipe write | Ollama-local | qwen3.5:122b | Wave 1 ✓ | queued — **serialize farms** |
+| 4e Queue write | Ollama-local | qwen3.5:122b | Wave 1 ✓ | queued |
+| 4f Rule write | Ollama-local | qwen3.5:122b | Wave 1 ✓ | queued |
+| 4g Settings/apply | Ollama-local | qwen3.5:122b | Wave 1 ✓ | queued |
+| 4h Restore snapshot | Ollama-local | qwen3.5:122b | 4d–4g | queued |
+| 4i MCP write register | Cursor | auto | 4d–4h | queued |
+| 4j Live write smoke | Cursor | auto | 4i | queued |
+
+**Phase 3:** 5a presets (Ollama-local 122b) → 5b docs+register (Cursor auto).
+
+**Wave 1 logs:** `/tmp/ollama-bucket-4{a,b,c}.log`  
+**Prompts:** `tmp_bucket_4*_prompt.md`, `tmp_bucket_5*_prompt.md`

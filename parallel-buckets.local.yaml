@@ -1,0 +1,27 @@
+# opnsense-mcp local overlay — Parallel Buckets v0.1.0
+
+product: opnsense-mcp
+version: "0.1.0"
+
+spec:
+  dir: docs/research
+  spec_suffix: "-spec.md"
+  buckets_suffix: "-buckets.md"
+
+integration:
+  branch_pattern: "feat/{feature}-spec"
+
+wiring:
+  globs:
+    - opnsense_mcp/fastmcp_server.py
+
+live_verify:
+  profile: live_mcp
+  notes: |
+    MCP-first homelab operations — use MCP tools before workspace Python or raw API.
+    See .cursor/rules/mcp-first.mdc and CLAUDE.md.
+
+resource_portfolio_local: .cursor/parallel-buckets/resource-portfolio.local.md
+skill_symlink: .cursor/skills/parallel-buckets
+
+parallel_buckets_home: ~/code/parallel-buckets

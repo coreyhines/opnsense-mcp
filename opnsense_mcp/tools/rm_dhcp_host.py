@@ -47,7 +47,10 @@ class RmDhcpHostTool:
 
         identifier = str(params.get("host") or "").strip()
         if not identifier:
-            return {"status": "error", "error": "host (hostname, MAC, or uuid) is required"}
+            return {
+                "status": "error",
+                "error": "host (hostname, MAC, or uuid) is required",
+            }
 
         apply = bool(params.get("apply", False))
         try:

@@ -67,7 +67,9 @@ def resolve_interface_key(
             str(entry.get("device") or ""),
             str(entry.get("name") or ""),
         ]
-        if any(candidate and candidate.lower() == needle_lc for candidate in candidates):
+        if any(
+            candidate and candidate.lower() == needle_lc for candidate in candidates
+        ):
             return key
     return None
 
@@ -154,10 +156,7 @@ async def resolve_scope_from_selectors(
     rows = extract_rows(response)
     for row in rows:
         row_subnet = str(
-            row.get("subnet")
-            or row.get("network")
-            or row.get("range")
-            or ""
+            row.get("subnet") or row.get("network") or row.get("range") or ""
         ).strip()
         row_interface = str(row.get("interface") or "").strip()
         if row_subnet and cidr_matches(row_subnet, normalized_subnet):

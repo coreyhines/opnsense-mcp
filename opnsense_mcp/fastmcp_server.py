@@ -35,11 +35,37 @@ from opnsense_mcp.tools.shaper_audit import (
     AuditShaperConfigTool,
     ExplainShaperConfigTool,
 )
-from opnsense_mcp.tools.shaper_pipes import GetShaperPipeTool, ListShaperPipesTool
-from opnsense_mcp.tools.shaper_queues import GetShaperQueueTool, ListShaperQueuesTool
-from opnsense_mcp.tools.shaper_rules import GetShaperRuleTool, ListShaperRulesTool
-from opnsense_mcp.tools.shaper_service import ShaperStatisticsTool
-from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
+from opnsense_mcp.tools.shaper_pipes import (
+    AddShaperPipeTool,
+    DeleteShaperPipeTool,
+    GetShaperPipeTool,
+    ListShaperPipesTool,
+    SetShaperPipeTool,
+    ToggleShaperPipeTool,
+)
+from opnsense_mcp.tools.shaper_presets import ApplyShaperPresetTool
+from opnsense_mcp.tools.shaper_queues import (
+    AddShaperQueueTool,
+    DeleteShaperQueueTool,
+    GetShaperQueueTool,
+    ListShaperQueuesTool,
+    SetShaperQueueTool,
+    ToggleShaperQueueTool,
+)
+from opnsense_mcp.tools.shaper_rules import (
+    AddShaperRuleTool,
+    DeleteShaperRuleTool,
+    GetShaperRuleTool,
+    ListShaperRulesTool,
+    SetShaperRuleTool,
+    ToggleShaperRuleTool,
+)
+from opnsense_mcp.tools.shaper_service import ApplyShaperTool, ShaperStatisticsTool
+from opnsense_mcp.tools.shaper_settings import (
+    GetShaperSettingsTool,
+    SetShaperSettingsTool,
+)
+from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
 from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
@@ -80,12 +106,28 @@ def build_mcp_server() -> FastMCP:
     firewall_logs_tool = FirewallLogsTool(client)
     list_shaper_pipes_tool = ListShaperPipesTool(client)
     get_shaper_pipe_tool = GetShaperPipeTool(client)
+    add_shaper_pipe_tool = AddShaperPipeTool(client)
+    set_shaper_pipe_tool = SetShaperPipeTool(client)
+    toggle_shaper_pipe_tool = ToggleShaperPipeTool(client)
+    delete_shaper_pipe_tool = DeleteShaperPipeTool(client)
     list_shaper_queues_tool = ListShaperQueuesTool(client)
     get_shaper_queue_tool = GetShaperQueueTool(client)
+    add_shaper_queue_tool = AddShaperQueueTool(client)
+    set_shaper_queue_tool = SetShaperQueueTool(client)
+    toggle_shaper_queue_tool = ToggleShaperQueueTool(client)
+    delete_shaper_queue_tool = DeleteShaperQueueTool(client)
     list_shaper_rules_tool = ListShaperRulesTool(client)
     get_shaper_rule_tool = GetShaperRuleTool(client)
+    add_shaper_rule_tool = AddShaperRuleTool(client)
+    set_shaper_rule_tool = SetShaperRuleTool(client)
+    toggle_shaper_rule_tool = ToggleShaperRuleTool(client)
+    delete_shaper_rule_tool = DeleteShaperRuleTool(client)
     get_shaper_settings_tool = GetShaperSettingsTool(client)
+    set_shaper_settings_tool = SetShaperSettingsTool(client)
     shaper_statistics_tool = ShaperStatisticsTool(client)
+    apply_shaper_tool = ApplyShaperTool(client)
+    restore_shaper_snapshot_tool = RestoreShaperSnapshotTool(client)
+    apply_shaper_preset_tool = ApplyShaperPresetTool(client)
     audit_shaper_config_tool = AuditShaperConfigTool(client)
     explain_shaper_config_tool = ExplainShaperConfigTool(client)
 
@@ -582,6 +624,237 @@ def build_mcp_server() -> FastMCP:
         """Explain traffic shaper configuration in plain language."""
         result = await explain_shaper_config_tool.execute(
             {"include_audit": include_audit}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def add_shaper_pipe(
+        description: str,
+        bandwidth: int,
+        bandwidth_metric: str = "Mbit",
+        scheduler: str = "fq_codel",
+        enabled: bool = True,
+        apply: bool = True,
+    ) -> str:
+        """Create a traffic shaper pipe."""
+        result = await add_shaper_pipe_tool.execute(
+            {
+                "description": description,
+                "bandwidth": bandwidth,
+                "bandwidth_metric": bandwidth_metric,
+                "scheduler": scheduler,
+                "enabled": enabled,
+                "apply": apply,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def set_shaper_pipe(
+        uuid: str,
+        description: str | None = None,
+        bandwidth: int | None = None,
+        bandwidth_metric: str | None = None,
+        scheduler: str | None = None,
+        enabled: bool | None = None,
+        apply: bool = True,
+    ) -> str:
+        """Update a traffic shaper pipe by uuid."""
+        result = await set_shaper_pipe_tool.execute(
+            {
+                "uuid": uuid,
+                "description": description,
+                "bandwidth": bandwidth,
+                "bandwidth_metric": bandwidth_metric,
+                "scheduler": scheduler,
+                "enabled": enabled,
+                "apply": apply,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def toggle_shaper_pipe(uuid: str, apply: bool = True) -> str:
+        """Toggle a traffic shaper pipe enabled state."""
+        result = await toggle_shaper_pipe_tool.execute({"uuid": uuid, "apply": apply})
+        return str(result)
+
+    @mcp.tool()
+    async def delete_shaper_pipe(
+        uuid: str,
+        confirm: str | None = None,
+        apply: bool = True,
+    ) -> str:
+        """Delete a traffic shaper pipe (confirmation token required)."""
+        result = await delete_shaper_pipe_tool.execute(
+            {"uuid": uuid, "confirm": confirm, "apply": apply}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def add_shaper_queue(
+        description: str,
+        pipe_uuid: str,
+        weight: int = 100,
+        apply: bool = True,
+    ) -> str:
+        """Create a traffic shaper queue."""
+        result = await add_shaper_queue_tool.execute(
+            {
+                "description": description,
+                "pipe_uuid": pipe_uuid,
+                "weight": weight,
+                "apply": apply,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def set_shaper_queue(
+        uuid: str,
+        description: str | None = None,
+        pipe_uuid: str | None = None,
+        weight: int | None = None,
+        enabled: bool | None = None,
+        apply: bool = True,
+    ) -> str:
+        """Update a traffic shaper queue by uuid."""
+        result = await set_shaper_queue_tool.execute(
+            {
+                "uuid": uuid,
+                "description": description,
+                "pipe_uuid": pipe_uuid,
+                "weight": weight,
+                "enabled": enabled,
+                "apply": apply,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def toggle_shaper_queue(uuid: str, apply: bool = True) -> str:
+        """Toggle a traffic shaper queue enabled state."""
+        result = await toggle_shaper_queue_tool.execute({"uuid": uuid, "apply": apply})
+        return str(result)
+
+    @mcp.tool()
+    async def delete_shaper_queue(
+        uuid: str,
+        confirm: str | None = None,
+        apply: bool = True,
+    ) -> str:
+        """Delete a traffic shaper queue (confirmation token required)."""
+        result = await delete_shaper_queue_tool.execute(
+            {"uuid": uuid, "confirm": confirm, "apply": apply}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def add_shaper_rule(
+        description: str,
+        interface: str,
+        direction: str,
+        target_uuid: str,
+        proto: str = "ip",
+        apply: bool = True,
+    ) -> str:
+        """Create a traffic shaper rule."""
+        result = await add_shaper_rule_tool.execute(
+            {
+                "description": description,
+                "interface": interface,
+                "direction": direction,
+                "target_uuid": target_uuid,
+                "proto": proto,
+                "apply": apply,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def set_shaper_rule(
+        uuid: str,
+        description: str | None = None,
+        interface: str | None = None,
+        direction: str | None = None,
+        target_uuid: str | None = None,
+        proto: str | None = None,
+        enabled: bool | None = None,
+        apply: bool = True,
+    ) -> str:
+        """Update a traffic shaper rule by uuid."""
+        result = await set_shaper_rule_tool.execute(
+            {
+                "uuid": uuid,
+                "description": description,
+                "interface": interface,
+                "direction": direction,
+                "target_uuid": target_uuid,
+                "proto": proto,
+                "enabled": enabled,
+                "apply": apply,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def toggle_shaper_rule(uuid: str, apply: bool = True) -> str:
+        """Toggle a traffic shaper rule enabled state."""
+        result = await toggle_shaper_rule_tool.execute({"uuid": uuid, "apply": apply})
+        return str(result)
+
+    @mcp.tool()
+    async def delete_shaper_rule(
+        uuid: str,
+        confirm: str | None = None,
+        apply: bool = True,
+    ) -> str:
+        """Delete a traffic shaper rule (confirmation token required)."""
+        result = await delete_shaper_rule_tool.execute(
+            {"uuid": uuid, "confirm": confirm, "apply": apply}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def set_shaper_settings(apply: bool = True) -> str:
+        """Update global traffic shaper settings."""
+        result = await set_shaper_settings_tool.execute({"apply": apply})
+        return str(result)
+
+    @mcp.tool()
+    async def apply_shaper() -> str:
+        """Apply pending traffic shaper configuration via service/reconfigure."""
+        result = await apply_shaper_tool.execute({})
+        return str(result)
+
+    @mcp.tool()
+    async def restore_shaper_snapshot(
+        snapshot_id: str,
+        apply: bool = True,
+    ) -> str:
+        """Restore traffic shaper config from a prior snapshot_id."""
+        result = await restore_shaper_snapshot_tool.execute(
+            {"snapshot_id": snapshot_id, "apply": apply}
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def apply_shaper_preset(
+        download_mbit: float,
+        upload_mbit: float,
+        preset: str = "bufferbloat_wan",
+        wan_interface: str = "wan",
+        apply: bool = True,
+    ) -> str:
+        """Apply bufferbloat_wan preset with FQ-CoDel pipes at 85% ISP rates."""
+        result = await apply_shaper_preset_tool.execute(
+            {
+                "preset": preset,
+                "download_mbit": download_mbit,
+                "upload_mbit": upload_mbit,
+                "wan_interface": wan_interface,
+                "apply": apply,
+            }
         )
         return str(result)
 
