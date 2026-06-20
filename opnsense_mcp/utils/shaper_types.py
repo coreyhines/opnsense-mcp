@@ -22,6 +22,12 @@ _VALID_STATUSES: frozenset[str] = frozenset(
     {TOOL_STATUS_SUCCESS, TOOL_STATUS_ERROR, TOOL_STATUS_WARNING, TOOL_STATUS_CRITICAL}
 )
 
+AUDIT_FINDING_SEVERITIES: frozenset[str] = frozenset({"error", "warning", "info"})
+
+AUDIT_RESULT_STATUSES: frozenset[str] = _VALID_STATUSES
+
+INTERPRETATION_VERDICTS: frozenset[str] = _VALID_STATUSES
+
 # ---------------------------------------------------------------------------
 # Scheduler constants
 # ---------------------------------------------------------------------------
@@ -212,5 +218,20 @@ class InterpretationResult:
 
 
 def is_valid_scheduler(name: str) -> bool:
-    """Return True if *name* is a recognised pipe scheduler key."""
-    return bool(name) and name in PIPE_SCHEDULERS
+    """Return True if *name* is a recognised pipe scheduler key (including ``""``)."""
+    return name in PIPE_SCHEDULERS
+
+
+def is_valid_audit_severity(severity: str) -> bool:
+    """Return True if *severity* is a recognised audit finding level."""
+    return severity in AUDIT_FINDING_SEVERITIES
+
+
+def is_valid_audit_status(status: str) -> bool:
+    """Return True if *status* is a recognised aggregated audit result status."""
+    return status in AUDIT_RESULT_STATUSES
+
+
+def is_valid_interpretation_verdict(verdict: str) -> bool:
+    """Return True if *verdict* is a recognised statistics interpretation verdict."""
+    return verdict in INTERPRETATION_VERDICTS
