@@ -1,0 +1,33 @@
+{
+  "rows": [
+    {
+      "uuid": "84c6c7d8-1234-5678-abcd-000000000003",
+      "description": "Download queue",
+      "enabled": "1",
+      "weight": 100,
+      "pipe": "e93038e5-1234-5678-abcd-000000000001",
+      "mask": "none",
+      "codel_enable": "0",
+      "codel_target": "",
+      "codel_interval": "",
+      "codel_ecn_enable": "0",
+      "pie_enable": "0"
+    },
+    {
+      "uuid": "14cc84dd-1234-5678-abcd-000000000004",
+      "description": "Upload queue",
+      "enabled": "1",
+      "weight": 100,
+      "pipe": "f9b19d27-1234-5678-abcd-000000000002",
+      "mask": "none",
+      "codel_enable": "0",
+      "codel_target": "",
+      "codel_interval": "",
+      "codel_ecn_enable": "0",
+      "pie_enable": "0"
+    }
+  ],
+  "rowCount": 2,
+  "total": 2,
+  "current": 1
+}
