@@ -75,7 +75,7 @@ async def test_fastmcp_server_tool_count():
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    assert len(tools) == 52
+    assert len(tools) == 51
 
 
 def test_main_argparser_accepts_transport():

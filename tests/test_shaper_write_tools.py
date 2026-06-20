@@ -21,7 +21,6 @@ from opnsense_mcp.tools.shaper_queues import (
 from opnsense_mcp.tools.shaper_rules import AddShaperRuleTool, DeleteShaperRuleTool
 from opnsense_mcp.tools.shaper_service import ApplyShaperTool
 from opnsense_mcp.tools.shaper_settings import (
-    SetShaperSettingsTool,
     search_shaper_pipes,
     search_shaper_rules,
 )
@@ -121,14 +120,6 @@ async def test_add_shaper_rule(mock_client: MockOPNsenseClient) -> None:
         }
     )
     assert resp["status"] == TOOL_STATUS_SUCCESS
-
-
-@pytest.mark.asyncio
-async def test_set_shaper_settings(mock_client: MockOPNsenseClient) -> None:
-    tool = SetShaperSettingsTool(mock_client)
-    resp = await tool.execute({"apply": False})
-    assert resp["status"] == TOOL_STATUS_SUCCESS
-    assert resp["structured"]["applied"] is False
 
 
 @pytest.mark.asyncio
