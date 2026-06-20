@@ -168,6 +168,21 @@ STATS_FLOWSET_DROPS = {
     ],
 }
 
+STATS_FLOWSET_DROPS_DICT = {
+    "status": "ok",
+    "items": [
+        {
+            "type": "pipe",
+            "uuid": "e93038e5-1234",
+            "description": "Download pipe",
+            "pipe": "10000",
+            "bw": "1776 Mbit/s",
+            "scheduler": {"sched_type": "FIFO"},
+            "flowset": {"sched_nr": "10000", "drops": 7},
+        },
+    ],
+}
+
 STATS_DROPTAIL_LOAD = {
     "status": "ok",
     "items": [
@@ -400,6 +415,28 @@ def test_interpret_statistics_flowset_drops_hint():
     assert result.verdict == "warning"
 
 
+def test_interpret_statistics_flowset_drops_dict_format():
+    result = interpret_statistics(STATS_FLOWSET_DROPS_DICT)
+    assert any("[PIPE_FLOWSET_DROPS]" in h for h in result.hints)
+    assert any("7 drop" in h for h in result.hints)
+
+
+def test_interpret_statistics_single_queue_flow_no_hint():
+    stats = {
+        "status": "ok",
+        "items": [
+            {
+                "type": "queue",
+                "uuid": "q-1",
+                "description": "Download queue",
+                "flows": 1,
+            },
+        ],
+    }
+    result = interpret_statistics(stats)
+    assert not any("[QUEUE_FLOWS_ACTIVE]" in h for h in result.hints)
+
+
 def test_interpret_statistics_droptail_load_hint():
     result = interpret_statistics(STATS_DROPTAIL_LOAD)
     assert any("[PIPE_DROPTAIL_LOAD]" in h for h in result.hints)
@@ -499,6 +536,11 @@ def test_store_baseline_overwrites_existing_key():
 
 def test_interpret_statistics_no_baseline_delta_is_none():
     result = interpret_statistics(STATS_DRIFT)
+    assert result.baseline_delta is None
+
+
+def test_interpret_statistics_missing_baseline_id_returns_none_delta():
+    result = interpret_statistics(STATS_DRIFT, baseline_id="nonexistent-baseline")
     assert result.baseline_delta is None
 
 

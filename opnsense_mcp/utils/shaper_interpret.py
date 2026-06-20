@@ -25,7 +25,7 @@ from opnsense_mcp.utils.shaper_types import (
 # ---------------------------------------------------------------------------
 
 _HIGH_LOAD_PKTS = 100_000
-_QUEUE_FLOWS_WARN = 1
+_QUEUE_FLOWS_WARN = 10
 _BW_MISMATCH_RATIO = 0.05
 
 RUNTIME_SCHEDULER_ALIASES: dict[str, str] = {
@@ -182,11 +182,16 @@ def _config_bandwidth_mbit(pipe: dict[str, Any]) -> float | None:
 
 
 def _flowset_drop_total(pipe_item: dict[str, Any]) -> int:
-    """Sum drop counters reported under a pipe's ``flowset`` entries."""
+    """Sum drop counters reported under a pipe's ``flowset`` (dict or list)."""
+    flowset = pipe_item.get("flowset")
+    entries: list[dict[str, Any]] = []
+    if isinstance(flowset, dict):
+        entries = [flowset]
+    elif isinstance(flowset, list):
+        entries = [entry for entry in flowset if isinstance(entry, dict)]
+
     total = 0
-    for entry in pipe_item.get("flowset") or []:
-        if not isinstance(entry, dict):
-            continue
+    for entry in entries:
         for key in ("drops", "drop_pkts", "drop", "drop_bytes"):
             value = entry.get(key)
             if isinstance(value, (int, float)) and value > 0:
