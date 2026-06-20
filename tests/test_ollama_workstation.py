@@ -22,10 +22,25 @@ PB_HOME = (
     .resolve()
 )
 SCRIPTS = PB_HOME / "scripts"
+_OLLAMA_WORKSTATION_SCRIPT = SCRIPTS / "ollama_workstation.py"
+_RECOMMEND_BUCKET_OWNER_SCRIPT = SCRIPTS / "recommend_bucket_owner.py"
+
+pytestmark = pytest.mark.skipif(
+    not (
+        _OLLAMA_WORKSTATION_SCRIPT.is_file()
+        and _RECOMMEND_BUCKET_OWNER_SCRIPT.is_file()
+    ),
+    reason=(
+        "parallel-buckets scripts not installed "
+        "(expected under PARALLEL_BUCKETS_HOME/scripts)"
+    ),
+)
 
 
 def _load_module(name: str):
     path = SCRIPTS / f"{name}.py"
+    if not path.is_file():
+        pytest.skip(f"missing parallel-buckets script: {path}")
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
