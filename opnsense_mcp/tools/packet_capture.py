@@ -74,9 +74,7 @@ class PacketCaptureTool2:
                     )  # nosec B603 B607 — hardcoded command, no user input
                     if "opnsense_mcp/server.py" not in result2.stdout:
                         issues.append("OPNsense MCP server is not running")
-                        solutions.append(
-                            "Restart the MCP server using: ./mcp_start.sh"
-                        )
+                        solutions.append("Restart the MCP server using: ./mcp_start.sh")
             except Exception as e:
                 issues.append(f"Could not check MCP server status: {e}")
                 solutions.append("Manually check if the MCP server is running")
@@ -701,10 +699,7 @@ class PacketCaptureTool2:
                     f"ifconfig {shlex.quote(interface)}"
                 )  # nosec B601 — inputs sanitized via shlex.quote
                 ifconfig_err = stderr.read().decode()
-                if (
-                    "not found" in ifconfig_err
-                    or "No such interface" in ifconfig_err
-                ):
+                if "not found" in ifconfig_err or "No such interface" in ifconfig_err:
                     client.close()
                     return {
                         "status": "error",

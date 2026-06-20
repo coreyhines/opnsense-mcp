@@ -33,7 +33,7 @@ def load_opnsense_env() -> None:
     Later steps (3) do not override keys already set by (1) or (2).
     """
     deploy_env = _deploy_env_path()
-    if deploy_env.exists():
+    if deploy_env.is_file() and os.access(deploy_env, os.R_OK):
         load_dotenv(deploy_env, override=True)
         logger.debug("Loaded environment file: %s", deploy_env)
     extra = os.environ.get("OPNSENSE_ENV_FILE", "").strip()

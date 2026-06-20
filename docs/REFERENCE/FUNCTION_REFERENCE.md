@@ -391,18 +391,44 @@ The agent automatically handles the complexity of multi-step queries, allowing u
 
 ---
 
-## Planned: Traffic shaper & FQ-CoDel (not yet implemented)
+## Traffic shaper & FQ-CoDel
 
 Full specification: [`docs/research/traffic-shaper-spec.md`](../research/traffic-shaper-spec.md).
 
-These tools will expose OPNsense **pipes**, **queues**, **rules**, global shaper settings,
-runtime **statistics**, **audit** against best practices, plain-language **explain**, and
-**rollback** via snapshots. Typical agent flows:
+### Read tools
+
+| Tool | Purpose |
+|------|---------|
+| `list_shaper_pipes` / `get_shaper_pipe` | Pipe inventory and detail |
+| `list_shaper_queues` / `get_shaper_queue` | Queue inventory and detail |
+| `list_shaper_rules` / `get_shaper_rule` | Rule inventory and detail |
+| `get_shaper_settings` | Global shaper settings summary |
+| `shaper_statistics` | Runtime stats with baseline compare |
+| `audit_shaper_config` | Best-practice audit (schedulers, IPv6, bandwidth) |
+| `explain_shaper_config` | Plain-language config explanation |
+
+### Write tools
+
+Each mutation captures a **snapshot_id** for rollback via `restore_shaper_snapshot`.
+Destructive deletes require a **confirm** token from the first call.
+
+| Tool | Purpose |
+|------|---------|
+| `add_shaper_pipe` / `set_shaper_pipe` / `toggle_shaper_pipe` / `delete_shaper_pipe` | Pipe CRUD |
+| `add_shaper_queue` / `set_shaper_queue` / `toggle_shaper_queue` / `delete_shaper_queue` | Queue CRUD |
+| `add_shaper_rule` / `set_shaper_rule` / `toggle_shaper_rule` / `delete_shaper_rule` | Rule CRUD |
+| `set_shaper_settings` | Global settings subset |
+| `apply_shaper` | Explicit `service/reconfigure` |
+| `restore_shaper_snapshot` | Roll back to a captured snapshot |
+| `apply_shaper_preset` | `bufferbloat_wan` — FQ-CoDel pipes at 85% ISP rates |
+
+Typical agent flows:
 
 - **Audit**: `audit_shaper_config` → report scheduler drift, missing IPv6 rules, bandwidth vs WAN
 - **Tune**: `set_shaper_pipe` / `set_shaper_rule` → auto-reconfigure → `shaper_statistics`
 - **Explain**: `explain_shaper_config` after changes for non-technical users
 - **Preset**: `apply_shaper_preset` (`bufferbloat_wan`) with dual-stack WAN rules
+- **Rollback**: any write returns `snapshot_id` → `restore_shaper_snapshot` if needed
 
 Correlates with existing `interface_list`, `gateway_status`, `get_logs`, and
 `packet_capture` for before/after bufferbloat troubleshooting.

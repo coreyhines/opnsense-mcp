@@ -14,7 +14,9 @@ def make_request() -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_list_subnet_dns_reads_subnet_option_data(make_request: AsyncMock) -> None:
+async def test_list_subnet_dns_reads_subnet_option_data(
+    make_request: AsyncMock,
+) -> None:
     subnet_payload = {
         "uuid": "subnet-v4",
         "subnet": "10.0.2.0/24",
@@ -45,9 +47,7 @@ async def test_set_subnet_dns_disables_autocollect(make_request: AsyncMock) -> N
         "subnet": "10.0.2.0/24",
         "interface": "opt2",
         "option_data_autocollect": "1",
-        "option_data": {
-            "domain_name_servers": {"value": "10.0.10.5", "selected": 1}
-        },
+        "option_data": {"domain_name_servers": {"value": "10.0.10.5", "selected": 1}},
     }
     make_request.side_effect = [
         {"rows": [{"uuid": "subnet-v4", "subnet": "10.0.2.0/24", "interface": "opt2"}]},

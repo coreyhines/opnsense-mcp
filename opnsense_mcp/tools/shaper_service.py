@@ -105,3 +105,44 @@ class ShaperStatisticsTool:
             hints=interpretation.hints,
             baseline_id=new_baseline_id,
         )
+
+
+class ApplyShaperTool:
+    """Explicit traffic shaper reconfigure (apply pending GUI changes)."""
+
+    name = "apply_shaper"
+    description = "Apply pending traffic shaper configuration via service/reconfigure"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
+
+    def __init__(self, client: ClientT) -> None:
+        self.client = client
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        from opnsense_mcp.utils.shaper_mutation import reconfigure_shaper
+        from opnsense_mcp.utils.shaper_types import TOOL_STATUS_SUCCESS
+
+        _ = params
+        if not self.client:
+            return make_tool_response(
+                status=TOOL_STATUS_ERROR,
+                structured={"error": "No client"},
+                summary="**Error:** No client.",
+            )
+        try:
+            result = await reconfigure_shaper(self.client)
+        except Exception as exc:
+            logger.exception("Failed to apply shaper")
+            return make_tool_response(
+                status=TOOL_STATUS_ERROR,
+                structured={"error": str(exc)},
+                summary=f"**Error:** {exc}",
+            )
+        return make_tool_response(
+            status=TOOL_STATUS_SUCCESS,
+            structured={"reconfigure_result": result, "applied": True},
+            summary="**Traffic shaper reconfigure** completed.",
+        )

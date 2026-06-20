@@ -19,6 +19,27 @@ SHAPER_READ_TOOLS = frozenset(
     }
 )
 
+SHAPER_WRITE_TOOLS = frozenset(
+    {
+        "add_shaper_pipe",
+        "set_shaper_pipe",
+        "toggle_shaper_pipe",
+        "delete_shaper_pipe",
+        "add_shaper_queue",
+        "set_shaper_queue",
+        "toggle_shaper_queue",
+        "delete_shaper_queue",
+        "add_shaper_rule",
+        "set_shaper_rule",
+        "toggle_shaper_rule",
+        "delete_shaper_rule",
+        "set_shaper_settings",
+        "apply_shaper",
+        "restore_shaper_snapshot",
+        "apply_shaper_preset",
+    }
+)
+
 
 def test_build_mcp_server_imports() -> None:
     """build_mcp_server must import and construct without error."""
@@ -41,3 +62,19 @@ async def test_shaper_read_tools_registered() -> None:
     tool_names = {t.name for t in tools}
     missing = SHAPER_READ_TOOLS - tool_names
     assert not missing, f"Missing shaper read tools: {sorted(missing)}"
+
+
+@pytest.mark.asyncio
+async def test_shaper_write_tools_registered() -> None:
+    """All bucket 4i shaper write tools must appear in FastMCP tool list."""
+    from fastmcp.client import Client
+
+    from opnsense_mcp.fastmcp_server import build_mcp_server
+
+    mcp = build_mcp_server()
+    async with Client(mcp) as client:
+        tools = await client.list_tools()
+
+    tool_names = {t.name for t in tools}
+    missing = SHAPER_WRITE_TOOLS - tool_names
+    assert not missing, f"Missing shaper write tools: {sorted(missing)}"
