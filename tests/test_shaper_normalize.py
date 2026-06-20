@@ -104,6 +104,14 @@ def test_selected_enum_none_selected_returns_empty_string():
     assert selected_enum(field) == ""
 
 
+def test_selected_enum_string_zero_not_selected():
+    field = {
+        "fq_codel": {"selected": "0", "value": "FQ-CoDel"},
+        "fifo": {"selected": "1", "value": "FIFO"},
+    }
+    assert selected_enum(field) == "fifo"
+
+
 def test_selected_enum_wan_interface():
     field = {
         "wan": {"selected": 1, "value": "WAN"},
@@ -171,6 +179,11 @@ def test_normalize_pipe_from_search_row_bandwidth_int():
     pipe = normalize_pipe(rows[0])
     assert pipe["bandwidth"] == 1776
     assert isinstance(pipe["bandwidth"], int)
+
+
+def test_normalize_pipe_invalid_bandwidth_defaults_to_zero():
+    pipe = normalize_pipe({"uuid": "x", "bandwidth": "not-a-number", "enabled": "1"})
+    assert pipe["bandwidth"] == 0
 
 
 def test_normalize_pipe_from_search_row_bandwidth_metric():

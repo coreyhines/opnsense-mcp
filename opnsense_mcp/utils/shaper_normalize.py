@@ -32,7 +32,7 @@ def parse_boolish(val: Any) -> bool:
 def selected_enum(field: dict[str, Any]) -> str:
     """Return the key whose ``selected`` value is truthy; ``""`` if none."""
     for key, meta in field.items():
-        if isinstance(meta, dict) and meta.get("selected"):
+        if isinstance(meta, dict) and parse_boolish(meta.get("selected")):
             return key
     return ""
 
@@ -52,6 +52,16 @@ def _parse_optional_int(val: Any) -> int | None:
         return int(val)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_required_int(val: Any, default: int = 0) -> int:
+    """Return ``int(val)`` for required numeric fields; *default* when empty/invalid."""
+    if val is None or val == "":
+        return default
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return default
 
 
 def _resolve_str_or_enum(val: Any) -> str:
@@ -76,9 +86,7 @@ def normalize_pipe(row: dict[str, Any]) -> FlatShaperPipe:
         number=str(row.get("queue", "")),
         description=row.get("description", ""),
         enabled=parse_boolish(row.get("enabled", "0")),
-        bandwidth=int(row["bandwidth"])
-        if row.get("bandwidth") not in (None, "")
-        else 0,
+        bandwidth=_parse_required_int(row.get("bandwidth")),
         bandwidth_metric=selected_bandwidth_metric(row.get("bandwidthMetric", "")),
         scheduler=_resolve_str_or_enum(row.get("scheduler", "")),
         mask=_resolve_str_or_enum(row.get("mask", "")),
@@ -100,7 +108,7 @@ def normalize_queue(row: dict[str, Any]) -> FlatShaperQueue:
         description=row.get("description", ""),
         enabled=parse_boolish(row.get("enabled", "0")),
         pipe_uuid=_resolve_str_or_enum(row.get("pipe", "")),
-        weight=int(row["weight"]) if row.get("weight") not in (None, "") else 0,
+        weight=_parse_required_int(row.get("weight")),
         mask=_resolve_str_or_enum(row.get("mask", "")),
         codel_enable=parse_boolish(row.get("codel_enable", "0")),
         codel_target_ms=_parse_optional_int(row.get("codel_target", "")),
@@ -133,7 +141,7 @@ def normalize_rule(row: dict[str, Any]) -> FlatShaperRule:
         if not isinstance(dscp_raw, dict)
         else (selected_enum(dscp_raw) or None),
         target_uuid=_resolve_str_or_enum(row.get("target", "")),
-        sequence=int(row["sequence"]) if row.get("sequence") not in (None, "") else 0,
+        sequence=_parse_required_int(row.get("sequence")),
     )
 
 
