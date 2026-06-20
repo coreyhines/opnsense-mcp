@@ -417,7 +417,6 @@ Destructive deletes require a **confirm** token from the first call.
 | `add_shaper_pipe` / `set_shaper_pipe` / `toggle_shaper_pipe` / `delete_shaper_pipe` | Pipe CRUD |
 | `add_shaper_queue` / `set_shaper_queue` / `toggle_shaper_queue` / `delete_shaper_queue` | Queue CRUD |
 | `add_shaper_rule` / `set_shaper_rule` / `toggle_shaper_rule` / `delete_shaper_rule` | Rule CRUD |
-| `set_shaper_settings` | Global settings subset |
 | `apply_shaper` | Explicit `service/reconfigure` |
 | `restore_shaper_snapshot` | Roll back to a captured snapshot; optional `remove_orphans=true` deletes objects not in the snapshot |
 | `apply_shaper_preset` | `bufferbloat_wan` — FQ-CoDel pipes at **85% rounded** ISP rates (`rate_policy: 85pct_round`) |

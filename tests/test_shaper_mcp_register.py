@@ -33,7 +33,6 @@ SHAPER_WRITE_TOOLS = frozenset(
         "set_shaper_rule",
         "toggle_shaper_rule",
         "delete_shaper_rule",
-        "set_shaper_settings",
         "apply_shaper",
         "restore_shaper_snapshot",
         "apply_shaper_preset",

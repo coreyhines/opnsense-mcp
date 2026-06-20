@@ -69,7 +69,7 @@ Agent can:
 | Pipes | `add_pipe`, `set_pipe`, `get_pipe`, `search_pipes`, `del_pipe`, `toggle_pipe` | Full CRUD + list |
 | Queues | `add_queue`, `set_queue`, `get_queue`, `search_queues`, `del_queue`, `toggle_queue` | Full CRUD + list |
 | Rules | `add_rule`, `set_rule`, `get_rule`, `search_rules`, `del_rule`, `toggle_rule` | Full CRUD + list |
-| Global | `settings/get`, `settings/set` | Read + write |
+| Global | `settings/get` | Read-only (`get_shaper_settings`; use per-object toggles to disable) |
 | Service | `service/reconfigure`, `service/statistics` | Auto on apply; dedicated stats tool |
 | Presets | — | `apply_shaper_preset` (e.g. `bufferbloat_wan`) |
 | Snapshots | — | Pre-mutation snapshot + `restore_shaper_snapshot` |
@@ -291,7 +291,6 @@ Granular, resource-oriented tools. Each write tool accepts `apply: bool = true`.
 | `add_shaper_rule` / `set_shaper_rule` | Create / update |
 | `toggle_shaper_pipe` / `toggle_shaper_queue` / `toggle_shaper_rule` | Enable/disable |
 | `delete_shaper_pipe` / `delete_shaper_queue` / `delete_shaper_rule` | Requires `confirm` token |
-| `set_shaper_settings` | Global settings |
 | `apply_shaper` | Explicit reconfigure (when prior call used `apply=false`) |
 | `apply_shaper_preset` | Named preset workflow |
 | `restore_shaper_snapshot` | Rollback |

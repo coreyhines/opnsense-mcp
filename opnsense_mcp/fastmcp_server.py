@@ -61,10 +61,7 @@ from opnsense_mcp.tools.shaper_rules import (
     ToggleShaperRuleTool,
 )
 from opnsense_mcp.tools.shaper_service import ApplyShaperTool, ShaperStatisticsTool
-from opnsense_mcp.tools.shaper_settings import (
-    GetShaperSettingsTool,
-    SetShaperSettingsTool,
-)
+from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
 from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
@@ -123,7 +120,6 @@ def build_mcp_server() -> FastMCP:
     toggle_shaper_rule_tool = ToggleShaperRuleTool(client)
     delete_shaper_rule_tool = DeleteShaperRuleTool(client)
     get_shaper_settings_tool = GetShaperSettingsTool(client)
-    set_shaper_settings_tool = SetShaperSettingsTool(client)
     shaper_statistics_tool = ShaperStatisticsTool(client)
     apply_shaper_tool = ApplyShaperTool(client)
     restore_shaper_snapshot_tool = RestoreShaperSnapshotTool(client)
@@ -831,12 +827,6 @@ def build_mcp_server() -> FastMCP:
         result = await delete_shaper_rule_tool.execute(
             {"uuid": uuid, "confirm": confirm, "apply": apply}
         )
-        return str(result)
-
-    @mcp.tool()
-    async def set_shaper_settings(apply: bool = True) -> str:
-        """Update global traffic shaper settings."""
-        result = await set_shaper_settings_tool.execute({"apply": apply})
         return str(result)
 
     @mcp.tool()

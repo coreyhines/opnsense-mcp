@@ -18,7 +18,7 @@
 
 | ID | Item |
 |----|------|
-| MCP-03 | `set_shaper_settings` stub / limited fields |
+| MCP-03 | ~~`set_shaper_settings` stub~~ — **removed** (use toggles; no global flag on live OPNsense) |
 | FW-02 | Missing IPv6 shaper rules (operator / preset) |
 | TEST-01/02 | Pagination register tests; queue/rule write integration |
 
