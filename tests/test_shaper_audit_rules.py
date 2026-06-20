@@ -38,13 +38,31 @@ def load_fixture_models() -> tuple[list, list, list, dict]:
 # ---------------------------------------------------------------------------
 
 
-def test_run_audit_fixture_with_statistics_is_critical_drift():
+def test_run_audit_fixture_with_statistics_no_scheduler_drift():
     pipes, queues, rules, statistics = load_fixture_models()
     audit = run_audit(
         pipes=pipes,
         queues=queues,
         rules=rules,
         statistics=statistics,
+    )
+    drift = [f for f in audit.findings if f.code == "SCHEDULER_DRIFT"]
+    assert drift == []
+
+
+def test_run_audit_true_scheduler_drift_without_fqcodel_layout():
+    pipes, queues, rules, statistics = load_fixture_models()
+    stats_bad = deepcopy(statistics)
+    for item in stats_bad["items"]:
+        if item.get("type") == "pipe":
+            item.pop("flowset", None)
+            item.pop("pipe", None)
+            item.pop("id", None)
+    audit = run_audit(
+        pipes=pipes,
+        queues=queues,
+        rules=rules,
+        statistics=stats_bad,
     )
     assert audit.status == "critical"
     drift = [f for f in audit.findings if f.code == "SCHEDULER_DRIFT"]
@@ -94,11 +112,17 @@ def test_run_audit_fixture_queues_linked_to_correct_pipes():
 
 def test_run_audit_scheduler_drift_uses_scheduler_matches():
     pipes, queues, rules, statistics = load_fixture_models()
+    stats_bad = deepcopy(statistics)
+    for item in stats_bad["items"]:
+        if item.get("type") == "pipe":
+            item.pop("flowset", None)
+            item.pop("pipe", None)
+            item.pop("id", None)
     audit = run_audit(
         pipes=pipes,
         queues=queues,
         rules=rules,
-        statistics=statistics,
+        statistics=stats_bad,
     )
     assert any(
         "FIFO" in f.message or "fifo" in f.message.lower() for f in audit.findings
@@ -314,7 +338,7 @@ def test_run_audit_score_floor_zero():
         wan_line_rate_mbit=100.0,
     )
     assert audit.score >= 0
-    assert len(audit.findings) >= 4
+    assert len(audit.findings) >= 3
 
 
 def test_run_audit_status_error_without_drift():
@@ -336,11 +360,17 @@ def test_run_audit_status_error_without_drift():
 
 def test_format_audit_summary_returns_markdown():
     pipes, queues, rules, statistics = load_fixture_models()
+    stats_bad = deepcopy(statistics)
+    for item in stats_bad["items"]:
+        if item.get("type") == "pipe":
+            item.pop("flowset", None)
+            item.pop("pipe", None)
+            item.pop("id", None)
     audit = run_audit(
         pipes=pipes,
         queues=queues,
         rules=rules,
-        statistics=statistics,
+        statistics=stats_bad,
     )
     summary = format_audit_summary(audit)
     assert "**Traffic Shaper Audit**" in summary
@@ -363,11 +393,17 @@ def test_explain_shaper_config_returns_plain_language():
 
 def test_explain_shaper_config_mentions_audit_critical():
     pipes, queues, rules, statistics = load_fixture_models()
+    stats_bad = deepcopy(statistics)
+    for item in stats_bad["items"]:
+        if item.get("type") == "pipe":
+            item.pop("flowset", None)
+            item.pop("pipe", None)
+            item.pop("id", None)
     audit = run_audit(
         pipes=pipes,
         queues=queues,
         rules=rules,
-        statistics=statistics,
+        statistics=stats_bad,
     )
     text = explain_shaper_config(
         pipes=pipes,

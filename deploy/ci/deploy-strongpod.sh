@@ -34,6 +34,7 @@ if [[ -f "${INSTALL_ROOT}/environment" ]]; then
 fi
 
 podman pull "${IMAGE_REPO}:${IMAGE_TAG}"
+podman rm -f opnsense-mcp-app opnsense-mcp-caddy 2>/dev/null || true
 systemctl daemon-reload
 systemctl restart opnsense-mcp-app.service opnsense-mcp-caddy.service || systemctl restart opnsense-mcp-app.service
 

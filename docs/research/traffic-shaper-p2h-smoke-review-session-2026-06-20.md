@@ -95,6 +95,22 @@ BR-fix-b hints: `[SCHEDULER_DRIFT]` + `[ECN_INEFFECTIVE]` expected on this firew
 
 ---
 
+## GitLab issues filed (2026-06-20 follow-up)
+
+MCP workflows that failed on live infra — tracked for fix, not bypass:
+
+| Issue | Title | Blocks MCP? |
+|-------|-------|-------------|
+| [#4](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/4) | Shaper pipe write tools fail — wrong POST payload shape | **Yes** — `set_shaper_pipe`, `add_shaper_pipe`, preset pipe updates |
+| [#5](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/5) | SCHEDULER_DRIFT audit false positive for FQ-CoDel | Misleading read path — false critical |
+| [#6](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/6) | MCP-first: file GitLab issues before bypass | Process |
+
+**Resolved in branch (not issues):** MCP-01/MCP-02 (`dhcp`, `fw_rules` null args) — commit `cbcf539`.
+
+**Session note:** Scheduler remediation required container API bypass (#4). After delete/recreate, shaping works; `sched_type=FIFO` in statistics may be expected per OPNsense core#8572 — see #5.
+
+---
+
 ## Agent delivery
 
 | Bucket | Owner | Status |

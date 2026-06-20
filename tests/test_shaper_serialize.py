@@ -13,9 +13,11 @@ from opnsense_mcp.utils.shaper_normalize import (
 from opnsense_mcp.utils.shaper_serialize import (
     make_enum_field,
     merge_flat_into_pipe,
+    merge_flat_into_pipe_api_post,
     merge_flat_into_queue,
     merge_flat_into_rule,
     serialize_pipe,
+    serialize_pipe_api_post,
     serialize_queue,
     serialize_rule,
 )
@@ -113,6 +115,27 @@ def test_serialize_pipe_scheduler_is_enum_dict():
     payload = serialize_pipe(flat)
     assert payload["scheduler"]["fq_codel"]["selected"] == 1
     assert payload["scheduler"]["fifo"]["selected"] == 0
+
+
+def test_serialize_pipe_api_post_wraps_and_flattens_enums():
+    flat = normalize_pipe(load("search_pipes.json")["rows"][0])
+    post = serialize_pipe_api_post(flat)
+    assert set(post.keys()) == {"pipe"}
+    inner = post["pipe"]
+    assert isinstance(inner["scheduler"], str)
+    assert inner["scheduler"] == "fq_codel"
+    assert isinstance(inner["bandwidthMetric"], str)
+    assert inner["bandwidthMetric"] == "Mbit"
+
+
+def test_merge_pipe_api_post_preserves_template_fields():
+    uuid = "e93038e5-1234-5678-abcd-000000000001"
+    template = load("settings_get.json")["ts"]["pipes"][uuid]
+    flat = normalize_pipe({"uuid": uuid, **template})
+    flat["bandwidth"] = 999
+    post = merge_flat_into_pipe_api_post(template, flat)
+    assert post["pipe"]["bandwidth"] == "999"
+    assert post["pipe"]["scheduler"] == "fq_codel"
 
 
 def test_serialize_pipe_bandwidth_metric_is_enum_dict():

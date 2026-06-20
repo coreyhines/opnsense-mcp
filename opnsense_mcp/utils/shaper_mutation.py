@@ -17,9 +17,9 @@ from opnsense_mcp.utils.shaper_normalize import (
     normalize_rule,
 )
 from opnsense_mcp.utils.shaper_serialize import (
-    merge_flat_into_pipe,
-    merge_flat_into_queue,
-    merge_flat_into_rule,
+    merge_flat_into_pipe_api_post,
+    merge_flat_into_queue_api_post,
+    merge_flat_into_rule_api_post,
 )
 from opnsense_mcp.utils.shaper_snapshot_store import (
     build_restore_plan,
@@ -173,7 +173,7 @@ async def apply_snapshot_restore(
             "GET", f"/trafficshaper/settings/get_pipe/{uid}"
         )
         flat = normalize_pipe({**row, "uuid": uid})
-        payload = merge_flat_into_pipe(gui_resp.get("pipe") or {}, flat)
+        payload = merge_flat_into_pipe_api_post(gui_resp.get("pipe") or {}, flat)
         resp = await client._make_request(
             "POST",
             f"/trafficshaper/settings/set_pipe/{uid}",
@@ -192,7 +192,7 @@ async def apply_snapshot_restore(
             "GET", f"/trafficshaper/settings/get_queue/{uid}"
         )
         flat = normalize_queue({**row, "uuid": uid})
-        payload = merge_flat_into_queue(gui_resp.get("queue") or {}, flat, pmap)
+        payload = merge_flat_into_queue_api_post(gui_resp.get("queue") or {}, flat, pmap)
         resp = await client._make_request(
             "POST",
             f"/trafficshaper/settings/set_queue/{uid}",
@@ -211,7 +211,7 @@ async def apply_snapshot_restore(
             "GET", f"/trafficshaper/settings/get_rule/{uid}"
         )
         flat = normalize_rule({**row, "uuid": uid})
-        payload = merge_flat_into_rule(gui_resp.get("rule") or {}, flat, tmap)
+        payload = merge_flat_into_rule_api_post(gui_resp.get("rule") or {}, flat, tmap)
         resp = await client._make_request(
             "POST",
             f"/trafficshaper/settings/set_rule/{uid}",

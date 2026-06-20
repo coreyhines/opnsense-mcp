@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import pytest
@@ -128,14 +129,32 @@ async def test_get_shaper_settings(mock_client: MockOPNsenseClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_shaper_statistics_critical_drift(
+async def test_shaper_statistics_fqcodel_layout_not_critical_drift(
     mock_client: MockOPNsenseClient,
 ) -> None:
     tool = ShaperStatisticsTool(mock_client)
     resp = await tool.execute({})
-    assert resp["status"] == "critical"
     assert resp["baseline_id"]
     assert resp["structured"]["stored_baseline_id"] == resp["baseline_id"]
+    assert not any("SCHEDULER_DRIFT" in hint for hint in resp["hints"])
+    assert resp["status"] != "critical"
+
+
+@pytest.mark.asyncio
+async def test_shaper_statistics_true_drift_is_critical(
+    mock_client: MockOPNsenseClient,
+) -> None:
+    mock_client._ensure_shaper_mutable_copy()
+    stats = copy.deepcopy(mock_client._mutable_shaper["statistics"])  # type: ignore[index]
+    for item in stats.get("items", []):
+        if item.get("type") == "pipe":
+            item.pop("flowset", None)
+            item.pop("pipe", None)
+            item.pop("id", None)
+    mock_client._mutable_shaper["statistics"] = stats  # type: ignore[index]
+    tool = ShaperStatisticsTool(mock_client)
+    resp = await tool.execute({})
+    assert resp["status"] == "critical"
     assert any("SCHEDULER_DRIFT" in hint for hint in resp["hints"])
 
 
@@ -156,10 +175,13 @@ async def test_shaper_statistics_baseline_delta(
 async def test_audit_shaper_config(mock_client: MockOPNsenseClient) -> None:
     tool = AuditShaperConfigTool(mock_client)
     resp = await tool.execute({})
-    assert resp["status"] == "critical"
+    assert resp["status"] == "warning"
     assert resp["structured"]["score"] >= 0
     assert resp["structured"]["finding_count"] >= 1
     assert "Traffic Shaper Audit" in resp["summary"]
+    assert not any(
+        f.get("code") == "SCHEDULER_DRIFT" for f in resp["structured"]["findings"]
+    )
 
 
 @pytest.mark.asyncio

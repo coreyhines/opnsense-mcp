@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from opnsense_mcp.utils.shaper_interpret import scheduler_matches
+from opnsense_mcp.utils.shaper_interpret import (
+    fqcodel_statistics_layout_ok,
+    scheduler_matches,
+)
 from opnsense_mcp.utils.shaper_types import (
     AUDIT_CODES,
     DEFAULT_WAN_INTERFACES,
@@ -228,8 +231,11 @@ def _check_scheduler_drift(
         if not uuid or uuid not in runtime_by_uuid:
             continue
         config_sched = pipe.get("scheduler", "")
-        runtime_sched = runtime_by_uuid[uuid].get("scheduler", {}).get("sched_type", "")
+        runtime_pipe = runtime_by_uuid[uuid]
+        runtime_sched = runtime_pipe.get("scheduler", {}).get("sched_type", "")
         if config_sched and not scheduler_matches(config_sched, runtime_sched):
+            if fqcodel_statistics_layout_ok(runtime_pipe, config_sched):
+                continue
             desc = pipe.get("description", uuid)
             findings.append(
                 _finding(

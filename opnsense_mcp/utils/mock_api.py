@@ -73,6 +73,18 @@ class MockOPNsenseClient:
         return str(uuid.uuid4())
 
     @staticmethod
+    def _unwrap_shaper_post(
+        payload: dict[str, Any] | None, resource: str
+    ) -> dict[str, Any] | None:
+        """Unwrap ``{pipe|queue|rule: {...}}`` REST bodies for mock handlers."""
+        if not payload:
+            return payload
+        inner = payload.get(resource)
+        if isinstance(inner, dict):
+            return inner
+        return payload
+
+    @staticmethod
     def _payload_scalar(
         payload: dict[str, Any] | None, key: str, default: str = ""
     ) -> str:
@@ -227,6 +239,7 @@ class MockOPNsenseClient:
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Handle pipe CRUD/toggle mutation."""
+        payload = self._unwrap_shaper_post(payload, "pipe")
         self._ensure_shaper_mutable_copy()
         pipes = (
             self._mutable_shaper.setdefault("settings_get", {})
@@ -300,6 +313,7 @@ class MockOPNsenseClient:
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Handle queue CRUD/toggle mutation."""
+        payload = self._unwrap_shaper_post(payload, "queue")
         self._ensure_shaper_mutable_copy()
         queues = (
             self._mutable_shaper.setdefault("settings_get", {})
@@ -373,6 +387,7 @@ class MockOPNsenseClient:
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Handle rule CRUD/toggle mutation."""
+        payload = self._unwrap_shaper_post(payload, "rule")
         self._ensure_shaper_mutable_copy()
         rules = (
             self._mutable_shaper.setdefault("settings_get", {})

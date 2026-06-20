@@ -87,6 +87,45 @@ def scheduler_matches(config: str, runtime: str) -> bool:
     return _normalise_sched(runtime) == expected
 
 
+def _pipe_number(pipe_item: dict[str, Any]) -> str:
+    """Return the ipfw pipe number from a statistics pipe item."""
+    for key in ("pipe", "id", "number"):
+        value = pipe_item.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def _flowset_sched_nr(pipe_item: dict[str, Any]) -> str:
+    """Return ``sched_nr`` from a statistics pipe ``flowset`` (dict or list)."""
+    flowset = pipe_item.get("flowset")
+    if isinstance(flowset, dict):
+        return str(flowset.get("sched_nr") or "").strip()
+    if isinstance(flowset, list):
+        for entry in flowset:
+            if isinstance(entry, dict) and entry.get("sched_nr"):
+                return str(entry["sched_nr"]).strip()
+    return ""
+
+
+def fqcodel_statistics_layout_ok(
+    runtime_pipe: dict[str, Any],
+    config_scheduler: str,
+) -> bool:
+    """Return True when statistics layout matches expected FQ-CoDel (OPNsense #8572).
+
+    On FQ-CoDel pipes the inner flowset reports ``FIFO`` while the real AQM is
+    the pipe scheduler. When ``flowset.sched_nr`` equals the pipe number, that
+    layout is expected — not scheduler drift.
+    """
+    sched = _normalise_sched(config_scheduler)
+    if sched not in ("fq_codel", "fq_pie"):
+        return False
+    pipe_nr = _pipe_number(runtime_pipe)
+    sched_nr = _flowset_sched_nr(runtime_pipe)
+    return bool(pipe_nr and sched_nr == pipe_nr)
+
+
 # ---------------------------------------------------------------------------
 # Statistics parsing helpers
 # ---------------------------------------------------------------------------
@@ -255,6 +294,8 @@ def interpret_statistics(
             config_sched = config_pipe.get("scheduler", "")
             runtime_sched = rp.get("scheduler", {}).get("sched_type", "")
             if config_sched and not scheduler_matches(config_sched, runtime_sched):
+                if fqcodel_statistics_layout_ok(rp, config_sched):
+                    continue
                 desc = config_pipe.get("description", uuid)
                 hints.append(
                     f"[SCHEDULER_DRIFT] {desc}: "
@@ -315,12 +356,15 @@ def interpret_statistics(
             runtime_sched_type = runtime_scheduler.get("sched_type", "")
             desc = config_pipe.get("description", uuid)
             if config_sched and not scheduler_matches(config_sched, runtime_sched_type):
-                hints.append(
-                    f"[ECN_INEFFECTIVE] {desc}: ECN enabled in config but runtime "
-                    f"scheduler is {runtime_sched_type!r} — ECN requires active FQ-CoDel."
-                )
-                has_warning = True
-                continue
+                if fqcodel_statistics_layout_ok(rp, config_sched):
+                    pass
+                else:
+                    hints.append(
+                        f"[ECN_INEFFECTIVE] {desc}: ECN enabled in config but runtime "
+                        f"scheduler is {runtime_sched_type!r} — ECN requires active FQ-CoDel."
+                    )
+                    has_warning = True
+                    continue
             runtime_ecn = _runtime_ecn_enabled(runtime_scheduler)
             if runtime_ecn is False:
                 hints.append(
