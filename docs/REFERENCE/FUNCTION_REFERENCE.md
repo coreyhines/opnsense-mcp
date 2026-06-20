@@ -388,3 +388,21 @@ The OPNsense MCP Server is designed to work seamlessly with AI agents that can:
 - **Automate routine monitoring tasks** using scheduled queries
 
 The agent automatically handles the complexity of multi-step queries, allowing users to ask high-level questions and receive detailed, actionable responses.
+
+---
+
+## Planned: Traffic shaper & FQ-CoDel (not yet implemented)
+
+Full specification: [`docs/research/traffic-shaper-spec.md`](../research/traffic-shaper-spec.md).
+
+These tools will expose OPNsense **pipes**, **queues**, **rules**, global shaper settings,
+runtime **statistics**, **audit** against best practices, plain-language **explain**, and
+**rollback** via snapshots. Typical agent flows:
+
+- **Audit**: `audit_shaper_config` → report scheduler drift, missing IPv6 rules, bandwidth vs WAN
+- **Tune**: `set_shaper_pipe` / `set_shaper_rule` → auto-reconfigure → `shaper_statistics`
+- **Explain**: `explain_shaper_config` after changes for non-technical users
+- **Preset**: `apply_shaper_preset` (`bufferbloat_wan`) with dual-stack WAN rules
+
+Correlates with existing `interface_list`, `gateway_status`, `get_logs`, and
+`packet_capture` for before/after bufferbloat troubleshooting.
