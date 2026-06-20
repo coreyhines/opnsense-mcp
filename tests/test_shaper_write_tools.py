@@ -27,6 +27,7 @@ from opnsense_mcp.tools.shaper_settings import (
 )
 from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
+from opnsense_mcp.utils.shaper_mutation import capture_pre_mutation_snapshot
 from opnsense_mcp.utils.shaper_snapshot_store import clear_snapshots, get_snapshot
 from opnsense_mcp.utils.shaper_types import TOOL_STATUS_SUCCESS, TOOL_STATUS_WARNING
 
@@ -322,3 +323,94 @@ async def test_add_shaper_pipe_warning_when_reconfigure_fails(
     )
     assert resp["status"] == TOOL_STATUS_WARNING
     assert resp["structured"]["pending_changes"] is True
+
+
+@pytest.mark.asyncio
+async def test_restore_shaper_snapshot_remove_orphans(
+    mock_client: MockOPNsenseClient,
+) -> None:
+    add = AddShaperPipeTool(mock_client)
+    kept = await add.execute(
+        {"description": "Kept pipe", "bandwidth": 100, "apply": False}
+    )
+    assert kept["status"] == TOOL_STATUS_SUCCESS
+    snapshot_id = await capture_pre_mutation_snapshot(
+        mock_client, description="Snapshot with kept pipe only"
+    )
+    extra = await add.execute(
+        {"description": "Orphan pipe", "bandwidth": 50, "apply": False}
+    )
+    assert extra["status"] == TOOL_STATUS_SUCCESS
+    restore = RestoreShaperSnapshotTool(mock_client)
+    resp = await restore.execute(
+        {"snapshot_id": snapshot_id, "apply": False, "remove_orphans": True}
+    )
+    assert resp["status"] == TOOL_STATUS_SUCCESS
+    pipes = await search_shaper_pipes(mock_client)
+    descriptions = {p.get("description") for p in pipes}
+    assert "Kept pipe" in descriptions
+    assert "Orphan pipe" not in descriptions
+
+
+@pytest.mark.asyncio
+async def test_restore_shaper_snapshot_bandwidth_round_trip(
+    mock_client: MockOPNsenseClient,
+) -> None:
+    add = AddShaperPipeTool(mock_client)
+    created = await add.execute(
+        {"description": "Round trip pipe", "bandwidth": 100, "apply": False}
+    )
+    assert created["status"] == TOOL_STATUS_SUCCESS
+    pipe_uuid = created["structured"]["pipe"]["uuid"]
+    snapshot_id = await capture_pre_mutation_snapshot(
+        mock_client, description="After round trip pipe create"
+    )
+    set_tool = SetShaperPipeTool(mock_client)
+    await set_tool.execute({"uuid": pipe_uuid, "bandwidth": 50, "apply": False})
+    restore = RestoreShaperSnapshotTool(mock_client)
+    resp = await restore.execute({"snapshot_id": snapshot_id, "apply": False})
+    assert resp["status"] == TOOL_STATUS_SUCCESS
+    pipes = await search_shaper_pipes(mock_client)
+    match = next(p for p in pipes if p.get("uuid") == pipe_uuid)
+    assert str(match.get("bandwidth")) == "100"
+
+
+@pytest.mark.asyncio
+async def test_apply_shaper_preset_partial_failure(
+    mock_client: MockOPNsenseClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fail_queue_ensure(*_args: object, **_kwargs: object) -> dict:
+        raise RuntimeError("simulated queue ensure failure")
+
+    monkeypatch.setattr(
+        ApplyShaperPresetTool,
+        "_ensure_queue",
+        fail_queue_ensure,
+    )
+    preset = ApplyShaperPresetTool(mock_client)
+    resp = await preset.execute({"download_mbit": 100, "upload_mbit": 40, "apply": False})
+    assert resp["status"] == "error"
+    assert resp["structured"]["partial"] is True
+    assert resp["structured"]["actions"]
+
+
+@pytest.mark.asyncio
+async def test_preset_uses_single_parent_snapshot(
+    mock_client: MockOPNsenseClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    capture_calls: list[str] = []
+
+    async def counting_capture(client, *, description: str = "") -> str:
+        capture_calls.append(description)
+        from opnsense_mcp.utils.shaper_snapshot_store import capture_snapshot
+
+        return capture_snapshot({}, [], [], [], description=description)
+
+    monkeypatch.setattr(
+        "opnsense_mcp.tools.shaper_presets.capture_pre_mutation_snapshot",
+        counting_capture,
+    )
+    preset = ApplyShaperPresetTool(mock_client)
+    await preset.execute({"download_mbit": 100, "upload_mbit": 40, "apply": False})
+    assert len(capture_calls) == 1
+    assert capture_calls[0] == "Before bufferbloat_wan preset"

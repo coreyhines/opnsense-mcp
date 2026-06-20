@@ -23,6 +23,7 @@ from opnsense_mcp.utils.shaper_types import (
     TOOL_STATUS_WARNING,
     make_tool_response,
 )
+from opnsense_mcp.utils.shaper_write_helpers import bufferbloat_shaped_rate_mbit
 
 if TYPE_CHECKING:
     from opnsense_mcp.utils.api import OPNsenseClient
@@ -117,6 +118,7 @@ class ApplyShaperPresetTool:
         pipe_set: SetShaperPipeTool,
         pipes: list[dict[str, Any]],
         actions: list[str],
+        mutation_snapshot_id: str,
     ) -> dict[str, Any]:
         existing = _find_by_description(pipes, description)
         pipe_params = {
@@ -124,6 +126,7 @@ class ApplyShaperPresetTool:
             "scheduler": "fq_codel",
             "codel_ecn_enable": True,
             "apply": False,
+            "mutation_snapshot_id": mutation_snapshot_id,
         }
         if existing and existing.get("uuid"):
             resp = await pipe_set.execute(
@@ -132,11 +135,20 @@ class ApplyShaperPresetTool:
             _require_tool_success(resp, f"set pipe {description}")
             if resp.get("status") != TOOL_STATUS_WARNING:
                 actions.append(f"set pipe {description}")
-            return existing
+            refreshed = _find_by_description(
+                await search_shaper_pipes(self.client), description
+            )
+            return refreshed or existing
         resp = await pipe_add.execute({"description": description, **pipe_params})
         _require_tool_success(resp, f"add pipe {description}")
         actions.append(f"add pipe {description}")
-        return resp.get("structured", {}).get("pipe") or {}
+        pipe = resp.get("structured", {}).get("pipe") or {}
+        if pipe.get("uuid"):
+            return pipe
+        return (
+            _find_by_description(await search_shaper_pipes(self.client), description)
+            or {}
+        )
 
     async def _ensure_queue(
         self,
@@ -147,19 +159,35 @@ class ApplyShaperPresetTool:
         queue_set: SetShaperQueueTool,
         queues: list[dict[str, Any]],
         actions: list[str],
+        mutation_snapshot_id: str,
     ) -> dict[str, Any]:
         existing = _find_by_description(queues, description)
-        params = {"description": description, "pipe_uuid": pipe_uuid, "weight": 100, "apply": False}
+        params = {
+            "description": description,
+            "pipe_uuid": pipe_uuid,
+            "weight": 100,
+            "apply": False,
+            "mutation_snapshot_id": mutation_snapshot_id,
+        }
         if existing and existing.get("uuid"):
             resp = await queue_set.execute({"uuid": existing["uuid"], **params})
             _require_tool_success(resp, f"set queue {description}")
             if resp.get("status") != TOOL_STATUS_WARNING:
                 actions.append(f"set queue {description}")
-            return existing
+            refreshed = _find_by_description(
+                await search_shaper_queues(self.client), description
+            )
+            return refreshed or existing
         resp = await queue_add.execute(params)
         _require_tool_success(resp, f"add queue {description}")
         actions.append(f"add queue {description}")
-        return resp.get("structured", {}).get("queue") or {}
+        queue = resp.get("structured", {}).get("queue") or {}
+        if queue.get("uuid"):
+            return queue
+        return (
+            _find_by_description(await search_shaper_queues(self.client), description)
+            or {}
+        )
 
     async def _ensure_rule(
         self,
@@ -171,6 +199,7 @@ class ApplyShaperPresetTool:
         rule_set: SetShaperRuleTool,
         rules: list[dict[str, Any]],
         actions: list[str],
+        mutation_snapshot_id: str,
     ) -> None:
         desc = spec["description"]
         existing = _find_by_description(rules, desc)
@@ -181,6 +210,7 @@ class ApplyShaperPresetTool:
             "proto": spec["proto"],
             "target_uuid": target_uuid,
             "apply": False,
+            "mutation_snapshot_id": mutation_snapshot_id,
         }
         if existing and existing.get("uuid"):
             resp = await rule_set.execute({"uuid": existing["uuid"], **params})
@@ -222,8 +252,8 @@ class ApplyShaperPresetTool:
                 structured={"error": "rates must be positive"},
                 summary="**Error:** Bandwidth rates must be positive.",
             )
-        dl = int(dl_rate * 0.85)
-        ul = int(ul_rate * 0.85)
+        dl = bufferbloat_shaped_rate_mbit(dl_rate)
+        ul = bufferbloat_shaped_rate_mbit(ul_rate)
         apply = bool(params.get("apply", True))
         wan = str(params.get("wan_interface") or "wan")
         snapshot_id = await capture_pre_mutation_snapshot(
@@ -246,6 +276,7 @@ class ApplyShaperPresetTool:
                 pipe_set=pipe_set,
                 pipes=pipes,
                 actions=actions,
+                mutation_snapshot_id=snapshot_id,
             )
             pipes = await search_shaper_pipes(self.client)
             ul_pipe = await self._ensure_pipe(
@@ -255,6 +286,7 @@ class ApplyShaperPresetTool:
                 pipe_set=pipe_set,
                 pipes=pipes,
                 actions=actions,
+                mutation_snapshot_id=snapshot_id,
             )
             dl_uuid = str(dl_pipe.get("uuid") or "")
             if not dl_uuid:
@@ -277,6 +309,7 @@ class ApplyShaperPresetTool:
                 queue_set=queue_set,
                 queues=queues,
                 actions=actions,
+                mutation_snapshot_id=snapshot_id,
             )
             queues = await search_shaper_queues(self.client)
             ul_queue = await self._ensure_queue(
@@ -286,6 +319,7 @@ class ApplyShaperPresetTool:
                 queue_set=queue_set,
                 queues=queues,
                 actions=actions,
+                mutation_snapshot_id=snapshot_id,
             )
             dl_q_uuid = str(dl_queue.get("uuid") or "")
             if not dl_q_uuid:
@@ -318,6 +352,7 @@ class ApplyShaperPresetTool:
                     rule_set=rule_set,
                     rules=rules,
                     actions=actions,
+                    mutation_snapshot_id=snapshot_id,
                 )
                 rules = await search_shaper_rules(self.client)
         except Exception as exc:
@@ -341,5 +376,8 @@ class ApplyShaperPresetTool:
                 "actions": actions,
                 "download_mbit": dl,
                 "upload_mbit": ul,
+                "line_download_mbit": dl_rate,
+                "line_upload_mbit": ul_rate,
+                "rate_policy": "85pct_round",
             },
         )

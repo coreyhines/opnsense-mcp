@@ -10,6 +10,7 @@ from opnsense_mcp.utils.shaper_mutation import (
     capture_pre_mutation_snapshot,
     finish_mutation,
     load_pipe_queue_rule_rows,
+    mutation_snapshot_for_tool,
     pipe_description_map,
 )
 from opnsense_mcp.utils.shaper_normalize import normalize_queue
@@ -271,6 +272,8 @@ class AddShaperQueueTool:
             "pipe_uuid": {"type": "string"},
             "weight": {"type": "integer", "default": 100},
             "apply": {"type": "boolean", "default": True},
+            "mutation_snapshot_id": {"type": "string"},
+            "capture_snapshot": {"type": "boolean", "default": True},
         },
         "required": ["description", "pipe_uuid"],
     }
@@ -304,8 +307,10 @@ class AddShaperQueueTool:
                     structured={"error": "pipe_uuid not found", "pipe_uuid": pipe_uuid},
                     summary=f"**Error:** Pipe `{pipe_uuid}` not found.",
                 )
-            snapshot_id = await capture_pre_mutation_snapshot(
-                self.client, description=f"Before add queue {flat.get('description')}"
+            snapshot_id = await mutation_snapshot_for_tool(
+                self.client,
+                params,
+                description=f"Before add queue {flat.get('description')}",
             )
             payload = serialize_queue(flat, pmap)
             result = await self.client._make_request(
@@ -341,6 +346,8 @@ class SetShaperQueueTool:
             "weight": {"type": "integer"},
             "enabled": {"type": "boolean"},
             "apply": {"type": "boolean", "default": True},
+            "mutation_snapshot_id": {"type": "string"},
+            "capture_snapshot": {"type": "boolean", "default": True},
         },
         "required": ["uuid"],
     }
@@ -384,8 +391,10 @@ class SetShaperQueueTool:
                     structured={"error": "pipe_uuid not found", "pipe_uuid": proposed["pipe_uuid"]},
                     summary=f"**Error:** Pipe `{proposed['pipe_uuid']}` not found.",
                 )
-            snapshot_id = await capture_pre_mutation_snapshot(
-                self.client, description=f"Before set queue {uuid}"
+            snapshot_id = await mutation_snapshot_for_tool(
+                self.client,
+                params,
+                description=f"Before set queue {uuid}",
             )
             payload = merge_flat_into_queue(
                 existing_gui, proposed, pipe_description_map(pipe_rows)
