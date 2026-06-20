@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Mock API client for development and testing."""
 
+from __future__ import annotations
+
+import copy
 import json
 import logging
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +26,8 @@ class MockOPNsenseClient:
         )
         self.mock_data_path = workspace_root / mock_data_dir
         self._load_mock_data()
+        # Mutable data is deep-copied from fixture on first mutation
+        self._mutable_shaper: dict[str, Any] | None = None
 
     def _load_mock_data(self) -> None:
         """Load all mock data files."""
@@ -55,6 +61,17 @@ class MockOPNsenseClient:
             logger.exception("Failed to load mock data")
             self.mock_data = {}
 
+    def _ensure_shaper_mutable_copy(self) -> None:
+        """Deep-copy the traffic shaper fixture so mutations don't leak across tests."""
+        if self._mutable_shaper is None:
+            self._mutable_shaper = copy.deepcopy(
+                self.mock_data.get("traffic_shaper", {})
+            )
+
+    def _generate_uuid(self) -> str:
+        """Generate a random UUID for new shaper objects."""
+        return str(uuid.uuid4())
+
     async def get_system_status(self) -> dict[str, Any]:
         """Get mock system status."""
         return self.mock_data.get("system_status", {})
@@ -83,10 +100,16 @@ class MockOPNsenseClient:
 
     def _traffic_shaper_mock(self, method: str, endpoint: str) -> dict[str, Any] | None:
         """Return mock traffic shaper payload when endpoint matches, else None."""
-        shaper = self.mock_data.get("traffic_shaper", {})
-        if not shaper:
-            return None
         method_u = method.upper()
+        shaper_source = (
+            self._mutable_shaper
+            if self._mutable_shaper is not None
+            else self.mock_data.get("traffic_shaper", {})
+        )
+        if not shaper_source:
+            return None
+
+        # --- Read-only endpoints (unchanged from bucket 3c) ---
         resource_map = {
             "get_pipe": ("search_pipes", "pipe"),
             "get_queue": ("search_queues", "queue"),
@@ -94,21 +117,228 @@ class MockOPNsenseClient:
         }
         for path_part, (search_key, resource) in resource_map.items():
             if f"/trafficshaper/settings/{path_part}/" in endpoint:
-                uuid = endpoint.rsplit("/", 1)[-1]
-                for row in shaper.get(search_key, {}).get("rows", []):
-                    if row.get("uuid") == uuid:
+                uuid_val = endpoint.rsplit("/", 1)[-1]
+                for row in shaper_source.get(search_key, {}).get("rows", []):
+                    if row.get("uuid") == uuid_val:
                         return {resource: row}
+
         if endpoint.endswith("/trafficshaper/settings/get") and method_u == "GET":
-            return shaper.get("settings_get", {"ts": {}})
+            return shaper_source.get("settings_get", {"ts": {}})
         if "/trafficshaper/service/statistics" in endpoint:
-            return shaper.get("statistics", {"status": "ok", "items": []})
+            return shaper_source.get("statistics", {"status": "ok", "items": []})
         if "/trafficshaper/settings/search_pipes" in endpoint:
-            return shaper.get("search_pipes", {"rows": [], "rowCount": 0})
+            return shaper_source.get("search_pipes", {"rows": [], "rowCount": 0})
         if "/trafficshaper/settings/search_queues" in endpoint:
-            return shaper.get("search_queues", {"rows": [], "rowCount": 0})
+            return shaper_source.get("search_queues", {"rows": [], "rowCount": 0})
         if "/trafficshaper/settings/search_rules" in endpoint:
-            return shaper.get("search_rules", {"rows": [], "rowCount": 0})
+            return shaper_source.get("search_rules", {"rows": [], "rowCount": 0})
+
+        # --- Write endpoints (bucket 4c) ---
+        if method_u != "POST":
+            return None
+
+        # POST /trafficshaper/service/reconfigure
+        if "/trafficshaper/service/reconfigure" in endpoint:
+            return {"status": "ok"}
+
+        # Route to per-resource handlers
+        if "/trafficshaper/settings/" in endpoint:
+            for action in ("add_pipe", "set_pipe", "del_pipe", "toggle_pipe"):
+                if (
+                    f"/trafficshaper/settings/{action}/" in endpoint
+                    or endpoint.endswith(f"/trafficshaper/settings/{action}")
+                ):
+                    return self._handle_pipe_action(action, endpoint)
+            for action in ("add_queue", "set_queue", "del_queue", "toggle_queue"):
+                if (
+                    f"/trafficshaper/settings/{action}/" in endpoint
+                    or endpoint.endswith(f"/trafficshaper/settings/{action}")
+                ):
+                    return self._handle_queue_action(action, endpoint)
+            for action in ("add_rule", "set_rule", "del_rule", "toggle_rule"):
+                if (
+                    f"/trafficshaper/settings/{action}/" in endpoint
+                    or endpoint.endswith(f"/trafficshaper/settings/{action}")
+                ):
+                    return self._handle_rule_action(action, endpoint)
+
+        # POST /trafficshaper/settings/set (global settings subset)
+        if endpoint.endswith("/trafficshaper/settings/set"):
+            return self._handle_set_global_settings(endpoint)
+
         return None
+
+    def _handle_pipe_action(self, action: str, endpoint: str) -> dict[str, Any]:
+        """Handle pipe CRUD/toggle mutation."""
+        self._ensure_shaper_mutable_copy()
+        pipes = (
+            self._mutable_shaper.setdefault("settings_get", {})
+            .setdefault("ts", {})
+            .setdefault("pipes", {})
+            .setdefault("pipe", {})
+        )
+        search_pipes = self._mutable_shaper.setdefault("search_pipes", {})
+        rows = search_pipes.get("rows", [])
+
+        if action == "add_pipe":
+            pipe_uuid = self._generate_uuid()
+            new_row: dict[str, str] = {
+                "uuid": pipe_uuid,
+                "number": "10002",
+                "description": "New pipe",
+                "enabled": "1",
+                "bandwidth": "0",
+                "bandwidthMetric": "Mbit",
+                "scheduler": "fq_codel",
+            }
+            pipes[pipe_uuid] = {"_uuid_ref": pipe_uuid}
+            rows.append(new_row)
+            search_pipes["rowCount"] = len(rows)
+            return {"status": "ok", "id": pipe_uuid}
+
+        if action == "set_pipe":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            if uuid_val in pipes:
+                row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
+                if row_ref:
+                    row_ref["enabled"] = "1"
+                    row_ref["description"] = f"Updated pipe {uuid_val[:8]}"
+            return {"status": "ok"}
+
+        if action == "del_pipe":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            if uuid_val in pipes:
+                del pipes[uuid_val]
+                rows[:] = [r for r in rows if r.get("uuid") != uuid_val]
+                search_pipes["rowCount"] = len(rows)
+            return {"status": "ok"}
+
+        if action == "toggle_pipe":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
+            if row_ref:
+                current = row_ref.get("enabled", "1")
+                row_ref["enabled"] = "0" if current == "1" else "1"
+            return {"status": "ok", "enabled": row_ref["enabled"] if row_ref else "1"}
+
+        return {"status": "ok"}
+
+    def _handle_queue_action(self, action: str, endpoint: str) -> dict[str, Any]:
+        """Handle queue CRUD/toggle mutation."""
+        self._ensure_shaper_mutable_copy()
+        queues = (
+            self._mutable_shaper.setdefault("settings_get", {})
+            .setdefault("ts", {})
+            .setdefault("queues", {})
+            .setdefault("queue", {})
+        )
+        search_queues = self._mutable_shaper.setdefault("search_queues", {})
+        rows = search_queues.get("rows", [])
+
+        if action == "add_queue":
+            queue_uuid = self._generate_uuid()
+            new_row: dict[str, str] = {
+                "uuid": queue_uuid,
+                "description": "New queue",
+                "enabled": "1",
+                "pipe": "",
+                "weight": "100",
+            }
+            queues[queue_uuid] = {"_uuid_ref": queue_uuid}
+            rows.append(new_row)
+            search_queues["rowCount"] = len(rows)
+            return {"status": "ok", "id": queue_uuid}
+
+        if action == "set_queue":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            if uuid_val in queues:
+                row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
+                if row_ref:
+                    row_ref["enabled"] = "1"
+                    row_ref["description"] = f"Updated queue {uuid_val[:8]}"
+            return {"status": "ok"}
+
+        if action == "del_queue":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            if uuid_val in queues:
+                del queues[uuid_val]
+                rows[:] = [r for r in rows if r.get("uuid") != uuid_val]
+                search_queues["rowCount"] = len(rows)
+            return {"status": "ok"}
+
+        if action == "toggle_queue":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
+            if row_ref:
+                current = row_ref.get("enabled", "1")
+                row_ref["enabled"] = "0" if current == "1" else "1"
+            return {"status": "ok", "enabled": row_ref["enabled"] if row_ref else "1"}
+
+        return {"status": "ok"}
+
+    def _handle_rule_action(self, action: str, endpoint: str) -> dict[str, Any]:
+        """Handle rule CRUD/toggle mutation."""
+        self._ensure_shaper_mutable_copy()
+        rules = (
+            self._mutable_shaper.setdefault("settings_get", {})
+            .setdefault("ts", {})
+            .setdefault("rules", {})
+            .setdefault("rule", {})
+        )
+        search_rules = self._mutable_shaper.setdefault("search_rules", {})
+        rows = search_rules.get("rows", [])
+
+        if action == "add_rule":
+            rule_uuid = self._generate_uuid()
+            new_row: dict[str, str] = {
+                "uuid": rule_uuid,
+                "description": "New rule",
+                "enabled": "1",
+                "interface": "wan",
+                "direction": "in",
+                "proto": "ip",
+                "target": "",
+            }
+            rules[rule_uuid] = {"_uuid_ref": rule_uuid}
+            rows.append(new_row)
+            search_rules["rowCount"] = len(rows)
+            return {"status": "ok", "id": rule_uuid}
+
+        if action == "set_rule":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            if uuid_val in rules:
+                row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
+                if row_ref:
+                    row_ref["enabled"] = "1"
+                    row_ref["description"] = f"Updated rule {uuid_val[:8]}"
+            return {"status": "ok"}
+
+        if action == "del_rule":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            if uuid_val in rules:
+                del rules[uuid_val]
+                rows[:] = [r for r in rows if r.get("uuid") != uuid_val]
+                search_rules["rowCount"] = len(rows)
+            return {"status": "ok"}
+
+        if action == "toggle_rule":
+            uuid_val = endpoint.rsplit("/", 1)[-1]
+            row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
+            if row_ref:
+                current = row_ref.get("enabled", "1")
+                row_ref["enabled"] = "0" if current == "1" else "1"
+            return {"status": "ok", "enabled": row_ref["enabled"] if row_ref else "1"}
+
+        return {"status": "ok"}
+
+    def _handle_set_global_settings(self, endpoint: str) -> dict[str, Any]:
+        """Handle POST /trafficshaper/settings/set for global settings subset."""
+        self._ensure_shaper_mutable_copy()
+        # Accept any payload and mirror it back as success
+        return {
+            "status": "ok",
+            "message": "Settings saved successfully",
+        }
 
     async def _make_request(
         self,
