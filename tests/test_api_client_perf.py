@@ -161,6 +161,42 @@ async def test_dhcp_tool_uses_get_when_no_query(client_config):
     mock_client.search_dhcpv6_leases.assert_not_called()
 
 
+async def test_dhcp_tool_treats_null_search_as_unfiltered(client_config):
+    """FastMCP passes explicit null for omitted optional args."""
+    from opnsense_mcp.tools.dhcp import DHCPTool
+
+    mock_client = MagicMock()
+    mock_client.get_dhcpv4_leases = AsyncMock(return_value=[])
+    mock_client.get_dhcpv6_leases = AsyncMock(return_value=[])
+    mock_client.search_dhcpv4_leases = AsyncMock()
+    mock_client.search_dhcpv6_leases = AsyncMock()
+    tool = DHCPTool(mock_client)
+    result = await tool.execute({"search": None})
+    mock_client.get_dhcpv4_leases.assert_called_once()
+    mock_client.search_dhcpv4_leases.assert_not_called()
+    assert result["status"] == "success"
+
+
+async def test_fw_rules_tool_treats_null_enabled_as_unfiltered(client_config):
+    """FastMCP passes explicit null for omitted optional args."""
+    from opnsense_mcp.tools.fw_rules import FwRulesTool
+
+    mock_client = MagicMock()
+    mock_client.get_firewall_rules = AsyncMock(
+        return_value=[
+            {"uuid": "1", "enabled": "1", "interface": "lan", "action": "pass"},
+            {"uuid": "2", "enabled": "0", "interface": "wan", "action": "block"},
+        ]
+    )
+    mock_client.get_interfaces = AsyncMock(return_value=[])
+    tool = FwRulesTool(mock_client)
+    result = await tool.execute({"enabled": None})
+    assert result["status"] == "success"
+    assert result["total_all"] == 2
+    assert result["total"] == 2
+    assert len(result["rules"]) == 2
+
+
 async def test_make_request_fails_fast_without_retry_sleep(client_config):
     """_make_request must not sleep before failing — no retry delay on error."""
     with (

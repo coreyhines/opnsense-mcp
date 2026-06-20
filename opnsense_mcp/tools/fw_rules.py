@@ -414,8 +414,8 @@ class FwRulesTool:
                     filtered_rules, params["protocol"]
                 )
 
-            # Filter by enabled status
-            if "enabled" in params:
+            # Filter by enabled status (FastMCP passes explicit null for omitted args)
+            if params.get("enabled") is not None:
                 filtered_rules = await self._filter_rules_by_enabled(
                     filtered_rules, params["enabled"]
                 )

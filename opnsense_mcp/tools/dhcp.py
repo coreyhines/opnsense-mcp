@@ -91,7 +91,7 @@ class DHCPTool:
                     "error": "No client available",
                 }
 
-            search = (params or {}).get("search", "").strip()
+            search = str((params or {}).get("search") or "").strip()
 
             if search:
                 # Server-side search — avoids fetching full lease table
