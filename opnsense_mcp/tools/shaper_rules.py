@@ -32,6 +32,7 @@ from opnsense_mcp.utils.shaper_types import (
 from opnsense_mcp.utils.shaper_write_helpers import (
     detect_idempotent_set,
     issue_delete_confirm_token,
+    next_shaper_rule_sequence,
     validate_delete_confirm_token,
     warn_lan_interface,
 )
@@ -309,6 +310,10 @@ class AddShaperRuleTool:
             "direction": {"type": "string"},
             "proto": {"type": "string"},
             "target_uuid": {"type": "string"},
+            "sequence": {
+                "type": "integer",
+                "description": "Rule order; auto-assigned when omitted",
+            },
             "apply": {"type": "boolean", "default": True},
             "mutation_snapshot_id": {"type": "string"},
             "capture_snapshot": {"type": "boolean", "default": True},
@@ -340,7 +345,11 @@ class AddShaperRuleTool:
         if lan_warn:
             hints.append(lan_warn)
         try:
-            pipe_rows, queue_rows, _ = await load_pipe_queue_rule_rows(self.client)
+            pipe_rows, queue_rows, rule_rows = await load_pipe_queue_rule_rows(
+                self.client
+            )
+            if not flat.get("sequence"):
+                flat["sequence"] = next_shaper_rule_sequence(rule_rows)
             tmap = target_description_map(queue_rows, pipe_rows)
             if target_uuid not in tmap:
                 return make_tool_response(

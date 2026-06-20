@@ -96,6 +96,20 @@ def validate_delete_confirm_token(
 # ---------------------------------------------------------------------------
 
 
+def next_shaper_rule_sequence(rule_rows: list[dict[str, Any]]) -> int:
+    """Return the next unused rule sequence number from search rows."""
+    max_seq = 0
+    for row in rule_rows:
+        raw = row.get("sequence")
+        if raw in (None, ""):
+            continue
+        try:
+            max_seq = max(max_seq, int(raw))
+        except (TypeError, ValueError):
+            continue
+    return max_seq + 1 if max_seq else 1
+
+
 def detect_idempotent_set(
     existing_flat: dict[str, Any], proposed_flat: dict[str, Any]
 ) -> bool:
