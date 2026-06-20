@@ -8,6 +8,7 @@ from opnsense_mcp.utils.shaper_write_helpers import (
     detect_idempotent_set,
     issue_delete_confirm_token,
     pending_apply_fields,
+    shaper_api_result_ok,
     validate_delete_confirm_token,
     validate_pipe_bandwidth,
     warn_lan_interface,
@@ -72,3 +73,12 @@ def test_pending_apply_fields() -> None:
     assert pending["pending_changes"] is True
     applied = pending_apply_fields(True, {"status": "ok"})
     assert applied["applied"] is True
+
+
+def test_shaper_api_result_ok() -> None:
+    ok, detail = shaper_api_result_ok({"status": "ok"})
+    assert ok is True
+    assert detail is None
+    ok, detail = shaper_api_result_ok({"status": "failed", "error": "nope"})
+    assert ok is False
+    assert detail == "nope"

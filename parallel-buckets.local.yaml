@@ -1,27 +1,40 @@
-# opnsense-mcp local overlay — Parallel Buckets v0.1.0
-
 product: opnsense-mcp
-version: "0.1.0"
-
+version: 0.1.0
 spec:
   dir: docs/research
-  spec_suffix: "-spec.md"
-  buckets_suffix: "-buckets.md"
-
+  spec_suffix: -spec.md
+  buckets_suffix: -buckets.md
 integration:
-  branch_pattern: "feat/{feature}-spec"
-
+  branch_pattern: feat/{feature}-spec
 wiring:
   globs:
-    - opnsense_mcp/fastmcp_server.py
-
+  - opnsense_mcp/fastmcp_server.py
 live_verify:
   profile: live_mcp
-  notes: |
-    MCP-first homelab operations — use MCP tools before workspace Python or raw API.
+  notes: 'MCP-first homelab operations — use MCP tools before workspace Python or
+    raw API.
+
     See .cursor/rules/mcp-first.mdc and CLAUDE.md.
 
+    '
 resource_portfolio_local: .cursor/parallel-buckets/resource-portfolio.local.md
 skill_symlink: .cursor/skills/parallel-buckets
-
 parallel_buckets_home: ~/code/parallel-buckets
+models:
+  catalog: .cursor/parallel-buckets/model-catalog.json
+  configured_at: '2026-06-20'
+  choices:
+    ollama_local:
+      standard: qwen3.6:35b-a3b-mxfp8
+      fast: qwen3.6:35b-a3b-mxfp8
+    ollama_cloud:
+      standard: kimi-k2.7-code:cloud
+    ollama_workstation:
+      standard: qwen3:32b
+    claude:
+      sonnet: sonnet
+      opus: opus
+    cursor:
+      default: auto
+      sonnet: sonnet
+      opus: opus
