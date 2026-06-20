@@ -1,0 +1,43 @@
+{
+  "rows": [
+    {
+      "uuid": "e93038e5-1234-5678-abcd-000000000001",
+      "description": "Download pipe",
+      "enabled": "1",
+      "bandwidth": 1776,
+      "bandwidthMetric": "Mbit",
+      "scheduler": "fq_codel",
+      "mask": "none",
+      "codel_enable": "0",
+      "codel_target": "",
+      "codel_interval": "",
+      "codel_ecn_enable": "1",
+      "fqcodel_quantum": "",
+      "fqcodel_limit": "",
+      "fqcodel_flows": "",
+      "pie_enable": "0",
+      "queue": "10000"
+    },
+    {
+      "uuid": "f9b19d27-1234-5678-abcd-000000000002",
+      "description": "Upload pipe",
+      "enabled": "1",
+      "bandwidth": 325,
+      "bandwidthMetric": "Mbit",
+      "scheduler": "fq_codel",
+      "mask": "none",
+      "codel_enable": "0",
+      "codel_target": "",
+      "codel_interval": "",
+      "codel_ecn_enable": "1",
+      "fqcodel_quantum": "",
+      "fqcodel_limit": "",
+      "fqcodel_flows": "",
+      "pie_enable": "0",
+      "queue": "10001"
+    }
+  ],
+  "rowCount": 2,
+  "total": 2,
+  "current": 1
+}

@@ -1,0 +1,39 @@
+{
+  "rows": [
+    {
+      "uuid": "690c995b-1234-5678-abcd-000000000005",
+      "description": "Download Rule",
+      "enabled": "1",
+      "sequence": "1",
+      "interface": "wan",
+      "interface2": "",
+      "proto": "ip",
+      "direction": "in",
+      "source": "any",
+      "source_port": "",
+      "destination": "any",
+      "destination_port": "",
+      "dscp": "",
+      "target": "84c6c7d8-1234-5678-abcd-000000000003"
+    },
+    {
+      "uuid": "5122c31a-1234-5678-abcd-000000000006",
+      "description": "Upload Rule",
+      "enabled": "1",
+      "sequence": "2",
+      "interface": "wan",
+      "interface2": "",
+      "proto": "ip",
+      "direction": "out",
+      "source": "any",
+      "source_port": "",
+      "destination": "any",
+      "destination_port": "",
+      "dscp": "",
+      "target": "14cc84dd-1234-5678-abcd-000000000004"
+    }
+  ],
+  "rowCount": 2,
+  "total": 2,
+  "current": 1
+}

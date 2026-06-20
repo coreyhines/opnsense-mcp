@@ -1,0 +1,57 @@
+{
+  "status": "ok",
+  "items": [
+    {
+      "uuid": "e93038e5-1234-5678-abcd-000000000001",
+      "description": "Download pipe",
+      "bw": 1776,
+      "type": "pipe",
+      "scheduler": {
+        "sched_type": "FIFO"
+      },
+      "flowset": []
+    },
+    {
+      "uuid": "f9b19d27-1234-5678-abcd-000000000002",
+      "description": "Upload pipe",
+      "bw": 325,
+      "type": "pipe",
+      "scheduler": {
+        "sched_type": "FIFO"
+      },
+      "flowset": []
+    },
+    {
+      "uuid": "84c6c7d8-1234-5678-abcd-000000000003",
+      "description": "Download queue",
+      "type": "queue",
+      "weight": 100,
+      "flows": 0
+    },
+    {
+      "uuid": "14cc84dd-1234-5678-abcd-000000000004",
+      "description": "Upload queue",
+      "type": "queue",
+      "weight": 100,
+      "flows": 0
+    },
+    {
+      "uuid": "690c995b-1234-5678-abcd-000000000005",
+      "description": "Download Rule",
+      "type": "rule",
+      "rule_uuid": "690c995b-1234-5678-abcd-000000000005",
+      "pkts": 3200000,
+      "bytes": 2500000000,
+      "accessed": "2026-06-20T10:00:00"
+    },
+    {
+      "uuid": "5122c31a-1234-5678-abcd-000000000006",
+      "description": "Upload Rule",
+      "type": "rule",
+      "rule_uuid": "5122c31a-1234-5678-abcd-000000000006",
+      "pkts": 2800000,
+      "bytes": 2200000000,
+      "accessed": "2026-06-20T10:00:00"
+    }
+  ]
+}

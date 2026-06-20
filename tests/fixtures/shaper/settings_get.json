@@ -1,0 +1,178 @@
+{
+  "ts": {
+    "pipes": {
+      "e93038e5-1234-5678-abcd-000000000001": {
+        "enabled": "1",
+        "description": "Download pipe",
+        "bandwidth": "1776",
+        "bandwidthMetric": {
+          "bit": {"selected": 0, "value": "bit/s"},
+          "Kbit": {"selected": 0, "value": "Kbit/s"},
+          "Mbit": {"selected": 1, "value": "Mbit/s"},
+          "Gbit": {"selected": 0, "value": "Gbit/s"}
+        },
+        "queue": "10000",
+        "mask": {
+          "none": {"selected": 1, "value": "none"},
+          "src-ip": {"selected": 0, "value": "source IP"},
+          "dst-ip": {"selected": 0, "value": "destination IP"}
+        },
+        "scheduler": {
+          "fq_codel": {"selected": 1, "value": "FQ-CoDel"},
+          "fifo": {"selected": 0, "value": "FIFO"},
+          "fq_pie": {"selected": 0, "value": "FQ-PIE"},
+          "qfq": {"selected": 0, "value": "QFQ"},
+          "rr": {"selected": 0, "value": "RR"},
+          "drr": {"selected": 0, "value": "DRR"},
+          "wfq": {"selected": 0, "value": "WFQ"},
+          "codel": {"selected": 0, "value": "CoDel"},
+          "pie": {"selected": 0, "value": "PIE"}
+        },
+        "codel_enable": "0",
+        "codel_target": "",
+        "codel_interval": "",
+        "codel_ecn_enable": "1",
+        "fqcodel_quantum": "",
+        "fqcodel_limit": "",
+        "fqcodel_flows": "",
+        "pie_enable": "0"
+      },
+      "f9b19d27-1234-5678-abcd-000000000002": {
+        "enabled": "1",
+        "description": "Upload pipe",
+        "bandwidth": "325",
+        "bandwidthMetric": {
+          "bit": {"selected": 0, "value": "bit/s"},
+          "Kbit": {"selected": 0, "value": "Kbit/s"},
+          "Mbit": {"selected": 1, "value": "Mbit/s"},
+          "Gbit": {"selected": 0, "value": "Gbit/s"}
+        },
+        "queue": "10001",
+        "mask": {
+          "none": {"selected": 1, "value": "none"},
+          "src-ip": {"selected": 0, "value": "source IP"},
+          "dst-ip": {"selected": 0, "value": "destination IP"}
+        },
+        "scheduler": {
+          "fq_codel": {"selected": 1, "value": "FQ-CoDel"},
+          "fifo": {"selected": 0, "value": "FIFO"},
+          "fq_pie": {"selected": 0, "value": "FQ-PIE"},
+          "qfq": {"selected": 0, "value": "QFQ"},
+          "rr": {"selected": 0, "value": "RR"},
+          "drr": {"selected": 0, "value": "DRR"},
+          "wfq": {"selected": 0, "value": "WFQ"},
+          "codel": {"selected": 0, "value": "CoDel"},
+          "pie": {"selected": 0, "value": "PIE"}
+        },
+        "codel_enable": "0",
+        "codel_target": "",
+        "codel_interval": "",
+        "codel_ecn_enable": "1",
+        "fqcodel_quantum": "",
+        "fqcodel_limit": "",
+        "fqcodel_flows": "",
+        "pie_enable": "0"
+      }
+    },
+    "queues": {
+      "84c6c7d8-1234-5678-abcd-000000000003": {
+        "enabled": "1",
+        "description": "Download queue",
+        "weight": "100",
+        "pipe": {
+          "e93038e5-1234-5678-abcd-000000000001": {"selected": 1, "value": "Download pipe"},
+          "f9b19d27-1234-5678-abcd-000000000002": {"selected": 0, "value": "Upload pipe"}
+        },
+        "mask": {
+          "none": {"selected": 1, "value": "none"},
+          "src-ip": {"selected": 0, "value": "source IP"},
+          "dst-ip": {"selected": 0, "value": "destination IP"}
+        },
+        "codel_enable": "0",
+        "codel_target": "",
+        "codel_interval": "",
+        "codel_ecn_enable": "0",
+        "pie_enable": "0"
+      },
+      "14cc84dd-1234-5678-abcd-000000000004": {
+        "enabled": "1",
+        "description": "Upload queue",
+        "weight": "100",
+        "pipe": {
+          "e93038e5-1234-5678-abcd-000000000001": {"selected": 0, "value": "Download pipe"},
+          "f9b19d27-1234-5678-abcd-000000000002": {"selected": 1, "value": "Upload pipe"}
+        },
+        "mask": {
+          "none": {"selected": 1, "value": "none"},
+          "src-ip": {"selected": 0, "value": "source IP"},
+          "dst-ip": {"selected": 0, "value": "destination IP"}
+        },
+        "codel_enable": "0",
+        "codel_target": "",
+        "codel_interval": "",
+        "codel_ecn_enable": "0",
+        "pie_enable": "0"
+      }
+    },
+    "rules": {
+      "690c995b-1234-5678-abcd-000000000005": {
+        "enabled": "1",
+        "description": "Download Rule",
+        "sequence": "1",
+        "interface": {
+          "wan": {"selected": 1, "value": "WAN"},
+          "lan": {"selected": 0, "value": "LAN"}
+        },
+        "interface2": {},
+        "proto": {
+          "ip": {"selected": 1, "value": "IP"},
+          "ip6": {"selected": 0, "value": "IPv6"},
+          "tcp": {"selected": 0, "value": "TCP"},
+          "udp": {"selected": 0, "value": "UDP"}
+        },
+        "direction": {
+          "in": {"selected": 1, "value": "in"},
+          "out": {"selected": 0, "value": "out"}
+        },
+        "source": "any",
+        "source_port": "",
+        "destination": "any",
+        "destination_port": "",
+        "dscp": {},
+        "target": {
+          "84c6c7d8-1234-5678-abcd-000000000003": {"selected": 1, "value": "Download queue"},
+          "14cc84dd-1234-5678-abcd-000000000004": {"selected": 0, "value": "Upload queue"}
+        }
+      },
+      "5122c31a-1234-5678-abcd-000000000006": {
+        "enabled": "1",
+        "description": "Upload Rule",
+        "sequence": "2",
+        "interface": {
+          "wan": {"selected": 1, "value": "WAN"},
+          "lan": {"selected": 0, "value": "LAN"}
+        },
+        "interface2": {},
+        "proto": {
+          "ip": {"selected": 1, "value": "IP"},
+          "ip6": {"selected": 0, "value": "IPv6"},
+          "tcp": {"selected": 0, "value": "TCP"},
+          "udp": {"selected": 0, "value": "UDP"}
+        },
+        "direction": {
+          "in": {"selected": 0, "value": "in"},
+          "out": {"selected": 1, "value": "out"}
+        },
+        "source": "any",
+        "source_port": "",
+        "destination": "any",
+        "destination_port": "",
+        "dscp": {},
+        "target": {
+          "84c6c7d8-1234-5678-abcd-000000000003": {"selected": 0, "value": "Download queue"},
+          "14cc84dd-1234-5678-abcd-000000000004": {"selected": 1, "value": "Upload queue"}
+        }
+      }
+    }
+  }
+}
