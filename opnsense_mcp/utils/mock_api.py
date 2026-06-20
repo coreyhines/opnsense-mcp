@@ -73,7 +73,9 @@ class MockOPNsenseClient:
         return str(uuid.uuid4())
 
     @staticmethod
-    def _payload_scalar(payload: dict[str, Any] | None, key: str, default: str = "") -> str:
+    def _payload_scalar(
+        payload: dict[str, Any] | None, key: str, default: str = ""
+    ) -> str:
         """Read a GUI scalar or enum-selected value from a shaper POST payload."""
         if not payload:
             return default
@@ -113,6 +115,23 @@ class MockOPNsenseClient:
         data = self.mock_data.get("firewall_rules", {})
         return data.get("rules", [])
 
+    @staticmethod
+    def _paginate_search_rows(
+        all_rows: list[dict[str, Any]],
+        payload: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Slice search rows using OPNsense ``current`` / ``rowCount`` pagination."""
+        total = len(all_rows)
+        if not payload:
+            return {"rows": all_rows, "rowCount": total}
+        row_count = int(payload.get("rowCount", 50))
+        current = int(payload.get("current", 1))
+        if row_count == -1:
+            return {"rows": all_rows, "rowCount": total}
+        start = max(0, (current - 1) * row_count)
+        end = start + row_count
+        return {"rows": all_rows[start:end], "rowCount": total}
+
     def _traffic_shaper_mock(
         self,
         method: str,
@@ -148,11 +167,23 @@ class MockOPNsenseClient:
         if "/trafficshaper/service/statistics" in endpoint:
             return shaper_source.get("statistics", {"status": "ok", "items": []})
         if "/trafficshaper/settings/search_pipes" in endpoint:
-            return shaper_source.get("search_pipes", {"rows": [], "rowCount": 0})
+            source = shaper_source.get("search_pipes", {"rows": [], "rowCount": 0})
+            return self._paginate_search_rows(
+                list(source.get("rows") or []),
+                payload,
+            )
         if "/trafficshaper/settings/search_queues" in endpoint:
-            return shaper_source.get("search_queues", {"rows": [], "rowCount": 0})
+            source = shaper_source.get("search_queues", {"rows": [], "rowCount": 0})
+            return self._paginate_search_rows(
+                list(source.get("rows") or []),
+                payload,
+            )
         if "/trafficshaper/settings/search_rules" in endpoint:
-            return shaper_source.get("search_rules", {"rows": [], "rowCount": 0})
+            source = shaper_source.get("search_rules", {"rows": [], "rowCount": 0})
+            return self._paginate_search_rows(
+                list(source.get("rows") or []),
+                payload,
+            )
 
         # --- Write endpoints (bucket 4c) ---
         if method_u != "POST":
@@ -283,7 +314,9 @@ class MockOPNsenseClient:
             queue_uuid = self._generate_uuid()
             new_row: dict[str, str] = {
                 "uuid": queue_uuid,
-                "description": self._payload_scalar(payload, "description", "New queue"),
+                "description": self._payload_scalar(
+                    payload, "description", "New queue"
+                ),
                 "enabled": self._payload_scalar(payload, "enabled", "1"),
                 "pipe": self._payload_scalar(payload, "pipe", ""),
                 "weight": self._payload_scalar(payload, "weight", "100"),

@@ -524,10 +524,17 @@ def build_mcp_server() -> FastMCP:
     async def list_shaper_pipes(
         enabled: bool | None = None,
         description: str | None = None,
+        row_count: int | None = None,
+        fetch_all: bool = True,
     ) -> str:
         """List traffic shaper pipes with optional enabled/description filters."""
         result = await list_shaper_pipes_tool.execute(
-            {"enabled": enabled, "description": description}
+            {
+                "enabled": enabled,
+                "description": description,
+                "row_count": row_count,
+                "fetch_all": fetch_all,
+            }
         )
         return str(result)
 
@@ -546,10 +553,17 @@ def build_mcp_server() -> FastMCP:
     async def list_shaper_queues(
         enabled: bool | None = None,
         description: str | None = None,
+        row_count: int | None = None,
+        fetch_all: bool = True,
     ) -> str:
         """List traffic shaper queues with optional enabled/description filters."""
         result = await list_shaper_queues_tool.execute(
-            {"enabled": enabled, "description": description}
+            {
+                "enabled": enabled,
+                "description": description,
+                "row_count": row_count,
+                "fetch_all": fetch_all,
+            }
         )
         return str(result)
 
@@ -569,6 +583,8 @@ def build_mcp_server() -> FastMCP:
         enabled: bool | None = None,
         description: str | None = None,
         interface: str | None = None,
+        row_count: int | None = None,
+        fetch_all: bool = True,
     ) -> str:
         """List traffic shaper rules with optional filters."""
         result = await list_shaper_rules_tool.execute(
@@ -576,6 +592,8 @@ def build_mcp_server() -> FastMCP:
                 "enabled": enabled,
                 "description": description,
                 "interface": interface,
+                "row_count": row_count,
+                "fetch_all": fetch_all,
             }
         )
         return str(result)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from opnsense_mcp.tools.shaper_settings import (
-    SEARCH_BODY,
+    fetch_shaper_search_rows,
     fetch_shaper_settings_raw,
     search_shaper_pipes,
     search_shaper_queues,
@@ -40,11 +40,10 @@ ClientT = "OPNsenseClient | MockOPNsenseClient"
 
 
 async def _search_rows(client: ClientT, path: str) -> list[dict[str, Any]]:
-    """POST a shaper search_* endpoint and return flat rows."""
+    """POST a shaper search_* endpoint and return all flat rows."""
     if not client:
         return []
-    resp = await client._make_request("POST", path, json=SEARCH_BODY)
-    return list(resp.get("rows") or [])
+    return await fetch_shaper_search_rows(client, path, fetch_all=True)
 
 
 async def capture_pre_mutation_snapshot(

@@ -5,7 +5,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from opnsense_mcp.tools.shaper_settings import search_shaper_pipes, search_shaper_queues
+from opnsense_mcp.tools.shaper_settings import (
+    SHAPER_LIST_SEARCH_SCHEMA,
+    parse_shaper_search_options,
+    search_shaper_pipes,
+    search_shaper_queues,
+)
 from opnsense_mcp.utils.shaper_mutation import (
     capture_pre_mutation_snapshot,
     finish_mutation,
@@ -106,6 +111,7 @@ class ListShaperQueuesTool:
                 "type": "string",
                 "description": "Optional description substring filter",
             },
+            **SHAPER_LIST_SEARCH_SCHEMA,
         },
         "required": [],
     }
@@ -128,9 +134,17 @@ class ListShaperQueuesTool:
         if enabled is not None:
             enabled = bool(enabled)
         description = str(params.get("description") or "").strip() or None
+        row_count, fetch_all = parse_shaper_search_options(
+            row_count=params.get("row_count"),
+            fetch_all=params.get("fetch_all"),
+        )
 
         try:
-            queues = await search_shaper_queues(self.client)
+            queues = await search_shaper_queues(
+                self.client,
+                row_count=row_count,
+                fetch_all=fetch_all,
+            )
             queues = _filter_queues(queues, enabled=enabled, description=description)
         except Exception as exc:
             logger.exception("Failed to list shaper queues")
@@ -383,12 +397,15 @@ class SetShaperQueueTool:
                     hints=["No changes applied; payload matches existing config."],
                 )
             pipe_rows, _, _ = await load_pipe_queue_rule_rows(self.client)
-            if proposed.get("pipe_uuid") and proposed["pipe_uuid"] not in pipe_description_map(
-                pipe_rows
-            ):
+            if proposed.get("pipe_uuid") and proposed[
+                "pipe_uuid"
+            ] not in pipe_description_map(pipe_rows):
                 return make_tool_response(
                     status=TOOL_STATUS_ERROR,
-                    structured={"error": "pipe_uuid not found", "pipe_uuid": proposed["pipe_uuid"]},
+                    structured={
+                        "error": "pipe_uuid not found",
+                        "pipe_uuid": proposed["pipe_uuid"],
+                    },
                     summary=f"**Error:** Pipe `{proposed['pipe_uuid']}` not found.",
                 )
             snapshot_id = await mutation_snapshot_for_tool(
