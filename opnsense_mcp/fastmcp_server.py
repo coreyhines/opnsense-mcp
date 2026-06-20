@@ -831,10 +831,19 @@ def build_mcp_server() -> FastMCP:
     async def restore_shaper_snapshot(
         snapshot_id: str,
         apply: bool = True,
+        remove_orphans: bool = False,
     ) -> str:
-        """Restore traffic shaper config from a prior snapshot_id."""
+        """Restore traffic shaper config from a prior snapshot_id.
+
+        Set remove_orphans=true to delete pipes/queues/rules whose UUID is not
+        in the snapshot (destructive; default false).
+        """
         result = await restore_shaper_snapshot_tool.execute(
-            {"snapshot_id": snapshot_id, "apply": apply}
+            {
+                "snapshot_id": snapshot_id,
+                "apply": apply,
+                "remove_orphans": remove_orphans,
+            }
         )
         return str(result)
 

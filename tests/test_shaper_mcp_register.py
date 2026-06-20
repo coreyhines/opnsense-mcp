@@ -78,3 +78,20 @@ async def test_shaper_write_tools_registered() -> None:
     tool_names = {t.name for t in tools}
     missing = SHAPER_WRITE_TOOLS - tool_names
     assert not missing, f"Missing shaper write tools: {sorted(missing)}"
+
+
+@pytest.mark.asyncio
+async def test_restore_shaper_snapshot_mcp_remove_orphans_param() -> None:
+    """FastMCP must expose remove_orphans on restore_shaper_snapshot (BR-fix-a)."""
+    from fastmcp.client import Client
+
+    from opnsense_mcp.fastmcp_server import build_mcp_server
+
+    mcp = build_mcp_server()
+    async with Client(mcp) as client:
+        tools = await client.list_tools()
+
+    restore = next(t for t in tools if t.name == "restore_shaper_snapshot")
+    props = (restore.inputSchema or {}).get("properties", {})
+    assert "remove_orphans" in props
+    assert props["remove_orphans"].get("default") is False
