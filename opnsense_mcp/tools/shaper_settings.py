@@ -28,9 +28,69 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-SEARCH_BODY: dict[str, int] = {"current": 1, "rowCount": 50}
+DEFAULT_SHAPER_SEARCH_ROW_COUNT = 50
+MAX_SHAPER_SEARCH_ROW_COUNT = 500
+
+# Backward-compatible default body for callers that still import SEARCH_BODY.
+SEARCH_BODY: dict[str, int] = {
+    "current": 1,
+    "rowCount": DEFAULT_SHAPER_SEARCH_ROW_COUNT,
+}
 
 ClientT = "OPNsenseClient | MockOPNsenseClient | None"
+
+
+def shaper_search_body(current: int, row_count: int) -> dict[str, int]:
+    """Build OPNsense traffic shaper search POST body."""
+    return {"current": current, "rowCount": row_count}
+
+
+def parse_shaper_search_options(
+    *,
+    row_count: int | None = None,
+    fetch_all: bool | None = None,
+) -> tuple[int, bool]:
+    """Normalize optional search pagination arguments."""
+    page_size = (
+        DEFAULT_SHAPER_SEARCH_ROW_COUNT
+        if row_count is None
+        else max(1, min(int(row_count), MAX_SHAPER_SEARCH_ROW_COUNT))
+    )
+    return page_size, True if fetch_all is None else bool(fetch_all)
+
+
+async def fetch_shaper_search_rows(
+    client: ClientT,
+    path: str,
+    *,
+    row_count: int = DEFAULT_SHAPER_SEARCH_ROW_COUNT,
+    fetch_all: bool = True,
+) -> list[dict[str, Any]]:
+    """POST a shaper search_* endpoint and return flat rows (paginated when needed)."""
+    if not client:
+        raise RuntimeError("No client available")
+    page_size = max(1, min(int(row_count), MAX_SHAPER_SEARCH_ROW_COUNT))
+    current = 1
+    all_rows: list[dict[str, Any]] = []
+    total: int | None = None
+
+    while True:
+        resp = await client._make_request(
+            "POST",
+            path,
+            json=shaper_search_body(current, page_size),
+        )
+        rows = list(resp.get("rows") or [])
+        all_rows.extend(rows)
+        if not fetch_all:
+            return all_rows
+        total_raw = resp.get("rowCount")
+        total = int(total_raw) if total_raw is not None else len(all_rows)
+        if len(all_rows) >= total or not rows:
+            break
+        current += 1
+
+    return all_rows
 
 
 def _unwrap_ts_section(section: dict[str, Any]) -> dict[str, Any]:
@@ -42,6 +102,19 @@ def _unwrap_ts_section(section: dict[str, Any]) -> dict[str, Any]:
         ):
             return section[sole_key]
     return section
+
+
+SHAPER_LIST_SEARCH_SCHEMA: dict[str, Any] = {
+    "row_count": {
+        "type": "integer",
+        "description": "Search API page size (default 50, max 500)",
+    },
+    "fetch_all": {
+        "type": "boolean",
+        "default": True,
+        "description": "When true, paginate until all rows are returned",
+    },
+}
 
 
 def _ts_from_settings_response(data: dict[str, Any]) -> dict[str, Any]:
@@ -56,40 +129,52 @@ async def fetch_shaper_settings_raw(client: ClientT) -> dict[str, Any]:
     return await client._make_request("GET", "/trafficshaper/settings/get")
 
 
-async def search_shaper_pipes(client: ClientT) -> list[FlatShaperPipe]:
+async def search_shaper_pipes(
+    client: ClientT,
+    *,
+    row_count: int = DEFAULT_SHAPER_SEARCH_ROW_COUNT,
+    fetch_all: bool = True,
+) -> list[FlatShaperPipe]:
     """POST search_pipes and normalize rows."""
-    if not client:
-        raise RuntimeError("No client available")
-    resp = await client._make_request(
-        "POST",
+    rows = await fetch_shaper_search_rows(
+        client,
         "/trafficshaper/settings/search_pipes",
-        json=SEARCH_BODY,
+        row_count=row_count,
+        fetch_all=fetch_all,
     )
-    return [normalize_pipe(row) for row in resp.get("rows", [])]
+    return [normalize_pipe(row) for row in rows]
 
 
-async def search_shaper_queues(client: ClientT) -> list[FlatShaperQueue]:
+async def search_shaper_queues(
+    client: ClientT,
+    *,
+    row_count: int = DEFAULT_SHAPER_SEARCH_ROW_COUNT,
+    fetch_all: bool = True,
+) -> list[FlatShaperQueue]:
     """POST search_queues and normalize rows."""
-    if not client:
-        raise RuntimeError("No client available")
-    resp = await client._make_request(
-        "POST",
+    rows = await fetch_shaper_search_rows(
+        client,
         "/trafficshaper/settings/search_queues",
-        json=SEARCH_BODY,
+        row_count=row_count,
+        fetch_all=fetch_all,
     )
-    return [normalize_queue(row) for row in resp.get("rows", [])]
+    return [normalize_queue(row) for row in rows]
 
 
-async def search_shaper_rules(client: ClientT) -> list[FlatShaperRule]:
+async def search_shaper_rules(
+    client: ClientT,
+    *,
+    row_count: int = DEFAULT_SHAPER_SEARCH_ROW_COUNT,
+    fetch_all: bool = True,
+) -> list[FlatShaperRule]:
     """POST search_rules and normalize rows."""
-    if not client:
-        raise RuntimeError("No client available")
-    resp = await client._make_request(
-        "POST",
+    rows = await fetch_shaper_search_rows(
+        client,
         "/trafficshaper/settings/search_rules",
-        json=SEARCH_BODY,
+        row_count=row_count,
+        fetch_all=fetch_all,
     )
-    return [normalize_rule(row) for row in resp.get("rows", [])]
+    return [normalize_rule(row) for row in rows]
 
 
 async def fetch_shaper_statistics(client: ClientT) -> dict[str, Any]:

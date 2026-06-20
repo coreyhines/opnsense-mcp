@@ -114,6 +114,90 @@ STATS_HEALTHY = {
     ],
 }
 
+PIPES_ECN_ON = [
+    {
+        "uuid": "e93038e5-1234",
+        "scheduler": "fq_codel",
+        "description": "Download pipe",
+        "bandwidth": 1776,
+        "bandwidth_metric": "Mbit",
+        "codel_ecn_enable": True,
+    },
+]
+
+STATS_FLOWSET_DROPS = {
+    "status": "ok",
+    "items": [
+        {
+            "type": "pipe",
+            "uuid": "e93038e5-1234",
+            "description": "Download pipe",
+            "bw": "1776 Mbit/s",
+            "scheduler": {"sched_type": "FQ_CODEL"},
+            "flowset": [{"drops": 42}],
+        },
+    ],
+}
+
+STATS_DROPTAIL_LOAD = {
+    "status": "ok",
+    "items": [
+        {
+            "type": "pipe",
+            "uuid": "e93038e5-1234",
+            "description": "Download pipe",
+            "bw": "1776 Mbit/s",
+            "scheduler": {"sched_type": "FIFO", "queue_params": "droptail"},
+        },
+        {
+            "type": "rule",
+            "rule_uuid": "690c995b-abc",
+            "description": "Download Rule",
+            "pkts": 150_000,
+            "bytes": 2500000000,
+            "accessed": "2026-06-20",
+        },
+    ],
+}
+
+STATS_QUEUE_FLOWS = {
+    "status": "ok",
+    "items": [
+        {
+            "type": "queue",
+            "uuid": "q-1",
+            "description": "Download queue",
+            "flows": 12,
+        },
+    ],
+}
+
+STATS_ECN_RUNTIME_OFF = {
+    "status": "ok",
+    "items": [
+        {
+            "type": "pipe",
+            "uuid": "e93038e5-1234",
+            "description": "Download pipe",
+            "bw": "1776 Mbit/s",
+            "scheduler": {"sched_type": "FQ_CODEL", "codel_ecn_enable": False},
+        },
+    ],
+}
+
+STATS_BW_MISMATCH = {
+    "status": "ok",
+    "items": [
+        {
+            "type": "pipe",
+            "uuid": "e93038e5-1234",
+            "description": "Download pipe",
+            "bw": "1500 Mbit/s",
+            "scheduler": {"sched_type": "FQ_CODEL"},
+        },
+    ],
+}
+
 
 # ---------------------------------------------------------------------------
 # Teardown helper: clear baselines between tests
@@ -261,6 +345,46 @@ def test_interpret_statistics_nonzero_pkts_no_zero_hint():
     result = interpret_statistics(STATS_DRIFT)
     zero_hints = [h for h in result.hints if "zero" in h.lower() and "pkt" in h.lower()]
     assert zero_hints == []
+
+
+# ---------------------------------------------------------------------------
+# interpret_statistics — BR-fix-b hints (drops, util, ECN)
+# ---------------------------------------------------------------------------
+
+
+def test_interpret_statistics_flowset_drops_hint():
+    result = interpret_statistics(STATS_FLOWSET_DROPS)
+    assert any("[PIPE_FLOWSET_DROPS]" in h for h in result.hints)
+    assert result.verdict == "warning"
+
+
+def test_interpret_statistics_droptail_load_hint():
+    result = interpret_statistics(STATS_DROPTAIL_LOAD)
+    assert any("[PIPE_DROPTAIL_LOAD]" in h for h in result.hints)
+    assert result.verdict == "warning"
+
+
+def test_interpret_statistics_queue_flows_hint():
+    result = interpret_statistics(STATS_QUEUE_FLOWS)
+    assert any("[QUEUE_FLOWS_ACTIVE]" in h for h in result.hints)
+    assert result.verdict == "warning"
+
+
+def test_interpret_statistics_ecn_runtime_off_hint():
+    result = interpret_statistics(STATS_ECN_RUNTIME_OFF, pipes=PIPES_ECN_ON)
+    assert any("[ECN_RUNTIME_OFF]" in h for h in result.hints)
+    assert result.verdict == "warning"
+
+
+def test_interpret_statistics_ecn_ineffective_on_drift():
+    result = interpret_statistics(STATS_DRIFT, pipes=PIPES_ECN_ON)
+    assert any("[ECN_INEFFECTIVE]" in h for h in result.hints)
+
+
+def test_interpret_statistics_bw_mismatch_hint():
+    result = interpret_statistics(STATS_BW_MISMATCH, pipes=PIPES_ECN_ON)
+    assert any("[PIPE_BW_MISMATCH]" in h for h in result.hints)
+    assert result.verdict == "warning"
 
 
 # ---------------------------------------------------------------------------

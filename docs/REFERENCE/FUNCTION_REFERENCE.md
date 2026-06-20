@@ -399,11 +399,11 @@ Full specification: [`docs/research/traffic-shaper-spec.md`](../research/traffic
 
 | Tool | Purpose |
 |------|---------|
-| `list_shaper_pipes` / `get_shaper_pipe` | Pipe inventory and detail |
-| `list_shaper_queues` / `get_shaper_queue` | Queue inventory and detail |
-| `list_shaper_rules` / `get_shaper_rule` | Rule inventory and detail |
+| `list_shaper_pipes` / `get_shaper_pipe` | Pipe inventory and detail (`row_count`, `fetch_all` for search pagination) |
+| `list_shaper_queues` / `get_shaper_queue` | Queue inventory and detail (`row_count`, `fetch_all`) |
+| `list_shaper_rules` / `get_shaper_rule` | Rule inventory and detail (`row_count`, `fetch_all`) |
 | `get_shaper_settings` | Global shaper settings summary |
-| `shaper_statistics` | Runtime stats with baseline compare |
+| `shaper_statistics` | Runtime stats with baseline compare; hints for scheduler drift, drops, ECN, bandwidth mismatch |
 | `audit_shaper_config` | Best-practice audit (schedulers, IPv6, bandwidth) |
 | `explain_shaper_config` | Plain-language config explanation |
 

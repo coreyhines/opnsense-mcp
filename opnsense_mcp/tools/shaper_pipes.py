@@ -5,7 +5,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from opnsense_mcp.tools.shaper_settings import search_shaper_pipes
+from opnsense_mcp.tools.shaper_settings import (
+    SHAPER_LIST_SEARCH_SCHEMA,
+    parse_shaper_search_options,
+    search_shaper_pipes,
+)
 from opnsense_mcp.utils.shaper_mutation import (
     capture_pre_mutation_snapshot,
     finish_mutation,
@@ -106,6 +110,7 @@ class ListShaperPipesTool:
                 "type": "string",
                 "description": "Optional description substring filter",
             },
+            **SHAPER_LIST_SEARCH_SCHEMA,
         },
         "required": [],
     }
@@ -128,9 +133,17 @@ class ListShaperPipesTool:
         if enabled is not None:
             enabled = bool(enabled)
         description = str(params.get("description") or "").strip() or None
+        row_count, fetch_all = parse_shaper_search_options(
+            row_count=params.get("row_count"),
+            fetch_all=params.get("fetch_all"),
+        )
 
         try:
-            pipes = await search_shaper_pipes(self.client)
+            pipes = await search_shaper_pipes(
+                self.client,
+                row_count=row_count,
+                fetch_all=fetch_all,
+            )
             pipes = _filter_pipes(pipes, enabled=enabled, description=description)
         except Exception as exc:
             logger.exception("Failed to list shaper pipes")

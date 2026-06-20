@@ -5,6 +5,7 @@ Pure functions — no I/O, no OPNsense API calls.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from opnsense_mcp.utils.shaper_types import (
@@ -22,6 +23,10 @@ from opnsense_mcp.utils.shaper_types import (
 # (e.g. "FIFO", "FQ_CODEL").  We normalise both sides to lowercase+underscore
 # before comparing, so the map values just reflect the expected normalised form.
 # ---------------------------------------------------------------------------
+
+_HIGH_LOAD_PKTS = 100_000
+_QUEUE_FLOWS_WARN = 1
+_BW_MISMATCH_RATIO = 0.05
 
 RUNTIME_SCHEDULER_ALIASES: dict[str, str] = {
     "fq_codel": "fq_codel",
@@ -91,8 +96,84 @@ def _extract_pipes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [i for i in items if i.get("type") == "pipe"]
 
 
+def _extract_queues(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [i for i in items if i.get("type") == "queue"]
+
+
 def _extract_rules(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [i for i in items if i.get("type") == "rule"]
+
+
+def _metric_to_mbit(value: float, metric: str) -> float:
+    """Convert a bandwidth scalar to Mbit/s using OPNsense metric suffix."""
+    key = metric.lower().replace("/s", "").strip()
+    if key.startswith("g"):
+        return value * 1000.0
+    if key.startswith("k"):
+        return value / 1000.0
+    return value
+
+
+def _parse_bandwidth_mbit(value: Any) -> float | None:
+    """Parse runtime statistics ``bw`` values (int or human-readable string)."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    match = re.match(r"^([\d.]+)\s*(Kbit|Mbit|Gbit)", text, flags=re.IGNORECASE)
+    if match:
+        amount = float(match.group(1))
+        return _metric_to_mbit(amount, match.group(2))
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _config_bandwidth_mbit(pipe: dict[str, Any]) -> float | None:
+    """Return configured pipe bandwidth in Mbit/s."""
+    bandwidth = pipe.get("bandwidth")
+    if bandwidth is None:
+        return None
+    metric = str(pipe.get("bandwidth_metric") or "Mbit")
+    return _metric_to_mbit(float(bandwidth), metric)
+
+
+def _flowset_drop_total(pipe_item: dict[str, Any]) -> int:
+    """Sum drop counters reported under a pipe's ``flowset`` entries."""
+    total = 0
+    for entry in pipe_item.get("flowset") or []:
+        if not isinstance(entry, dict):
+            continue
+        for key in ("drops", "drop_pkts", "drop", "drop_bytes"):
+            value = entry.get(key)
+            if isinstance(value, (int, float)) and value > 0:
+                total += int(value)
+    return total
+
+
+def _scheduler_queue_params(scheduler: dict[str, Any]) -> str:
+    """Return lowercase queue_params string from a runtime scheduler dict."""
+    return str(scheduler.get("queue_params") or "").lower()
+
+
+def _runtime_ecn_enabled(scheduler: dict[str, Any]) -> bool | None:
+    """Return runtime ECN flag when explicitly present on statistics scheduler."""
+    for key in ("codel_ecn_enable", "ecn", "ecn_enable", "codel_ecn"):
+        if key not in scheduler:
+            continue
+        value = scheduler[key]
+        if isinstance(value, bool):
+            return value
+        lowered = str(value).lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return None
 
 
 def _build_rule_stats(rules: list[dict[str, Any]]) -> dict[str, Any]:
@@ -158,10 +239,14 @@ def interpret_statistics(
     hints: list[str] = []
     has_critical = False
     has_warning = False
+    config_by_uuid: dict[str, dict[str, Any]] = {}
+    if pipes is not None:
+        config_by_uuid = {p["uuid"]: p for p in pipes if "uuid" in p}
+
+    total_rule_pkts = sum(int(r.get("pkts") or 0) for r in rules)
 
     # --- Scheduler drift check ---
     if pipes is not None:
-        config_by_uuid = {p["uuid"]: p for p in pipes if "uuid" in p}
         for rp in runtime_pipes:
             uuid = rp.get("uuid", "")
             config_pipe = config_by_uuid.get(uuid)
@@ -177,6 +262,93 @@ def interpret_statistics(
                     "reconfigure or rewrite the pipe to apply the configured scheduler."
                 )
                 has_critical = True
+
+    # --- Flowset drop counters ---
+    for rp in runtime_pipes:
+        drops = _flowset_drop_total(rp)
+        if drops <= 0:
+            continue
+        desc = rp.get("description", rp.get("uuid", "unknown"))
+        hints.append(
+            f"[PIPE_FLOWSET_DROPS] {desc}: {drops} drop(s) in flowset — "
+            "investigate congestion or tune bandwidth."
+        )
+        has_warning = True
+
+    # --- Droptail scheduler under load ---
+    if total_rule_pkts >= _HIGH_LOAD_PKTS:
+        for rp in runtime_pipes:
+            scheduler = rp.get("scheduler") or {}
+            if "droptail" not in _scheduler_queue_params(scheduler):
+                continue
+            desc = rp.get("description", rp.get("uuid", "unknown"))
+            hints.append(
+                f"[PIPE_DROPTAIL_LOAD] {desc}: droptail queue with "
+                f"{total_rule_pkts:,} rule pkts — run a bufferbloat test or "
+                "reduce the bandwidth target."
+            )
+            has_warning = True
+
+    # --- Active queue flows (utilization signal) ---
+    for queue in _extract_queues(items):
+        flows = queue.get("flows", 0)
+        if not isinstance(flows, (int, float)) or flows < _QUEUE_FLOWS_WARN:
+            continue
+        desc = queue.get("description", queue.get("uuid", "unknown"))
+        hints.append(
+            f"[QUEUE_FLOWS_ACTIVE] {desc}: {int(flows)} active flow(s) — "
+            "queue may be near capacity."
+        )
+        has_warning = True
+
+    # --- ECN runtime vs config ---
+    if pipes is not None:
+        for rp in runtime_pipes:
+            uuid = rp.get("uuid", "")
+            config_pipe = config_by_uuid.get(uuid)
+            if config_pipe is None or not config_pipe.get("codel_ecn_enable"):
+                continue
+            config_sched = config_pipe.get("scheduler", "")
+            if _normalise_sched(config_sched) != "fq_codel":
+                continue
+            runtime_scheduler = rp.get("scheduler") or {}
+            runtime_sched_type = runtime_scheduler.get("sched_type", "")
+            desc = config_pipe.get("description", uuid)
+            if config_sched and not scheduler_matches(config_sched, runtime_sched_type):
+                hints.append(
+                    f"[ECN_INEFFECTIVE] {desc}: ECN enabled in config but runtime "
+                    f"scheduler is {runtime_sched_type!r} — ECN requires active FQ-CoDel."
+                )
+                has_warning = True
+                continue
+            runtime_ecn = _runtime_ecn_enabled(runtime_scheduler)
+            if runtime_ecn is False:
+                hints.append(
+                    f"[ECN_RUNTIME_OFF] {desc}: ECN enabled in config but runtime "
+                    "statistics report ECN disabled."
+                )
+                has_warning = True
+
+    # --- Config bandwidth vs statistics display ---
+    if pipes is not None:
+        for rp in runtime_pipes:
+            uuid = rp.get("uuid", "")
+            config_pipe = config_by_uuid.get(uuid)
+            if config_pipe is None:
+                continue
+            config_mbit = _config_bandwidth_mbit(config_pipe)
+            stats_mbit = _parse_bandwidth_mbit(rp.get("bw"))
+            if config_mbit is None or stats_mbit is None or config_mbit <= 0:
+                continue
+            if abs(config_mbit - stats_mbit) / config_mbit <= _BW_MISMATCH_RATIO:
+                continue
+            desc = config_pipe.get("description", uuid)
+            hints.append(
+                f"[PIPE_BW_MISMATCH] {desc}: config bandwidth "
+                f"{config_mbit:g} Mbit/s vs statistics {stats_mbit:g} Mbit/s — "
+                "verify apply/reconfigure or pipe rewrite."
+            )
+            has_warning = True
 
     # --- Zero-pkts rules check ---
     for r in rules:

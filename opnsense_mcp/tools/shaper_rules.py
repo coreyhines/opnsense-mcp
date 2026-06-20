@@ -5,7 +5,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from opnsense_mcp.tools.shaper_settings import search_shaper_rules
+from opnsense_mcp.tools.shaper_settings import (
+    SHAPER_LIST_SEARCH_SCHEMA,
+    parse_shaper_search_options,
+    search_shaper_rules,
+)
 from opnsense_mcp.utils.shaper_mutation import (
     capture_pre_mutation_snapshot,
     finish_mutation,
@@ -119,6 +123,7 @@ class ListShaperRulesTool:
                 "type": "string",
                 "description": "Optional interface name filter (e.g. wan)",
             },
+            **SHAPER_LIST_SEARCH_SCHEMA,
         },
         "required": [],
     }
@@ -142,9 +147,17 @@ class ListShaperRulesTool:
             enabled = bool(enabled)
         description = str(params.get("description") or "").strip() or None
         interface = str(params.get("interface") or "").strip() or None
+        row_count, fetch_all = parse_shaper_search_options(
+            row_count=params.get("row_count"),
+            fetch_all=params.get("fetch_all"),
+        )
 
         try:
-            rules = await search_shaper_rules(self.client)
+            rules = await search_shaper_rules(
+                self.client,
+                row_count=row_count,
+                fetch_all=fetch_all,
+            )
             rules = _filter_rules(
                 rules,
                 enabled=enabled,
@@ -329,7 +342,10 @@ class AddShaperRuleTool:
             if target_uuid not in tmap:
                 return make_tool_response(
                     status=TOOL_STATUS_ERROR,
-                    structured={"error": "target_uuid not found", "target_uuid": target_uuid},
+                    structured={
+                        "error": "target_uuid not found",
+                        "target_uuid": target_uuid,
+                    },
                     summary=f"**Error:** Target `{target_uuid}` not found.",
                 )
             snapshot_id = await mutation_snapshot_for_tool(
