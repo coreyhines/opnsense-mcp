@@ -1,0 +1,214 @@
+{
+  "settings_get": {
+    "ts": {
+      "pipes": {
+        "pipe": {
+          "e93038e5-5422-4557-b0f2-082c4cb0ddf4": {
+            "bandwidth": "850",
+            "bandwidthMetric": {
+              "Mbit": {"selected": 1, "value": "Mbit/s"}
+            },
+            "description": "Download pipe",
+            "enabled": "1",
+            "number": "10000",
+            "scheduler": {
+              "fq_codel": {"selected": 1, "value": "FlowQueue-CoDel"},
+              "fifo": {"selected": 0, "value": "FIFO"}
+            },
+            "codel_ecn_enable": "1",
+            "codel_enable": "0",
+            "mask": {"none": {"selected": 1, "value": "(none)"}}
+          },
+          "f9b19d27-eb3a-4d24-bec9-ac781aeb53f8": {
+            "bandwidth": "34",
+            "bandwidthMetric": {
+              "Mbit": {"selected": 1, "value": "Mbit/s"}
+            },
+            "description": "Upload pipe",
+            "enabled": "1",
+            "number": "10001",
+            "scheduler": {
+              "fq_codel": {"selected": 1, "value": "FlowQueue-CoDel"}
+            },
+            "codel_ecn_enable": "1",
+            "mask": {"none": {"selected": 1, "value": "(none)"}}
+          }
+        }
+      },
+      "queues": {
+        "queue": {
+          "84c6c7d8-09a6-40d6-b2b7-2c1485c9d6e3": {
+            "description": "Download queue",
+            "enabled": "1",
+            "number": "10000",
+            "weight": "100",
+            "pipe": {
+              "e93038e5-5422-4557-b0f2-082c4cb0ddf4": {
+                "selected": 1,
+                "value": "Download pipe"
+              }
+            }
+          },
+          "14cc84dd-c1c0-4fe9-9247-6250ed476cf9": {
+            "description": "Upload queue",
+            "enabled": "1",
+            "number": "10001",
+            "weight": "100",
+            "pipe": {
+              "f9b19d27-eb3a-4d24-bec9-ac781aeb53f8": {
+                "selected": 1,
+                "value": "Upload pipe"
+              }
+            }
+          }
+        }
+      },
+      "rules": {
+        "rule": {
+          "690c995b-bebd-4a8d-a4c9-df6fd0dc61ea": {
+            "description": "Download Rule",
+            "enabled": "1",
+            "interface": {"wan": {"selected": 1, "value": "WAN"}},
+            "direction": {"in": {"selected": 1, "value": "In"}},
+            "proto": {"ip": {"selected": 1, "value": "ip"}},
+            "source": {"any": {"selected": 1, "value": "any"}},
+            "destination": {"any": {"selected": 1, "value": "any"}},
+            "target": {
+              "84c6c7d8-09a6-40d6-b2b7-2c1485c9d6e3": {
+                "selected": 1,
+                "value": "Download queue"
+              }
+            }
+          },
+          "5122c31a-6d77-4b30-a0c9-626a5b3181e0": {
+            "description": "Upload Rule",
+            "enabled": "1",
+            "interface": {"wan": {"selected": 1, "value": "WAN"}},
+            "direction": {"out": {"selected": 1, "value": "Out"}},
+            "proto": {"ip": {"selected": 1, "value": "ip"}},
+            "source": {"any": {"selected": 1, "value": "any"}},
+            "destination": {"any": {"selected": 1, "value": "any"}},
+            "target": {
+              "14cc84dd-c1c0-4fe9-9247-6250ed476cf9": {
+                "selected": 1,
+                "value": "Upload queue"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "search_pipes": {
+    "rowCount": 2,
+    "rows": [
+      {
+        "uuid": "e93038e5-5422-4557-b0f2-082c4cb0ddf4",
+        "number": "10000",
+        "description": "Download pipe",
+        "enabled": "1",
+        "bandwidth": "850",
+        "bandwidthMetric": "Mbit",
+        "scheduler": "fq_codel"
+      },
+      {
+        "uuid": "f9b19d27-eb3a-4d24-bec9-ac781aeb53f8",
+        "number": "10001",
+        "description": "Upload pipe",
+        "enabled": "1",
+        "bandwidth": "34",
+        "bandwidthMetric": "Mbit",
+        "scheduler": "fq_codel"
+      }
+    ]
+  },
+  "search_queues": {
+    "rowCount": 2,
+    "rows": [
+      {
+        "uuid": "84c6c7d8-09a6-40d6-b2b7-2c1485c9d6e3",
+        "description": "Download queue",
+        "enabled": "1",
+        "pipe": "e93038e5-5422-4557-b0f2-082c4cb0ddf4",
+        "weight": "100"
+      },
+      {
+        "uuid": "14cc84dd-c1c0-4fe9-9247-6250ed476cf9",
+        "description": "Upload queue",
+        "enabled": "1",
+        "pipe": "f9b19d27-eb3a-4d24-bec9-ac781aeb53f8",
+        "weight": "100"
+      }
+    ]
+  },
+  "search_rules": {
+    "rowCount": 2,
+    "rows": [
+      {
+        "uuid": "690c995b-bebd-4a8d-a4c9-df6fd0dc61ea",
+        "description": "Download Rule",
+        "enabled": "1",
+        "interface": "wan",
+        "direction": "in",
+        "proto": "ip",
+        "target": "84c6c7d8-09a6-40d6-b2b7-2c1485c9d6e3"
+      },
+      {
+        "uuid": "5122c31a-6d77-4b30-a0c9-626a5b3181e0",
+        "description": "Upload Rule",
+        "enabled": "1",
+        "interface": "wan",
+        "direction": "out",
+        "proto": "ip",
+        "target": "14cc84dd-c1c0-4fe9-9247-6250ed476cf9"
+      }
+    ]
+  },
+  "statistics": {
+    "status": "ok",
+    "items": [
+      {
+        "type": "pipe",
+        "uuid": "e93038e5-5422-4557-b0f2-082c4cb0ddf4",
+        "description": "Download pipe",
+        "bw": "850.000 Mbit/s",
+        "scheduler": {"sched_type": "FIFO"},
+        "rules": []
+      },
+      {
+        "type": "queue",
+        "uuid": "84c6c7d8-09a6-40d6-b2b7-2c1485c9d6e3",
+        "description": "Download queue",
+        "rules": [
+          {
+            "rule_uuid": "690c995b-bebd-4a8d-a4c9-df6fd0dc61ea",
+            "description": "Download Rule",
+            "pkts": 1000,
+            "bytes": 500000
+          }
+        ]
+      },
+      {
+        "type": "pipe",
+        "uuid": "f9b19d27-eb3a-4d24-bec9-ac781aeb53f8",
+        "description": "Upload pipe",
+        "bw": "34.000 Mbit/s",
+        "scheduler": {"sched_type": "FIFO"},
+        "rules": []
+      },
+      {
+        "type": "queue",
+        "uuid": "14cc84dd-c1c0-4fe9-9247-6250ed476cf9",
+        "description": "Upload queue",
+        "rules": [
+          {
+            "rule_uuid": "5122c31a-6d77-4b30-a0c9-626a5b3181e0",
+            "description": "Upload Rule",
+            "pkts": 800,
+            "bytes": 400000
+          }
+        ]
+      }
+    ]
+  }
+}
