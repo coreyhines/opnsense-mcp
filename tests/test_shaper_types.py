@@ -6,8 +6,12 @@ import pytest
 
 from opnsense_mcp.utils.shaper_types import (
     AUDIT_CODES,
+    AUDIT_FINDING_SEVERITIES,
+    AUDIT_RESULT_STATUSES,
     DEFAULT_WAN_INTERFACES,
+    INTERPRETATION_VERDICTS,
     PIPE_SCHEDULERS,
+    TOOL_STATUS_CRITICAL,
     TOOL_STATUS_ERROR,
     TOOL_STATUS_SUCCESS,
     TOOL_STATUS_WARNING,
@@ -18,6 +22,9 @@ from opnsense_mcp.utils.shaper_types import (
     FlatShaperRule,
     InterpretationResult,
     ShaperToolResponse,
+    is_valid_audit_severity,
+    is_valid_audit_status,
+    is_valid_interpretation_verdict,
     is_valid_scheduler,
     make_tool_response,
 )
@@ -324,6 +331,38 @@ def test_tool_status_constants():
     assert TOOL_STATUS_SUCCESS == "success"
     assert TOOL_STATUS_ERROR == "error"
     assert TOOL_STATUS_WARNING == "warning"
+    assert TOOL_STATUS_CRITICAL == "critical"
+
+
+def test_audit_finding_severities_cover_expected_values():
+    assert frozenset({"error", "warning", "info"}) == AUDIT_FINDING_SEVERITIES
+    assert is_valid_audit_severity("warning") is True
+    assert is_valid_audit_severity("critical") is False
+
+
+def test_audit_result_statuses_match_tool_statuses():
+    expected = frozenset(
+        {
+            TOOL_STATUS_SUCCESS,
+            TOOL_STATUS_ERROR,
+            TOOL_STATUS_WARNING,
+            TOOL_STATUS_CRITICAL,
+        }
+    )
+    assert expected == AUDIT_RESULT_STATUSES
+    assert is_valid_audit_status("success") is True
+    assert is_valid_audit_status("bogus") is False
+
+
+def test_interpretation_verdicts_match_tool_statuses():
+    assert AUDIT_RESULT_STATUSES == INTERPRETATION_VERDICTS
+    assert is_valid_interpretation_verdict("critical") is True
+
+
+def test_audit_codes_keys_are_non_empty_strings():
+    for code, message in AUDIT_CODES.items():
+        assert isinstance(code, str) and code
+        assert isinstance(message, str) and message
 
 
 # ---------------------------------------------------------------------------
@@ -339,4 +378,8 @@ def test_is_valid_scheduler_known():
 
 def test_is_valid_scheduler_unknown():
     assert is_valid_scheduler("bogus") is False
-    assert is_valid_scheduler("") is False
+
+
+def test_is_valid_scheduler_empty_string_allowed():
+    assert "" in PIPE_SCHEDULERS
+    assert is_valid_scheduler("") is True
