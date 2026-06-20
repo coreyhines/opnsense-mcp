@@ -311,6 +311,8 @@ trivy_fs_scan:
 build:image:
   stage: build
   timeout: 30m
+  tags:
+    - strongpod
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
@@ -328,12 +330,11 @@ build:image:
       echo "OPNSENSE_MCP_IMAGE_TAG=${OPNSENSE_MCP_IMAGE_TAG}" | tee image-tag.env
     - mkdir -p /kaniko/.docker
     - |
-      if [ -z "${HUB_FREEBLIZZ_USER:-}" ] || [ -z "${HUB_FREEBLIZZ_PASSWORD:-}" ]; then
-        echo "ERROR: HUB_FREEBLIZZ_USER and HUB_FREEBLIZZ_PASSWORD are required for registry push."
-        exit 1
+      if [ -n "${HUB_FREEBLIZZ_USER:-}" ] && [ -n "${HUB_FREEBLIZZ_PASSWORD:-}" ]; then
+        echo "{\"auths\":{\"hub.freeblizz.com\":{\"auth\":\"$(echo -n "${HUB_FREEBLIZZ_USER}:${HUB_FREEBLIZZ_PASSWORD}" | base64 -w 0)\"}}}" > /kaniko/.docker/config.json
+      else
+        echo "No HUB_FREEBLIZZ_* CI variables; using network-local hub.freeblizz.com access."
       fi
-    - |
-      echo "{\"auths\":{\"hub.freeblizz.com\":{\"auth\":\"$(echo -n "${HUB_FREEBLIZZ_USER}:${HUB_FREEBLIZZ_PASSWORD}" | base64 -w 0)\"}}}" > /kaniko/.docker/config.json
   script:
     - echo "Pushing ${OPNSENSE_MCP_IMAGE}:${OPNSENSE_MCP_IMAGE_TAG}"
     - /kaniko/executor
