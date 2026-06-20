@@ -317,10 +317,15 @@ build:image:
   variables:
     OPNSENSE_MCP_IMAGE: hub.freeblizz.com/opnsense-mcp
   before_script:
-    - apk add --no-cache bash git
-    - chmod +x deploy/ci/compute-image-tag.sh
-    - export OPNSENSE_MCP_IMAGE_TAG="$(bash deploy/ci/compute-image-tag.sh)"
-    - echo "OPNSENSE_MCP_IMAGE_TAG=${OPNSENSE_MCP_IMAGE_TAG}" | tee image-tag.env
+    - |
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        OPNSENSE_MCP_IMAGE_TAG="${CI_COMMIT_TAG#v}"
+      else
+        _pyproject_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)"
+        OPNSENSE_MCP_IMAGE_TAG="${_pyproject_version}-dev.${CI_COMMIT_SHORT_SHA}"
+      fi
+      export OPNSENSE_MCP_IMAGE_TAG
+      echo "OPNSENSE_MCP_IMAGE_TAG=${OPNSENSE_MCP_IMAGE_TAG}" | tee image-tag.env
     - mkdir -p /kaniko/.docker
     - |
       if [ -z "${HUB_FREEBLIZZ_USER:-}" ] || [ -z "${HUB_FREEBLIZZ_PASSWORD:-}" ]; then
