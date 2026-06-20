@@ -8,6 +8,7 @@ from opnsense_mcp.utils.shaper_interpret import (
     RUNTIME_SCHEDULER_ALIASES,
     clear_baselines,
     format_statistics_summary,
+    fqcodel_statistics_layout_ok,
     get_baseline,
     interpret_statistics,
     scheduler_matches,
@@ -19,7 +20,7 @@ from opnsense_mcp.utils.shaper_types import InterpretationResult
 # Shared fixture data
 # ---------------------------------------------------------------------------
 
-# Phase 0 spike scenario: config says fq_codel, runtime reports FIFO (drift)
+# Phase 0 spike: config fq_codel, runtime inner FIFO with expected FQ-CoDel layout
 STATS_DRIFT = {
     "status": "ok",
     "items": [
@@ -27,15 +28,21 @@ STATS_DRIFT = {
             "type": "pipe",
             "uuid": "e93038e5-1234",
             "description": "Download pipe",
+            "pipe": "10000",
+            "id": 10000,
             "bw": "1776 Mbit/s",
             "scheduler": {"sched_type": "FIFO"},
+            "flowset": {"sched_nr": "10000"},
         },
         {
             "type": "pipe",
             "uuid": "f9b19d27-5678",
             "description": "Upload pipe",
+            "pipe": "10001",
+            "id": 10001,
             "bw": "325 Mbit/s",
             "scheduler": {"sched_type": "FIFO"},
+            "flowset": {"sched_nr": "10001"},
         },
         {
             "type": "rule",
@@ -51,6 +58,28 @@ STATS_DRIFT = {
             "description": "Upload Rule",
             "pkts": 2800000,
             "bytes": 2200000000,
+            "accessed": "2026-06-20",
+        },
+    ],
+}
+
+# True drift: config fq_codel but runtime FIFO without FQ-CoDel flowset layout
+STATS_TRUE_DRIFT = {
+    "status": "ok",
+    "items": [
+        {
+            "type": "pipe",
+            "uuid": "e93038e5-1234",
+            "description": "Download pipe",
+            "bw": "1776 Mbit/s",
+            "scheduler": {"sched_type": "FIFO"},
+        },
+        {
+            "type": "rule",
+            "rule_uuid": "690c995b-abc",
+            "description": "Download Rule",
+            "pkts": 3200000,
+            "bytes": 2500000000,
             "accessed": "2026-06-20",
         },
     ],
@@ -267,12 +296,25 @@ def test_scheduler_matches_empty_runtime_returns_false():
 
 
 def test_interpret_statistics_drift_verdict_is_critical():
-    result = interpret_statistics(STATS_DRIFT, pipes=PIPES_FQ_CODEL)
+    result = interpret_statistics(STATS_TRUE_DRIFT, pipes=PIPES_FQ_CODEL)
     assert result.verdict == "critical"
 
 
-def test_interpret_statistics_drift_hint_references_scheduler_drift():
+def test_interpret_statistics_fqcodel_layout_not_drift():
     result = interpret_statistics(STATS_DRIFT, pipes=PIPES_FQ_CODEL)
+    drift_hints = [h for h in result.hints if "SCHEDULER_DRIFT" in h]
+    assert drift_hints == []
+    assert result.verdict != "critical"
+
+
+def test_fqcodel_statistics_layout_ok_matches_pipe_number():
+    pipe = STATS_DRIFT["items"][0]
+    assert fqcodel_statistics_layout_ok(pipe, "fq_codel") is True
+    assert fqcodel_statistics_layout_ok(pipe, "fifo") is False
+
+
+def test_interpret_statistics_drift_hint_references_scheduler_drift():
+    result = interpret_statistics(STATS_TRUE_DRIFT, pipes=PIPES_FQ_CODEL)
     drift_hints = [
         h for h in result.hints if "drift" in h.lower() or "SCHEDULER_DRIFT" in h
     ]
@@ -280,7 +322,7 @@ def test_interpret_statistics_drift_hint_references_scheduler_drift():
 
 
 def test_interpret_statistics_drift_hint_names_a_pipe():
-    result = interpret_statistics(STATS_DRIFT, pipes=PIPES_FQ_CODEL)
+    result = interpret_statistics(STATS_TRUE_DRIFT, pipes=PIPES_FQ_CODEL)
     pipe_hints = [
         h
         for h in result.hints
@@ -377,7 +419,7 @@ def test_interpret_statistics_ecn_runtime_off_hint():
 
 
 def test_interpret_statistics_ecn_ineffective_on_drift():
-    result = interpret_statistics(STATS_DRIFT, pipes=PIPES_ECN_ON)
+    result = interpret_statistics(STATS_TRUE_DRIFT, pipes=PIPES_ECN_ON)
     assert any("[ECN_INEFFECTIVE]" in h for h in result.hints)
 
 
@@ -553,7 +595,7 @@ def test_format_statistics_summary_non_empty():
 
 
 def test_format_statistics_summary_mentions_scheduler_drift():
-    result = interpret_statistics(STATS_DRIFT, pipes=PIPES_FQ_CODEL)
+    result = interpret_statistics(STATS_TRUE_DRIFT, pipes=PIPES_FQ_CODEL)
     summary = format_statistics_summary(STATS_DRIFT, result)
     assert (
         "drift" in summary.lower()

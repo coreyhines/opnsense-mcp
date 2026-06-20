@@ -299,3 +299,111 @@ def merge_flat_into_rule(
 ) -> dict[str, Any]:
     """Merge flat rule changes into a fetched ``get_rule`` GUI dict."""
     return serialize_rule(flat, target_descriptions or {}, template=existing_gui)
+
+
+# ---------------------------------------------------------------------------
+# REST API POST bodies (set_pipe / add_pipe / …)
+#
+# OPNsense traffic shaper write endpoints expect:
+#   {"pipe": {...}} | {"queue": {...}} | {"rule": {...}}
+# with enum fields as plain strings (not GUI ``{option: {selected, value}}``).
+# ---------------------------------------------------------------------------
+
+
+def _selected_enum_key(field: Any) -> str:
+    """Return the selected option key from a GUI enum dict, or passthrough str."""
+    if not isinstance(field, dict):
+        return str(field or "")
+    for key, meta in field.items():
+        if isinstance(meta, dict) and meta.get("selected"):
+            return str(key)
+    selected = field.get("selected")
+    if selected is not None:
+        return str(selected)
+    return ""
+
+
+def flatten_gui_post_body(gui_body: dict[str, Any]) -> dict[str, Any]:
+    """Convert a GUI-shaped inner body to REST API scalar strings."""
+    flattened: dict[str, Any] = {}
+    for key, value in gui_body.items():
+        if isinstance(value, dict) and value and all(
+            isinstance(v, dict) and "selected" in v for v in value.values()
+        ):
+            flattened[key] = _selected_enum_key(value)
+        else:
+            flattened[key] = value
+    return flattened
+
+
+def wrap_pipe_api_post(gui_inner: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a GUI pipe body for ``add_pipe`` / ``set_pipe`` POST."""
+    return {"pipe": flatten_gui_post_body(gui_inner)}
+
+
+def wrap_queue_api_post(gui_inner: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a GUI queue body for ``add_queue`` / ``set_queue`` POST."""
+    return {"queue": flatten_gui_post_body(gui_inner)}
+
+
+def wrap_rule_api_post(gui_inner: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a GUI rule body for ``add_rule`` / ``set_rule`` POST."""
+    return {"rule": flatten_gui_post_body(gui_inner)}
+
+
+def serialize_pipe_api_post(
+    flat: FlatShaperPipe, template: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Flat pipe → wrapped REST API POST body."""
+    return wrap_pipe_api_post(serialize_pipe(flat, template=template))
+
+
+def merge_flat_into_pipe_api_post(
+    existing_gui: dict[str, Any], flat: FlatShaperPipe
+) -> dict[str, Any]:
+    """Merge flat pipe changes into wrapped REST API POST body."""
+    return wrap_pipe_api_post(merge_flat_into_pipe(existing_gui, flat))
+
+
+def serialize_queue_api_post(
+    flat: FlatShaperQueue,
+    pipe_descriptions: dict[str, str],
+    template: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Flat queue → wrapped REST API POST body."""
+    return wrap_queue_api_post(
+        serialize_queue(flat, pipe_descriptions, template=template)
+    )
+
+
+def merge_flat_into_queue_api_post(
+    existing_gui: dict[str, Any],
+    flat: FlatShaperQueue,
+    pipe_descriptions: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Merge flat queue changes into wrapped REST API POST body."""
+    return wrap_queue_api_post(
+        merge_flat_into_queue(existing_gui, flat, pipe_descriptions)
+    )
+
+
+def serialize_rule_api_post(
+    flat: FlatShaperRule,
+    target_descriptions: dict[str, str],
+    template: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Flat rule → wrapped REST API POST body."""
+    return wrap_rule_api_post(
+        serialize_rule(flat, target_descriptions, template=template)
+    )
+
+
+def merge_flat_into_rule_api_post(
+    existing_gui: dict[str, Any],
+    flat: FlatShaperRule,
+    target_descriptions: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Merge flat rule changes into wrapped REST API POST body."""
+    return wrap_rule_api_post(
+        merge_flat_into_rule(existing_gui, flat, target_descriptions)
+    )

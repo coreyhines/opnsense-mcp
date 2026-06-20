@@ -16,7 +16,10 @@ from opnsense_mcp.utils.shaper_mutation import (
     mutation_snapshot_for_tool,
 )
 from opnsense_mcp.utils.shaper_normalize import normalize_pipe
-from opnsense_mcp.utils.shaper_serialize import merge_flat_into_pipe, serialize_pipe
+from opnsense_mcp.utils.shaper_serialize import (
+    merge_flat_into_pipe_api_post,
+    serialize_pipe_api_post,
+)
 from opnsense_mcp.utils.shaper_types import (
     TOOL_STATUS_ERROR,
     TOOL_STATUS_SUCCESS,
@@ -331,7 +334,7 @@ class AddShaperPipeTool:
                 params,
                 description=f"Before add pipe {flat.get('description')}",
             )
-            payload = serialize_pipe(flat)
+            payload = serialize_pipe_api_post(flat)
             result = await self.client._make_request(
                 "POST",
                 "/trafficshaper/settings/add_pipe/",
@@ -430,7 +433,7 @@ class SetShaperPipeTool:
                 params,
                 description=f"Before set pipe {uuid}",
             )
-            payload = merge_flat_into_pipe(existing_gui, proposed)  # type: ignore[arg-type]
+            payload = merge_flat_into_pipe_api_post(existing_gui, proposed)  # type: ignore[arg-type]
             result = await self.client._make_request(
                 "POST",
                 f"/trafficshaper/settings/set_pipe/{uuid}",

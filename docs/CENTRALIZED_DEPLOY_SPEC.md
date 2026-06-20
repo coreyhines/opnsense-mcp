@@ -112,6 +112,7 @@ sudo env OPNSENSE_MCP_IMAGE_TAG=1.0.0 \
 
 ### Install troubleshooting (strongpod / quadlet)
 
+- **Image update but old code still running:** `systemctl restart` alone may leave the previous container instance. After changing **`OPNSENSE_MCP_IMAGE_TAG`**, run **`podman rm -f opnsense-mcp-app opnsense-mcp-caddy`** (or your **`OPNSENSE_MCP_*_CONTAINER_NAME`** values), then **`systemctl restart opnsense-mcp-pod.service opnsense-mcp-app.service opnsense-mcp-caddy.service`**. Reconnect MCP clients in Cursor after redeploy.
 - **Diverged git clone:** the installer **`git reset --hard origin/<branch>`** so `/opt/containerdata/.../src` always matches GitLab (no lingering local commits).
 - **`Failed to enable unit: ... transient or generated`:** quadlet-generated `.service` units sometimes cannot be enabled by name; the script enables the **`.container`** file path, then **`start`**, as a fallback.
 - **Unit not found after install:** (1) Quadlet files must live **directly in** **`/etc/containers/systemd/`** on Podman before **4.7** (subdirectories ignored — [containers/podman#20236](https://github.com/containers/podman/issues/20236)). (2) Quadlet names `.pod` units as **`<stem>-pod.service`** (appends `-pod`), **not** `pod-<stem>.service`: **`opnsense-mcp.pod`** → **`opnsense-mcp-pod.service`**. Container **`Requires=`** must match. (3) **`systemctl daemon-reload`**; ensure **`podman-quadlet`** is installed. (4) Dry-run: `sudo /usr/lib/systemd/system-generators/podman-system-generator --dryrun 2>&1 | grep opnsense-mcp`.

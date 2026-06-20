@@ -19,7 +19,10 @@ from opnsense_mcp.utils.shaper_mutation import (
     pipe_description_map,
 )
 from opnsense_mcp.utils.shaper_normalize import normalize_queue
-from opnsense_mcp.utils.shaper_serialize import merge_flat_into_queue, serialize_queue
+from opnsense_mcp.utils.shaper_serialize import (
+    merge_flat_into_queue_api_post,
+    serialize_queue_api_post,
+)
 from opnsense_mcp.utils.shaper_types import (
     TOOL_STATUS_ERROR,
     TOOL_STATUS_SUCCESS,
@@ -326,7 +329,7 @@ class AddShaperQueueTool:
                 params,
                 description=f"Before add queue {flat.get('description')}",
             )
-            payload = serialize_queue(flat, pmap)
+            payload = serialize_queue_api_post(flat, pmap)
             result = await self.client._make_request(
                 "POST", "/trafficshaper/settings/add_queue/", json=payload
             )
@@ -413,7 +416,7 @@ class SetShaperQueueTool:
                 params,
                 description=f"Before set queue {uuid}",
             )
-            payload = merge_flat_into_queue(
+            payload = merge_flat_into_queue_api_post(
                 existing_gui, proposed, pipe_description_map(pipe_rows)
             )
             result = await self.client._make_request(

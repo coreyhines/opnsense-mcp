@@ -171,8 +171,11 @@
         "type": "pipe",
         "uuid": "e93038e5-5422-4557-b0f2-082c4cb0ddf4",
         "description": "Download pipe",
+        "pipe": "10000",
+        "id": 10000,
         "bw": "850.000 Mbit/s",
         "scheduler": {"sched_type": "FIFO"},
+        "flowset": {"sched_nr": "10000"},
         "rules": []
       },
       {
@@ -192,8 +195,11 @@
         "type": "pipe",
         "uuid": "f9b19d27-eb3a-4d24-bec9-ac781aeb53f8",
         "description": "Upload pipe",
+        "pipe": "10001",
+        "id": 10001,
         "bw": "34.000 Mbit/s",
         "scheduler": {"sched_type": "FIFO"},
+        "flowset": {"sched_nr": "10001"},
         "rules": []
       },
       {

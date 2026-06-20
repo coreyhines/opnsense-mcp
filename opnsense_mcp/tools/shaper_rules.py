@@ -18,7 +18,10 @@ from opnsense_mcp.utils.shaper_mutation import (
     target_description_map,
 )
 from opnsense_mcp.utils.shaper_normalize import normalize_rule
-from opnsense_mcp.utils.shaper_serialize import merge_flat_into_rule, serialize_rule
+from opnsense_mcp.utils.shaper_serialize import (
+    merge_flat_into_rule_api_post,
+    serialize_rule_api_post,
+)
 from opnsense_mcp.utils.shaper_types import (
     TOOL_STATUS_ERROR,
     TOOL_STATUS_SUCCESS,
@@ -353,7 +356,7 @@ class AddShaperRuleTool:
                 params,
                 description=f"Before add rule {flat.get('description')}",
             )
-            payload = serialize_rule(flat, tmap)
+            payload = serialize_rule_api_post(flat, tmap)
             result = await self.client._make_request(
                 "POST", "/trafficshaper/settings/add_rule/", json=payload
             )
@@ -453,7 +456,7 @@ class SetShaperRuleTool:
                 params,
                 description=f"Before set rule {uuid}",
             )
-            payload = merge_flat_into_rule(existing_gui, proposed, tmap)
+            payload = merge_flat_into_rule_api_post(existing_gui, proposed, tmap)
             result = await self.client._make_request(
                 "POST", f"/trafficshaper/settings/set_rule/{uuid}", json=payload
             )

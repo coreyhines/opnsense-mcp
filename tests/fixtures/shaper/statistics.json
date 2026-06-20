@@ -6,20 +6,28 @@
       "description": "Download pipe",
       "bw": 1776,
       "type": "pipe",
+      "pipe": "10000",
+      "id": 10000,
       "scheduler": {
         "sched_type": "FIFO"
       },
-      "flowset": []
+      "flowset": {
+        "sched_nr": "10000"
+      }
     },
     {
       "uuid": "f9b19d27-1234-5678-abcd-000000000002",
       "description": "Upload pipe",
       "bw": 325,
       "type": "pipe",
+      "pipe": "10001",
+      "id": 10001,
       "scheduler": {
         "sched_type": "FIFO"
       },
-      "flowset": []
+      "flowset": {
+        "sched_nr": "10001"
+      }
     },
     {
       "uuid": "84c6c7d8-1234-5678-abcd-000000000003",

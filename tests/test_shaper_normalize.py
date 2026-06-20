@@ -561,13 +561,14 @@ def test_statistics_fixture_loads():
     assert len(stats["items"]) > 0
 
 
-def test_statistics_fixture_pipe_scheduler_is_fifo():
-    """Config says fq_codel but runtime reports FIFO — drift scenario."""
+def test_statistics_fixture_pipe_scheduler_is_fifo_with_fqcodel_layout():
+    """Runtime inner FIFO with flowset.sched_nr == pipe id is expected for fq_codel."""
     stats = load("statistics.json")
     pipes = [i for i in stats["items"] if i.get("type") == "pipe"]
     assert len(pipes) == 2
     for pipe in pipes:
         assert pipe["scheduler"]["sched_type"] == "FIFO"
+        assert pipe["flowset"]["sched_nr"] == str(pipe["pipe"])
 
 
 def test_statistics_fixture_rule_pkts_nonzero():
