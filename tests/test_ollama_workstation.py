@@ -11,12 +11,16 @@ from unittest.mock import patch
 
 import pytest
 
-PB_HOME = Path(
-    os.environ.get(
-        "PARALLEL_BUCKETS_HOME",
-        Path.home() / "code" / "parallel-buckets",
+PB_HOME = (
+    Path(
+        os.environ.get(
+            "PARALLEL_BUCKETS_HOME",
+            Path.home() / "code" / "parallel-buckets",
+        )
     )
-).expanduser().resolve()
+    .expanduser()
+    .resolve()
+)
 SCRIPTS = PB_HOME / "scripts"
 
 

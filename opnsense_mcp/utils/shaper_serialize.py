@@ -327,8 +327,10 @@ def flatten_gui_post_body(gui_body: dict[str, Any]) -> dict[str, Any]:
     """Convert a GUI-shaped inner body to REST API scalar strings."""
     flattened: dict[str, Any] = {}
     for key, value in gui_body.items():
-        if isinstance(value, dict) and value and all(
-            isinstance(v, dict) and "selected" in v for v in value.values()
+        if (
+            isinstance(value, dict)
+            and value
+            and all(isinstance(v, dict) and "selected" in v for v in value.values())
         ):
             flattened[key] = _selected_enum_key(value)
         else:
