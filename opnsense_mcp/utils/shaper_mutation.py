@@ -12,6 +12,7 @@ from opnsense_mcp.tools.shaper_settings import (
     search_shaper_rules,
 )
 from opnsense_mcp.utils.shaper_snapshot_store import capture_snapshot
+from opnsense_mcp.utils.shaper_types import TOOL_STATUS_SUCCESS, TOOL_STATUS_WARNING
 from opnsense_mcp.utils.shaper_write_helpers import (
     build_mutation_response,
     pending_apply_fields,
@@ -95,12 +96,15 @@ async def finish_mutation(
     if apply:
         reconfigure_result = await reconfigure_shaper(client)
     merged = {**structured, **pending_apply_fields(apply, reconfigure_result)}
+    final_status = status
+    if apply and merged.get("pending_changes") and not merged.get("applied"):
+        final_status = TOOL_STATUS_WARNING
     return build_mutation_response(
         merged,
         summary,
         snapshot_id=snapshot_id,
         hints=hints,
-        status=status,
+        status=final_status,
     )
 
 

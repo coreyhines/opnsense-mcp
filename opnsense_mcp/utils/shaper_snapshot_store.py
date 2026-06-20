@@ -55,8 +55,9 @@ def capture_snapshot(
 
 
 def get_snapshot(snapshot_id: str) -> dict[str, Any] | None:
-    """Return the stored snapshot blob for *snapshot_id*, or **None**."""
-    return _SNAPSHOT_STORE.get(snapshot_id)
+    """Return a deep copy of the stored snapshot blob, or **None**."""
+    snap = _SNAPSHOT_STORE.get(snapshot_id)
+    return copy.deepcopy(snap) if snap is not None else None
 
 
 def list_snapshots() -> list[dict[str, str]]:

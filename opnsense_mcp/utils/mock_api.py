@@ -72,6 +72,21 @@ class MockOPNsenseClient:
         """Generate a random UUID for new shaper objects."""
         return str(uuid.uuid4())
 
+    @staticmethod
+    def _payload_scalar(payload: dict[str, Any] | None, key: str, default: str = "") -> str:
+        """Read a GUI scalar or enum-selected value from a shaper POST payload."""
+        if not payload:
+            return default
+        raw = payload.get(key, default)
+        if isinstance(raw, dict):
+            selected = raw.get("selected")
+            if selected is not None:
+                return str(selected)
+            for value in raw.values():
+                if isinstance(value, dict) and value.get("selected") is not None:
+                    return str(value["selected"])
+        return str(raw or default)
+
     async def get_system_status(self) -> dict[str, Any]:
         """Get mock system status."""
         return self.mock_data.get("system_status", {})
@@ -98,7 +113,13 @@ class MockOPNsenseClient:
         data = self.mock_data.get("firewall_rules", {})
         return data.get("rules", [])
 
-    def _traffic_shaper_mock(self, method: str, endpoint: str) -> dict[str, Any] | None:
+    def _traffic_shaper_mock(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """Return mock traffic shaper payload when endpoint matches, else None."""
         method_u = method.upper()
         shaper_source = (
@@ -148,19 +169,19 @@ class MockOPNsenseClient:
                     f"/trafficshaper/settings/{action}/" in endpoint
                     or endpoint.endswith(f"/trafficshaper/settings/{action}")
                 ):
-                    return self._handle_pipe_action(action, endpoint)
+                    return self._handle_pipe_action(action, endpoint, payload)
             for action in ("add_queue", "set_queue", "del_queue", "toggle_queue"):
                 if (
                     f"/trafficshaper/settings/{action}/" in endpoint
                     or endpoint.endswith(f"/trafficshaper/settings/{action}")
                 ):
-                    return self._handle_queue_action(action, endpoint)
+                    return self._handle_queue_action(action, endpoint, payload)
             for action in ("add_rule", "set_rule", "del_rule", "toggle_rule"):
                 if (
                     f"/trafficshaper/settings/{action}/" in endpoint
                     or endpoint.endswith(f"/trafficshaper/settings/{action}")
                 ):
-                    return self._handle_rule_action(action, endpoint)
+                    return self._handle_rule_action(action, endpoint, payload)
 
         # POST /trafficshaper/settings/set (global settings subset)
         if endpoint.endswith("/trafficshaper/settings/set"):
@@ -168,7 +189,12 @@ class MockOPNsenseClient:
 
         return None
 
-    def _handle_pipe_action(self, action: str, endpoint: str) -> dict[str, Any]:
+    def _handle_pipe_action(
+        self,
+        action: str,
+        endpoint: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Handle pipe CRUD/toggle mutation."""
         self._ensure_shaper_mutable_copy()
         pipes = (
@@ -185,11 +211,11 @@ class MockOPNsenseClient:
             new_row: dict[str, str] = {
                 "uuid": pipe_uuid,
                 "number": "10002",
-                "description": "New pipe",
-                "enabled": "1",
-                "bandwidth": "0",
+                "description": self._payload_scalar(payload, "description", "New pipe"),
+                "enabled": self._payload_scalar(payload, "enabled", "1"),
+                "bandwidth": self._payload_scalar(payload, "bandwidth", "0"),
                 "bandwidthMetric": "Mbit",
-                "scheduler": "fq_codel",
+                "scheduler": self._payload_scalar(payload, "scheduler", "fq_codel"),
             }
             pipes[pipe_uuid] = {"_uuid_ref": pipe_uuid}
             rows.append(new_row)
@@ -200,7 +226,20 @@ class MockOPNsenseClient:
             uuid_val = endpoint.rsplit("/", 1)[-1]
             if uuid_val in pipes:
                 row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
-                if row_ref:
+                if row_ref and payload:
+                    row_ref["enabled"] = self._payload_scalar(
+                        payload, "enabled", row_ref.get("enabled", "1")
+                    )
+                    row_ref["description"] = self._payload_scalar(
+                        payload, "description", row_ref.get("description", "")
+                    )
+                    row_ref["bandwidth"] = self._payload_scalar(
+                        payload, "bandwidth", row_ref.get("bandwidth", "0")
+                    )
+                    row_ref["scheduler"] = self._payload_scalar(
+                        payload, "scheduler", row_ref.get("scheduler", "fq_codel")
+                    )
+                elif row_ref:
                     row_ref["enabled"] = "1"
                     row_ref["description"] = f"Updated pipe {uuid_val[:8]}"
             return {"status": "ok"}
@@ -223,7 +262,12 @@ class MockOPNsenseClient:
 
         return {"status": "ok"}
 
-    def _handle_queue_action(self, action: str, endpoint: str) -> dict[str, Any]:
+    def _handle_queue_action(
+        self,
+        action: str,
+        endpoint: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Handle queue CRUD/toggle mutation."""
         self._ensure_shaper_mutable_copy()
         queues = (
@@ -239,10 +283,10 @@ class MockOPNsenseClient:
             queue_uuid = self._generate_uuid()
             new_row: dict[str, str] = {
                 "uuid": queue_uuid,
-                "description": "New queue",
-                "enabled": "1",
-                "pipe": "",
-                "weight": "100",
+                "description": self._payload_scalar(payload, "description", "New queue"),
+                "enabled": self._payload_scalar(payload, "enabled", "1"),
+                "pipe": self._payload_scalar(payload, "pipe", ""),
+                "weight": self._payload_scalar(payload, "weight", "100"),
             }
             queues[queue_uuid] = {"_uuid_ref": queue_uuid}
             rows.append(new_row)
@@ -253,7 +297,20 @@ class MockOPNsenseClient:
             uuid_val = endpoint.rsplit("/", 1)[-1]
             if uuid_val in queues:
                 row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
-                if row_ref:
+                if row_ref and payload:
+                    row_ref["enabled"] = self._payload_scalar(
+                        payload, "enabled", row_ref.get("enabled", "1")
+                    )
+                    row_ref["description"] = self._payload_scalar(
+                        payload, "description", row_ref.get("description", "")
+                    )
+                    row_ref["pipe"] = self._payload_scalar(
+                        payload, "pipe", row_ref.get("pipe", "")
+                    )
+                    row_ref["weight"] = self._payload_scalar(
+                        payload, "weight", row_ref.get("weight", "100")
+                    )
+                elif row_ref:
                     row_ref["enabled"] = "1"
                     row_ref["description"] = f"Updated queue {uuid_val[:8]}"
             return {"status": "ok"}
@@ -276,7 +333,12 @@ class MockOPNsenseClient:
 
         return {"status": "ok"}
 
-    def _handle_rule_action(self, action: str, endpoint: str) -> dict[str, Any]:
+    def _handle_rule_action(
+        self,
+        action: str,
+        endpoint: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Handle rule CRUD/toggle mutation."""
         self._ensure_shaper_mutable_copy()
         rules = (
@@ -290,14 +352,15 @@ class MockOPNsenseClient:
 
         if action == "add_rule":
             rule_uuid = self._generate_uuid()
+            description = self._payload_scalar(payload, "description", "New rule")
             new_row: dict[str, str] = {
                 "uuid": rule_uuid,
-                "description": "New rule",
-                "enabled": "1",
-                "interface": "wan",
-                "direction": "in",
-                "proto": "ip",
-                "target": "",
+                "description": description,
+                "enabled": self._payload_scalar(payload, "enabled", "1"),
+                "interface": self._payload_scalar(payload, "interface", "wan"),
+                "direction": self._payload_scalar(payload, "direction", "in"),
+                "proto": self._payload_scalar(payload, "proto", "ip"),
+                "target": self._payload_scalar(payload, "target", ""),
             }
             rules[rule_uuid] = {"_uuid_ref": rule_uuid}
             rows.append(new_row)
@@ -308,7 +371,26 @@ class MockOPNsenseClient:
             uuid_val = endpoint.rsplit("/", 1)[-1]
             if uuid_val in rules:
                 row_ref = next((r for r in rows if r.get("uuid") == uuid_val), None)
-                if row_ref:
+                if row_ref and payload:
+                    row_ref["enabled"] = self._payload_scalar(
+                        payload, "enabled", row_ref.get("enabled", "1")
+                    )
+                    row_ref["description"] = self._payload_scalar(
+                        payload, "description", row_ref.get("description", "")
+                    )
+                    row_ref["interface"] = self._payload_scalar(
+                        payload, "interface", row_ref.get("interface", "wan")
+                    )
+                    row_ref["direction"] = self._payload_scalar(
+                        payload, "direction", row_ref.get("direction", "in")
+                    )
+                    row_ref["proto"] = self._payload_scalar(
+                        payload, "proto", row_ref.get("proto", "ip")
+                    )
+                    row_ref["target"] = self._payload_scalar(
+                        payload, "target", row_ref.get("target", "")
+                    )
+                elif row_ref:
                     row_ref["enabled"] = "1"
                     row_ref["description"] = f"Updated rule {uuid_val[:8]}"
             return {"status": "ok"}
@@ -344,11 +426,14 @@ class MockOPNsenseClient:
         self,
         method: str,
         endpoint: str,
-        **_kwargs: Any,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Stub for tools that call the real client's request helper."""
         logger.debug("Mock _make_request: %s %s", method, endpoint)
-        shaper_resp = self._traffic_shaper_mock(method, endpoint)
+        payload = kwargs.get("json")
+        shaper_resp = self._traffic_shaper_mock(
+            method, endpoint, payload=payload if isinstance(payload, dict) else None
+        )
         if shaper_resp is not None:
             return shaper_resp
         return {"total": 0, "rows": []}

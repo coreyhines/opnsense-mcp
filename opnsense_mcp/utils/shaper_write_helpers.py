@@ -254,6 +254,23 @@ def warn_lan_interface(
 
 
 # ---------------------------------------------------------------------------
+# API result validation (restore / mutation helpers)
+# ---------------------------------------------------------------------------
+
+
+def shaper_api_result_ok(resp: dict[str, Any]) -> tuple[bool, str | None]:
+    """Return whether an OPNsense shaper API response indicates success."""
+    if not isinstance(resp, dict):
+        return False, "invalid response"
+    if resp.get("error"):
+        return False, str(resp.get("error"))
+    status = str(resp.get("status", "ok")).lower()
+    if status and status not in ("ok", "done", "success"):
+        return False, f"status={status}"
+    return True, None
+
+
+# ---------------------------------------------------------------------------
 # Apply envelope builder
 # ---------------------------------------------------------------------------
 
@@ -362,6 +379,7 @@ __all__ = [
     "warn_lan_interface",
     "build_mutation_response",
     "pending_apply_fields",
+    "shaper_api_result_ok",
     "merge_flat_into_shaper_pipe",
     "merge_flat_into_shaper_queue",
     "merge_flat_into_shaper_rule",
