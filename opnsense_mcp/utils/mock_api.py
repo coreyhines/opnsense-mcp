@@ -81,14 +81,46 @@ class MockOPNsenseClient:
         data = self.mock_data.get("firewall_rules", {})
         return data.get("rules", [])
 
+    def _traffic_shaper_mock(self, method: str, endpoint: str) -> dict[str, Any] | None:
+        """Return mock traffic shaper payload when endpoint matches, else None."""
+        shaper = self.mock_data.get("traffic_shaper", {})
+        if not shaper:
+            return None
+        method_u = method.upper()
+        resource_map = {
+            "get_pipe": ("search_pipes", "pipe"),
+            "get_queue": ("search_queues", "queue"),
+            "get_rule": ("search_rules", "rule"),
+        }
+        for path_part, (search_key, resource) in resource_map.items():
+            if f"/trafficshaper/settings/{path_part}/" in endpoint:
+                uuid = endpoint.rsplit("/", 1)[-1]
+                for row in shaper.get(search_key, {}).get("rows", []):
+                    if row.get("uuid") == uuid:
+                        return {resource: row}
+        if endpoint.endswith("/trafficshaper/settings/get") and method_u == "GET":
+            return shaper.get("settings_get", {"ts": {}})
+        if "/trafficshaper/service/statistics" in endpoint:
+            return shaper.get("statistics", {"status": "ok", "items": []})
+        if "/trafficshaper/settings/search_pipes" in endpoint:
+            return shaper.get("search_pipes", {"rows": [], "rowCount": 0})
+        if "/trafficshaper/settings/search_queues" in endpoint:
+            return shaper.get("search_queues", {"rows": [], "rowCount": 0})
+        if "/trafficshaper/settings/search_rules" in endpoint:
+            return shaper.get("search_rules", {"rows": [], "rowCount": 0})
+        return None
+
     async def _make_request(
         self,
         method: str,
         endpoint: str,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        """Stub for tools that call the real client's request helper (empty grid by default)."""
+        """Stub for tools that call the real client's request helper."""
         logger.debug("Mock _make_request: %s %s", method, endpoint)
+        shaper_resp = self._traffic_shaper_mock(method, endpoint)
+        if shaper_resp is not None:
+            return shaper_resp
         return {"total": 0, "rows": []}
 
     async def get_firewall_logs(self, limit: int = 500) -> list[dict[str, Any]]:
