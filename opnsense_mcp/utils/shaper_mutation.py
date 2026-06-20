@@ -192,7 +192,9 @@ async def apply_snapshot_restore(
             "GET", f"/trafficshaper/settings/get_queue/{uid}"
         )
         flat = normalize_queue({**row, "uuid": uid})
-        payload = merge_flat_into_queue_api_post(gui_resp.get("queue") or {}, flat, pmap)
+        payload = merge_flat_into_queue_api_post(
+            gui_resp.get("queue") or {}, flat, pmap
+        )
         resp = await client._make_request(
             "POST",
             f"/trafficshaper/settings/set_queue/{uid}",

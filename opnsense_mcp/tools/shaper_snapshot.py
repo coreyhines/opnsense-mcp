@@ -106,7 +106,9 @@ class RestoreShaperSnapshotTool:
             "pre_restore_snapshot_id": pre_restore_id,
             "remove_orphans": remove_orphans,
         }
-        orphan_count = sum(1 for r in results if str(r.get("action", "")).startswith("del_"))
+        orphan_count = sum(
+            1 for r in results if str(r.get("action", "")).startswith("del_")
+        )
         summary = (
             f"**Restored snapshot** `{snapshot_id}` "
             f"({resource_updates} resource update(s)"

@@ -262,7 +262,9 @@ async def test_restore_shaper_snapshot_pending_apply(
 
 
 @pytest.mark.asyncio
-async def test_mock_add_pipe_preserves_description(mock_client: MockOPNsenseClient) -> None:
+async def test_mock_add_pipe_preserves_description(
+    mock_client: MockOPNsenseClient,
+) -> None:
     tool = AddShaperPipeTool(mock_client)
     resp = await tool.execute(
         {"description": "Unique mock pipe", "bandwidth": 50, "apply": False}
@@ -379,7 +381,9 @@ async def test_apply_shaper_preset_partial_failure(
         fail_queue_ensure,
     )
     preset = ApplyShaperPresetTool(mock_client)
-    resp = await preset.execute({"download_mbit": 100, "upload_mbit": 40, "apply": False})
+    resp = await preset.execute(
+        {"download_mbit": 100, "upload_mbit": 40, "apply": False}
+    )
     assert resp["status"] == "error"
     assert resp["structured"]["partial"] is True
     assert resp["structured"]["actions"]
