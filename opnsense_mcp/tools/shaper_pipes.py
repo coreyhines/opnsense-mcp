@@ -9,6 +9,7 @@ from opnsense_mcp.tools.shaper_settings import search_shaper_pipes
 from opnsense_mcp.utils.shaper_mutation import (
     capture_pre_mutation_snapshot,
     finish_mutation,
+    mutation_snapshot_for_tool,
 )
 from opnsense_mcp.utils.shaper_normalize import normalize_pipe
 from opnsense_mcp.utils.shaper_serialize import merge_flat_into_pipe, serialize_pipe
@@ -287,6 +288,8 @@ class AddShaperPipeTool:
             "scheduler": {"type": "string", "default": "fq_codel"},
             "enabled": {"type": "boolean", "default": True},
             "apply": {"type": "boolean", "default": True},
+            "mutation_snapshot_id": {"type": "string"},
+            "capture_snapshot": {"type": "boolean", "default": True},
         },
         "required": ["description", "bandwidth"],
     }
@@ -310,8 +313,10 @@ class AddShaperPipeTool:
             isp_rate_mbit=params.get("isp_rate_mbit"),
         )
         try:
-            snapshot_id = await capture_pre_mutation_snapshot(
-                self.client, description=f"Before add pipe {flat.get('description')}"
+            snapshot_id = await mutation_snapshot_for_tool(
+                self.client,
+                params,
+                description=f"Before add pipe {flat.get('description')}",
             )
             payload = serialize_pipe(flat)
             result = await self.client._make_request(
@@ -354,6 +359,8 @@ class SetShaperPipeTool:
             "scheduler": {"type": "string"},
             "enabled": {"type": "boolean"},
             "apply": {"type": "boolean", "default": True},
+            "mutation_snapshot_id": {"type": "string"},
+            "capture_snapshot": {"type": "boolean", "default": True},
         },
         "required": ["uuid"],
     }
@@ -405,8 +412,10 @@ class SetShaperPipeTool:
                     summary="**Warning:** Pipe unchanged (identical set request).",
                     hints=["No changes applied; payload matches existing config."],
                 )
-            snapshot_id = await capture_pre_mutation_snapshot(
-                self.client, description=f"Before set pipe {uuid}"
+            snapshot_id = await mutation_snapshot_for_tool(
+                self.client,
+                params,
+                description=f"Before set pipe {uuid}",
             )
             payload = merge_flat_into_pipe(existing_gui, proposed)  # type: ignore[arg-type]
             result = await self.client._make_request(

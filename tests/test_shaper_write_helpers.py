@@ -82,3 +82,10 @@ def test_shaper_api_result_ok() -> None:
     ok, detail = shaper_api_result_ok({"status": "failed", "error": "nope"})
     assert ok is False
     assert detail == "nope"
+
+
+def test_bufferbloat_shaped_rate_mbit_rounds() -> None:
+    from opnsense_mcp.utils.shaper_write_helpers import bufferbloat_shaped_rate_mbit
+
+    assert bufferbloat_shaped_rate_mbit(100) == 85
+    assert bufferbloat_shaped_rate_mbit(33.3) == 28

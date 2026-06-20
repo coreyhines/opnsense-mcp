@@ -258,6 +258,11 @@ def warn_lan_interface(
 # ---------------------------------------------------------------------------
 
 
+def bufferbloat_shaped_rate_mbit(line_rate_mbit: float) -> int:
+    """Return 85% of line rate in Mbit/s, rounded to nearest integer."""
+    return round(line_rate_mbit * 0.85)
+
+
 def shaper_api_result_ok(resp: dict[str, Any]) -> tuple[bool, str | None]:
     """Return whether an OPNsense shaper API response indicates success."""
     if not isinstance(resp, dict):
@@ -379,6 +384,7 @@ __all__ = [
     "warn_lan_interface",
     "build_mutation_response",
     "pending_apply_fields",
+    "bufferbloat_shaped_rate_mbit",
     "shaper_api_result_ok",
     "merge_flat_into_shaper_pipe",
     "merge_flat_into_shaper_queue",

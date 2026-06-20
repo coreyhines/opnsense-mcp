@@ -10,6 +10,7 @@ from opnsense_mcp.utils.shaper_mutation import (
     capture_pre_mutation_snapshot,
     finish_mutation,
     load_pipe_queue_rule_rows,
+    mutation_snapshot_for_tool,
     target_description_map,
 )
 from opnsense_mcp.utils.shaper_normalize import normalize_rule
@@ -293,6 +294,8 @@ class AddShaperRuleTool:
             "proto": {"type": "string"},
             "target_uuid": {"type": "string"},
             "apply": {"type": "boolean", "default": True},
+            "mutation_snapshot_id": {"type": "string"},
+            "capture_snapshot": {"type": "boolean", "default": True},
         },
         "required": ["description", "interface", "target_uuid"],
     }
@@ -329,8 +332,10 @@ class AddShaperRuleTool:
                     structured={"error": "target_uuid not found", "target_uuid": target_uuid},
                     summary=f"**Error:** Target `{target_uuid}` not found.",
                 )
-            snapshot_id = await capture_pre_mutation_snapshot(
-                self.client, description=f"Before add rule {flat.get('description')}"
+            snapshot_id = await mutation_snapshot_for_tool(
+                self.client,
+                params,
+                description=f"Before add rule {flat.get('description')}",
             )
             payload = serialize_rule(flat, tmap)
             result = await self.client._make_request(
@@ -369,6 +374,8 @@ class SetShaperRuleTool:
             "target_uuid": {"type": "string"},
             "enabled": {"type": "boolean"},
             "apply": {"type": "boolean", "default": True},
+            "mutation_snapshot_id": {"type": "string"},
+            "capture_snapshot": {"type": "boolean", "default": True},
         },
         "required": ["uuid"],
     }
@@ -425,8 +432,10 @@ class SetShaperRuleTool:
                     },
                     summary=f"**Error:** Target `{proposed['target_uuid']}` not found.",
                 )
-            snapshot_id = await capture_pre_mutation_snapshot(
-                self.client, description=f"Before set rule {uuid}"
+            snapshot_id = await mutation_snapshot_for_tool(
+                self.client,
+                params,
+                description=f"Before set rule {uuid}",
             )
             payload = merge_flat_into_rule(existing_gui, proposed, tmap)
             result = await self.client._make_request(

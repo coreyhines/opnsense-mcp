@@ -82,7 +82,7 @@ def build_restore_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
                 {
                     "action": "set_pipe",
                     "uuid": uuid_val,
-                    "flat_data": dict(row),
+                    "search_row": dict(row),
                 }
             )
 
@@ -94,7 +94,7 @@ def build_restore_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
                 {
                     "action": "set_queue",
                     "uuid": uuid_val,
-                    "flat_data": dict(row),
+                    "search_row": dict(row),
                 }
             )
 
@@ -106,7 +106,7 @@ def build_restore_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
                 {
                     "action": "set_rule",
                     "uuid": uuid_val,
-                    "flat_data": dict(row),
+                    "search_row": dict(row),
                 }
             )
 
