@@ -21,6 +21,12 @@ workflow:
 
 default:
   interruptible: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "flent-baseline"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web" && $FLENT_BASELINE == "true"'
+      when: never
+    - when: on_success
 
 stages:
   - lint
@@ -29,6 +35,7 @@ stages:
   - security
   - build
   - deploy
+  - observe
 
 variables:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
@@ -348,6 +355,10 @@ build:image:
     reports:
       dotenv: image-tag.env
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "flent-baseline"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web" && $FLENT_BASELINE == "true"'
+      when: never
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_TAG'
 
@@ -372,10 +383,14 @@ deploy:strongpod:
     - job: build:image
       artifacts: true
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "flent-baseline"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web" && $FLENT_BASELINE == "true"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "main" && $OPNSENSE_MCP_DEPLOY_HOST != "" && ($OPNSENSE_MCP_DEPLOY_SSH_KEY_B64 != "" || $OPNSENSE_MCP_DEPLOY_SSH_KEY != "")'
       when: manual
       allow_failure: false
-    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_TAG && $OPNSENSE_MCP_DEPLOY_HOST != "" && ($OPNSENSE_MCP_DEPLOY_SSH_KEY_B64 != "" || $OPNSENSE_MCP_DEPLOY_SSH_KEY != "")'
       when: manual
       allow_failure: false
   environment:
@@ -383,11 +398,20 @@ deploy:strongpod:
     url: https://opnsense-mcp.freeblizz.com/mcp
 
 # Aggregate security artifacts for download from the pipeline (not GitLab Pages).
+.collect_reports_rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "flent-baseline"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web" && $FLENT_BASELINE == "true"'
+      when: never
+    - when: always
+
 collect_reports:
   stage: deploy
   timeout: 15m
   image:
     name: $PYTHON_312_ALPINE_IMAGE
+  extends: .collect_reports_rules
   when: always
   needs:
     - job: pytest
@@ -440,3 +464,47 @@ collect_reports:
     paths:
       - public
     expire_in: 1 week
+
+# Scheduled FQ-CoDel baseline: flent rrul from net-10 sidecar on strongpod.
+# Create a GitLab pipeline schedule on main with variable SCHEDULED_JOB=flent-baseline
+# (recommended cron: 0 6 * * 1 — weekly Monday 06:00 UTC).
+# Optional CI variables: FLENT_ICMP_MAX_MS (default 145), FLENT_LENGTH, FLENT_RUNS,
+# NETPERF_HOST (default netperf-eu.bufferbloat.net).
+.flent_baseline_rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "flent-baseline"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $FLENT_BASELINE == "true"'
+    - when: never
+
+flent:baseline:
+  stage: observe
+  timeout: 45m
+  image: alpine:3.22.0
+  extends: .flent_baseline_rules
+  variables:
+    FLENT_LABEL: "ci-baseline-${CI_PIPELINE_ID}"
+    NETPERF_HOST: "netperf-eu.bufferbloat.net"
+    FLENT_LENGTH: "60"
+    FLENT_RUNS: "3"
+    FLENT_ICMP_MAX_MS: "145"
+  before_script:
+    - apk add --no-cache openssh-client bash python3
+    - bash deploy/ci/ssh-setup.sh
+  script:
+    - bash deploy/ci/run-flent-baseline-remote.sh
+    - |
+      set -a
+      # shellcheck disable=SC1091
+      source flent-artifacts/flent.env
+      set +a
+      python3 opnsense_mcp/utils/flent_summary.py \
+        "${SUMMARY_FILE}" \
+        --json-out flent-artifacts/flent-gate.json
+  artifacts:
+    when: always
+    paths:
+      - flent-artifacts/
+    reports:
+      dotenv: flent-artifacts/flent.env
+    expire_in: 4 weeks
+  allow_failure: false
