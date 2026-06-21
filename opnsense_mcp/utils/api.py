@@ -20,6 +20,7 @@ from opnsense_mcp.utils.dhcp_provider import (
     DHCPProvider,
     detect_dhcp_backend,
     require_host_provider,
+    require_dnsmasq_provider,
     require_subnet_dns_provider,
 )
 from opnsense_mcp.utils.dhcp_subnet_dns import Family, merge_slot_update
@@ -979,6 +980,28 @@ class OPNsenseClient:
             client_id=client_id,
             descr=descr,
             domain=domain,
+            dry_run=dry_run,
+        )
+
+    async def toggle_dhcp_range(
+        self,
+        *,
+        enabled: bool,
+        subnet: str | None = None,
+        interface: str | None = None,
+        uuid: str | None = None,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Enable or disable a dnsmasq DHCP range (Services → DHCPv4 → Ranges)."""
+        await self._ensure_dhcp_provider()
+        if self._dhcp_provider is None:
+            raise RuntimeError("DHCP provider not initialized")
+        provider = require_dnsmasq_provider(self._dhcp_provider)
+        return await provider.toggle_range(
+            enabled=enabled,
+            subnet=subnet,
+            interface=interface,
+            uuid=uuid,
             dry_run=dry_run,
         )
 

@@ -67,6 +67,15 @@ def require_host_provider(provider: DHCPProvider) -> Any:
     return provider
 
 
+def require_dnsmasq_provider(provider: DHCPProvider) -> Any:
+    """Return provider when backend is dnsmasq."""
+    backend = getattr(provider, "name", provider.__class__.__name__)
+    if backend != "dnsmasq":
+        msg = f"Operation requires dnsmasq backend, got {backend!r}"
+        raise ValueError(msg)
+    return provider
+
+
 _BACKEND_PROBES: list[tuple[str, type[DHCPProvider]]] = [
     (KeaProvider.SERVICE_STATUS_ENDPOINT, KeaProvider),
     (DnsmasqProvider.SERVICE_STATUS_ENDPOINT, DnsmasqProvider),
