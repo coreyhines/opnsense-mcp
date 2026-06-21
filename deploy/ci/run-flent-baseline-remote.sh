@@ -40,7 +40,7 @@ LATEST_SUMMARY="$(
 if [[ -z "${LATEST_SUMMARY}" ]]; then
   LATEST_SUMMARY="$(
     ssh -o StrictHostKeyChecking=no "${REMOTE}" \
-      "ls -1t '${REMOTE_RESULTS}'/*_${LABEL}.txt 2>/dev/null | head -1"
+      "ls -1t '${REMOTE_RESULTS}'/*${LABEL}*.flent 2>/dev/null | head -1"
   )"
 fi
 

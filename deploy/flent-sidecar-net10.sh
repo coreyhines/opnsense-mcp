@@ -57,10 +57,15 @@ podman run --rm \
       -t '${LABEL} net-10 via ${GW}' \
       -o /out/$(basename "${OUT_FLENT}") \
       2>&1 | tee /out/$(basename "${OUT_TXT}")
-    flent -i /out/$(basename "${OUT_FLENT}").gz -f summary 2>/dev/null \
-      | tee /out/$(basename "${OUT_TXT}" .txt)_summary.txt || \
-    flent -i /out/$(basename "${OUT_FLENT}") -f summary 2>/dev/null \
-      | tee /out/$(basename "${OUT_TXT}" .txt)_summary.txt || true
+    FLENT_GZ="$(ls -1t /out/*.flent.gz 2>/dev/null | head -1)"
+    if [[ -z "${FLENT_GZ}" ]]; then
+      echo "error: no .flent.gz output in /out" >&2
+      ls -la /out/ >&2 || true
+      exit 1
+    fi
+    SUMMARY_PATH="/out/$(basename "${OUT_TXT}" .txt)_summary.txt"
+    flent -i "${FLENT_GZ}" -f summary | tee "${SUMMARY_PATH}"
+    cp "${FLENT_GZ}" "/out/$(basename "${OUT_FLENT}").gz"
   "
 
 echo "Done. Flent: ${OUT_FLENT} (see ${OUT_TXT})"
