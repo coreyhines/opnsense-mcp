@@ -21,6 +21,10 @@ workflow:
 
 default:
   interruptible: true
+
+# Skip the full test/lint pipeline when only the flent baseline job should run.
+# (GitLab on this instance does not support `default: rules`.)
+.skip_flent_baseline_only:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "flent-baseline"'
       when: never
@@ -52,6 +56,7 @@ variables:
 
 # Hard gate — code must be clean before anything else runs
 ruff:
+  extends: .skip_flent_baseline_only
   stage: lint
   timeout: 15m
   dependencies: []
@@ -137,6 +142,7 @@ ai-review:
       when: on_success
 
 gitleaks:
+  extends: .skip_flent_baseline_only
   stage: scanning
   image:
     name: ghcr.io/gitleaks/gitleaks:v8.30.1
@@ -149,6 +155,7 @@ gitleaks:
 
 # GitGuardian — secret scan of commits in CI (requires masked GITGUARDIAN_API_KEY in CI/CD variables).
 gitguardian_scan:
+  extends: .skip_flent_baseline_only
   stage: scanning
   timeout: 20m
   dependencies: []
@@ -170,6 +177,7 @@ gitguardian_scan:
 
 # Unit tests (required gate). SAST template adds semgrep-sast in the same stage.
 pytest:
+  extends: .skip_flent_baseline_only
   stage: test
   timeout: 25m
   dependencies: []
@@ -205,6 +213,7 @@ pytest:
 # Security: informational scanners (dev/editable env and repo-wide heuristics) + hard gates below.
 
 bandit:
+  extends: .skip_flent_baseline_only
   stage: security
   timeout: 20m
   dependencies: []
@@ -221,6 +230,7 @@ bandit:
   allow_failure: true
 
 detect_secrets:
+  extends: .skip_flent_baseline_only
   stage: security
   timeout: 15m
   dependencies: []
@@ -237,6 +247,7 @@ detect_secrets:
 
 # Full tree + editable install — often includes dev-only CVE noise; keep informational.
 pip_audit:
+  extends: .skip_flent_baseline_only
   stage: security
   timeout: 25m
   dependencies: []
@@ -256,6 +267,7 @@ pip_audit:
 
 # Production dependency closure only (requirements.txt) — blocking supply-chain gate.
 pip_audit_prod:
+  extends: .skip_flent_baseline_only
   stage: security
   timeout: 25m
   dependencies: []
@@ -278,6 +290,7 @@ pip_audit_prod:
 
 # CycloneDX SBOM for the production dependency closure (downloadable artifact).
 sbom:
+  extends: .skip_flent_baseline_only
   stage: security
   timeout: 25m
   dependencies: []
@@ -301,6 +314,7 @@ sbom:
 
 # Repo filesystem — HIGH/CRITICAL only; blocking container-supply-chain posture for the repo tree.
 trivy_fs_scan:
+  extends: .skip_flent_baseline_only
   stage: security
   timeout: 30m
   dependencies: []
@@ -470,6 +484,16 @@ collect_reports:
 # (recommended cron: 0 6 * * 1 — weekly Monday 06:00 UTC).
 # Optional CI variables: FLENT_ICMP_MAX_MS (default 145), FLENT_LENGTH, FLENT_RUNS,
 # NETPERF_HOST (default netperf-eu.bufferbloat.net).
+
+# Override SAST template job for flent-only pipelines.
+semgrep-sast:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "flent-baseline"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web" && $FLENT_BASELINE == "true"'
+      when: never
+    - when: on_success
+
 .flent_baseline_rules:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "flent-baseline"'
