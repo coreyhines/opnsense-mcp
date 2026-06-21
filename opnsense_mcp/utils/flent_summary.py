@@ -32,12 +32,28 @@ class GateResult:
     messages: list[str]
 
 
+_ICMP_COL_RE = re.compile(
+    r"Ping\s*\(ms\)\s*ICMP\s*:\s*([0-9]+(?:\.[0-9]+)?)",
+    re.IGNORECASE,
+)
 _ICMP_MEAN_RE = re.compile(
     r"Ping\s*\(?ms?\)?\s*ICMP[^\n]*?mean\s*=\s*([0-9]+(?:\.[0-9]+)?)",
     re.IGNORECASE,
 )
 _ICMP_ALT_RE = re.compile(
     r"ICMP[^\n]*?mean\s*=\s*([0-9]+(?:\.[0-9]+)?)",
+    re.IGNORECASE,
+)
+_TCP_DOWN_COL_RE = re.compile(
+    r"TCP\s+download\s+sum\s*:\s*([0-9]+(?:\.[0-9]+)?)",
+    re.IGNORECASE,
+)
+_TCP_UP_COL_RE = re.compile(
+    r"TCP\s+upload\s+sum\s*:\s*([0-9]+(?:\.[0-9]+)?)",
+    re.IGNORECASE,
+)
+_TCP_TOTAL_COL_RE = re.compile(
+    r"TCP\s+totals\s*:\s*([0-9]+(?:\.[0-9]+)?)",
     re.IGNORECASE,
 )
 _TCP_DOWN_RE = re.compile(
@@ -54,23 +70,22 @@ _TCP_TOTAL_RE = re.compile(
 )
 
 
-def _first_float(pattern: re.Pattern[str], text: str) -> float | None:
-    match = pattern.search(text)
-    if not match:
-        return None
-    return float(match.group(1))
+def _first_float(*patterns: re.Pattern[str], text: str) -> float | None:
+    for pattern in patterns:
+        match = pattern.search(text)
+        if match:
+            return float(match.group(1))
+    return None
 
 
 def parse_flent_summary(text: str) -> FlentMetrics:
     """Extract loaded-latency and throughput means from flent summary text."""
-    icmp = _first_float(_ICMP_MEAN_RE, text)
-    if icmp is None:
-        icmp = _first_float(_ICMP_ALT_RE, text)
+    icmp = _first_float(_ICMP_COL_RE, _ICMP_MEAN_RE, _ICMP_ALT_RE, text=text)
     return FlentMetrics(
         icmp_mean_ms=icmp,
-        tcp_down_mbit=_first_float(_TCP_DOWN_RE, text),
-        tcp_up_mbit=_first_float(_TCP_UP_RE, text),
-        tcp_total_mbit=_first_float(_TCP_TOTAL_RE, text),
+        tcp_down_mbit=_first_float(_TCP_DOWN_COL_RE, _TCP_DOWN_RE, text=text),
+        tcp_up_mbit=_first_float(_TCP_UP_COL_RE, _TCP_UP_RE, text=text),
+        tcp_total_mbit=_first_float(_TCP_TOTAL_COL_RE, _TCP_TOTAL_RE, text=text),
     )
 
 
