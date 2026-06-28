@@ -33,6 +33,7 @@ async def test_fastmcp_server_lists_tools():
         "list_dhcp_hosts",
         "rm_dhcp_host",
         "mk_dhcp_host",
+        "toggle_dhcp_range",
         "lldp",
         "system",
         "fw_rules",
@@ -66,7 +67,7 @@ async def test_fastmcp_server_lists_tools():
 
 @pytest.mark.asyncio
 async def test_fastmcp_server_tool_count():
-    """Server must expose exactly 36 tools."""
+    """Server must expose exactly 52 tools."""
     from fastmcp.client import Client
 
     from opnsense_mcp.fastmcp_server import build_mcp_server
@@ -75,7 +76,7 @@ async def test_fastmcp_server_tool_count():
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    assert len(tools) == 51
+    assert len(tools) == 52
 
 
 def test_main_argparser_accepts_transport():
