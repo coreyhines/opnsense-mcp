@@ -958,7 +958,9 @@ class DnsmasqProvider:
             return response
         return {}
 
-    def _flat_range_payload(self, row: dict[str, Any], *, enabled: bool) -> dict[str, Any]:
+    def _flat_range_payload(
+        self, row: dict[str, Any], *, enabled: bool
+    ) -> dict[str, Any]:
         """Build flat range payload for set_range (preserve pool fields)."""
         return {
             "uuid": str(row.get("uuid") or ""),

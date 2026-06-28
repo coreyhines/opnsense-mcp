@@ -19,8 +19,8 @@ from urllib3.exceptions import InsecureRequestWarning
 from opnsense_mcp.utils.dhcp_provider import (
     DHCPProvider,
     detect_dhcp_backend,
-    require_host_provider,
     require_dnsmasq_provider,
+    require_host_provider,
     require_subnet_dns_provider,
 )
 from opnsense_mcp.utils.dhcp_subnet_dns import Family, merge_slot_update
