@@ -1,0 +1,661 @@
+{
+  "ax1": {
+    "flags": [
+      "up",
+      "broadcast",
+      "running",
+      "simplex",
+      "multicast",
+      "lower_up"
+    ],
+    "capabilities": [
+      "rxcsum",
+      "txcsum",
+      "vlan_mtu",
+      "vlan_hwtagging",
+      "jumbo_mtu",
+      "vlan_hwcsum",
+      "tso4",
+      "tso6",
+      "vlan_hwfilter",
+      "vlan_hwtso",
+      "netmap",
+      "rxcsum_ipv6",
+      "txcsum_ipv6",
+      "hwstats",
+      "mextpg"
+    ],
+    "options": [
+      "vlan_mtu",
+      "jumbo_mtu",
+      "hwstats",
+      "mextpg"
+    ],
+    "macaddr": "f4:90:ea:00:67:c7",
+    "supported_media": [
+      "autoselect",
+      "100M-SGMII",
+      "100baseTX",
+      "1000Base-SGMII",
+      "1000baseT",
+      "1000baseSX",
+      "1000baseLX",
+      "1000baseCX",
+      "1000Base-KX",
+      "10GBase-SFI",
+      "10Gbase-T",
+      "10GBase-KR"
+    ],
+    "is_physical": true,
+    "device": "ax1",
+    "mtu": "1500",
+    "macaddr_hw": "f4:90:ea:00:67:c7",
+    "media": "10GBase-SFI <full-duplex,rxpause,txpause>",
+    "media_raw": "Ethernet autoselect (10GBase-SFI <full-duplex,rxpause,txpause>)",
+    "status": "up",
+    "nd6": {
+      "flags": [
+        "performnud",
+        "accept_rtadv",
+        "auto_linklocal"
+      ]
+    },
+    "sfp": {
+      "plugged": "SFP/SFP+/SFP28 10G Base-SR (LC)",
+      "vendor": "Arista Networks",
+      "part_number": " SFP-10GE-T",
+      "serial_number": "WAMZ012401018A",
+      "manufacturing_date": "2024-01-05",
+      "temperature": "41.59 C",
+      "voltage": "3.31 ",
+      "lane_1_rx_power": "0.40 mW (-3.98 dBm)",
+      "lane_1_tx_bias": "6.00 mA"
+    },
+    "statistics": {
+      "device": "ax1",
+      "driver": "ax1",
+      "index": "6",
+      "flags": "8843",
+      "promiscuous listeners": "0",
+      "send queue length": "0",
+      "send queue max length": "50",
+      "send queue drops": "0",
+      "type": "Ethernet",
+      "address length": "6",
+      "header length": "18",
+      "link state": "2",
+      "vhid": "0",
+      "datalen": "152",
+      "mtu": "1500",
+      "metric": "0",
+      "line rate": "10000000000 bit/s",
+      "packets received": "1520824060",
+      "input errors": "1675",
+      "packets transmitted": "1035526438",
+      "output errors": "18446744073709550493",
+      "collisions": "0",
+      "bytes received": "1525131231835",
+      "bytes transmitted": "809002101807",
+      "multicasts received": "768776",
+      "multicasts transmitted": "584",
+      "input queue drops": "0",
+      "packets for unknown protocol": "0",
+      "HW offload capabilities": "0x0",
+      "uptime at attach or stat reset": "1"
+    },
+    "routes": [
+      "default",
+      "68.47.6.0/23",
+      "default",
+      "2001:558:1027:6b::/64",
+      "fd00:0:d:4::/64",
+      "fd00:0:101:41::/64",
+      "fe80::%ax1/64"
+    ],
+    "config": {
+      "if": "ax1",
+      "descr": "WAN",
+      "enable": "1",
+      "lock": "1",
+      "spoofmac": "",
+      "blockpriv": "1",
+      "blockbogons": "1",
+      "gateway_interface": "1",
+      "media": "autoselect",
+      "mediaopt": "",
+      "ipaddr": "dhcp",
+      "dhcphostname": "",
+      "alias-address": "",
+      "alias-subnet": "32",
+      "dhcprejectfrom": "",
+      "adv_dhcp_pt_timeout": "60",
+      "adv_dhcp_pt_retry": "15",
+      "adv_dhcp_pt_select_timeout": "0",
+      "adv_dhcp_pt_reboot": "",
+      "adv_dhcp_pt_backoff_cutoff": "",
+      "adv_dhcp_pt_initial_interval": "1",
+      "adv_dhcp_pt_values": "SavedCfg",
+      "adv_dhcp_send_options": "",
+      "adv_dhcp_request_options": "",
+      "adv_dhcp_required_options": "",
+      "adv_dhcp_option_modifiers": "",
+      "adv_dhcp_config_advanced": "",
+      "adv_dhcp_config_file_override": "",
+      "adv_dhcp_config_file_override_path": "",
+      "dhcphonourmtu": "1",
+      "ipaddrv6": "dhcp6",
+      "dhcp6-ia-pd-len": "4",
+      "dhcp6-ia-pd-send-hint": "1",
+      "adv_dhcp6_interface_statement_send_options": "",
+      "adv_dhcp6_interface_statement_request_options": "",
+      "adv_dhcp6_interface_statement_information_only_enable": "",
+      "adv_dhcp6_interface_statement_script": "",
+      "adv_dhcp6_id_assoc_statement_address_enable": "",
+      "adv_dhcp6_id_assoc_statement_address": "",
+      "adv_dhcp6_id_assoc_statement_address_id": "",
+      "adv_dhcp6_id_assoc_statement_address_pltime": "",
+      "adv_dhcp6_id_assoc_statement_address_vltime": "",
+      "adv_dhcp6_id_assoc_statement_prefix_enable": "",
+      "adv_dhcp6_id_assoc_statement_prefix": "",
+      "adv_dhcp6_id_assoc_statement_prefix_id": "",
+      "adv_dhcp6_id_assoc_statement_prefix_pltime": "",
+      "adv_dhcp6_id_assoc_statement_prefix_vltime": "",
+      "adv_dhcp6_prefix_interface_statement_sla_len": "",
+      "adv_dhcp6_authentication_statement_authname": "",
+      "adv_dhcp6_authentication_statement_protocol": "",
+      "adv_dhcp6_authentication_statement_algorithm": "",
+      "adv_dhcp6_authentication_statement_rdm": "",
+      "adv_dhcp6_key_info_statement_keyname": "",
+      "adv_dhcp6_key_info_statement_realm": "",
+      "adv_dhcp6_key_info_statement_keyid": "",
+      "adv_dhcp6_key_info_statement_secret": "",
+      "adv_dhcp6_key_info_statement_expire": "",
+      "adv_dhcp6_config_advanced": "",
+      "adv_dhcp6_config_file_override": "",
+      "adv_dhcp6_config_file_override_path": "",
+      "identifier": "wan"
+    },
+    "ifctl.nameserver": [
+      "75.75.75.75\n75.75.76.76",
+      "2001:558:feed::1\n2001:558:feed::2"
+    ],
+    "ifctl.router": [
+      "68.47.6.1",
+      "fe80::21c:73ff:fe00:99"
+    ],
+    "ifctl.searchdomain": [
+      "hsd1.mn.comcast.net."
+    ],
+    "ifctl.prefix": [
+      "2601:441:8483:b500::/60"
+    ],
+    "identifier": "wan",
+    "description": "WAN",
+    "enabled": true,
+    "link_type": "dhcp",
+    "addr4": "68.47.7.163/23",
+    "addr6": "2001:558:6014:19:4091:25d2:ca69:5582/128",
+    "ipv4": [
+      {
+        "ipaddr": "68.47.7.163/23"
+      }
+    ],
+    "ipv6": [
+      {
+        "ipaddr": "2001:558:6014:19:4091:25d2:ca69:5582/128"
+      },
+      {
+        "ipaddr": "fe80::f690:eaff:fe00:67c7/64"
+      }
+    ],
+    "vlan_tag": null,
+    "gateways": [
+      "68.47.6.1",
+      "fe80::21c:73ff:fe00:99"
+    ]
+  },
+  "ax0_vlan81": {
+    "flags": [
+      "up",
+      "broadcast",
+      "running",
+      "simplex",
+      "multicast",
+      "lower_up"
+    ],
+    "capabilities": [
+      "rxcsum",
+      "txcsum",
+      "tso4",
+      "tso6",
+      "rxcsum_ipv6",
+      "txcsum_ipv6",
+      "mextpg"
+    ],
+    "options": [
+      "mextpg"
+    ],
+    "macaddr": "f4:90:ea:00:67:c6",
+    "supported_media": [
+      "autoselect"
+    ],
+    "is_physical": false,
+    "device": "ax0_vlan81",
+    "mtu": "1500",
+    "macaddr_hw": "f4:90:ea:00:67:c6",
+    "groups": [
+      "vlan",
+      "noguests",
+      "trustedNets"
+    ],
+    "vlan": {
+      "tag": "81",
+      "proto": "802.1q",
+      "pcp": "0",
+      "parent": "ax0"
+    },
+    "media": "10GBase-SFI <full-duplex,rxpause,txpause>",
+    "media_raw": "Ethernet autoselect (10GBase-SFI <full-duplex,rxpause,txpause>)",
+    "status": "up",
+    "nd6": {
+      "flags": [
+        "performnud",
+        "auto_linklocal"
+      ]
+    },
+    "statistics": {
+      "device": "ax0_vlan81",
+      "driver": "vlan6",
+      "index": "17",
+      "flags": "8843",
+      "promiscuous listeners": "0",
+      "send queue length": "0",
+      "send queue max length": "50",
+      "send queue drops": "0",
+      "type": "unknown type 135",
+      "address length": "6",
+      "header length": "4",
+      "link state": "2",
+      "vhid": "0",
+      "datalen": "152",
+      "mtu": "1500",
+      "metric": "0",
+      "line rate": "10000000000 bit/s",
+      "packets received": "216424021",
+      "input errors": "0",
+      "packets transmitted": "593885167",
+      "output errors": "2866",
+      "collisions": "0",
+      "bytes received": "58045076556",
+      "bytes transmitted": "676721446534",
+      "multicasts received": "7111781",
+      "multicasts transmitted": "18252144",
+      "input queue drops": "0",
+      "packets for unknown protocol": "0",
+      "HW offload capabilities": "0x0",
+      "uptime at attach or stat reset": "75"
+    },
+    "routes": [
+      "10.0.8.0/24",
+      "2601:441:8483:b508::/64",
+      "fe80::%ax0_vlan81/64"
+    ],
+    "config": {
+      "if": "ax0_vlan81",
+      "descr": "VLAN81wifi",
+      "enable": "1",
+      "lock": "1",
+      "spoofmac": "",
+      "mtu": "1500",
+      "ipaddr": "10.0.8.1",
+      "subnet": "24",
+      "ipaddrv6": "track6",
+      "track6-interface": "wan",
+      "track6-prefix-id": "8",
+      "track6_ifid": "1",
+      "dhcpd6track6allowoverride": "1",
+      "identifier": "opt5"
+    },
+    "identifier": "opt5",
+    "description": "VLAN81wifi",
+    "enabled": true,
+    "link_type": "static",
+    "addr4": "10.0.8.1/24",
+    "addr6": "2601:441:8483:b508::1/64",
+    "ipv4": [
+      {
+        "ipaddr": "10.0.8.1/24"
+      }
+    ],
+    "ipv6": [
+      {
+        "ipaddr": "2601:441:8483:b508::1/64"
+      },
+      {
+        "ipaddr": "fe80::f690:eaff:fe00:67c6/64"
+      }
+    ],
+    "vlan_tag": "81",
+    "gateways": []
+  },
+  "igb0": {
+    "flags": [
+      "broadcast",
+      "simplex",
+      "multicast"
+    ],
+    "capabilities": [
+      "rxcsum",
+      "txcsum",
+      "vlan_mtu",
+      "vlan_hwtagging",
+      "jumbo_mtu",
+      "vlan_hwcsum",
+      "tso4",
+      "tso6",
+      "lro",
+      "wol_ucast",
+      "wol_mcast",
+      "wol_magic",
+      "vlan_hwfilter",
+      "vlan_hwtso",
+      "netmap",
+      "rxcsum_ipv6",
+      "txcsum_ipv6",
+      "hwstats",
+      "mextpg"
+    ],
+    "options": [
+      "vlan_mtu",
+      "jumbo_mtu",
+      "hwstats",
+      "mextpg"
+    ],
+    "macaddr": "f4:90:ea:00:67:c2",
+    "ipv4": [],
+    "ipv6": [],
+    "supported_media": [
+      "autoselect",
+      "1000baseT",
+      "1000baseT full-duplex",
+      "100baseTX full-duplex",
+      "100baseTX",
+      "10baseT/UTP full-duplex",
+      "10baseT/UTP"
+    ],
+    "is_physical": true,
+    "device": "igb0",
+    "mtu": "1500",
+    "macaddr_hw": "f4:90:ea:00:67:c2",
+    "media": "Ethernet autoselect",
+    "media_raw": "Ethernet autoselect",
+    "status": "no carrier",
+    "nd6": {
+      "flags": [
+        "performnud",
+        "ifdisabled",
+        "auto_linklocal"
+      ]
+    },
+    "statistics": {
+      "device": "igb0",
+      "driver": "igb0",
+      "index": "1",
+      "flags": "8802",
+      "promiscuous listeners": "0",
+      "send queue length": "0",
+      "send queue max length": "50",
+      "send queue drops": "0",
+      "type": "Ethernet",
+      "address length": "6",
+      "header length": "18",
+      "link state": "0",
+      "vhid": "0",
+      "datalen": "152",
+      "mtu": "1500",
+      "metric": "0",
+      "line rate": "10000000 bit/s",
+      "packets received": "0",
+      "input errors": "0",
+      "packets transmitted": "0",
+      "output errors": "0",
+      "collisions": "0",
+      "bytes received": "0",
+      "bytes transmitted": "0",
+      "multicasts received": "0",
+      "multicasts transmitted": "0",
+      "input queue drops": "0",
+      "packets for unknown protocol": "0",
+      "HW offload capabilities": "0x0",
+      "uptime at attach or stat reset": "1"
+    },
+    "identifier": "",
+    "description": "Unassigned Interface"
+  },
+  "bridge0": {
+    "flags": [
+      "up",
+      "broadcast",
+      "running",
+      "simplex",
+      "multicast",
+      "lower_up"
+    ],
+    "capabilities": [
+      "capabilities="
+    ],
+    "options": [
+      "options="
+    ],
+    "macaddr": "58:9c:fc:10:f1:2e",
+    "supported_media": [],
+    "is_physical": false,
+    "device": "bridge0",
+    "mtu": "1500",
+    "macaddr_hw": "58:9c:fc:10:f1:2e",
+    "priority": "32768",
+    "hellotime": "2",
+    "fwddelay": "15",
+    "maxage": "20",
+    "holdcnt": "6",
+    "proto": "rstp",
+    "maxaddr": "2000",
+    "timeout": "1200",
+    "members": {
+      "igb3": {
+        "flags": [
+          "learning",
+          "discover",
+          "autoedge",
+          "autoptp"
+        ]
+      },
+      "ax0_vlan5": {
+        "flags": [
+          "learning",
+          "discover",
+          "autoedge",
+          "autoptp"
+        ]
+      }
+    },
+    "groups": [
+      "bridge",
+      "noguests",
+      "trustedNets"
+    ],
+    "nd6": {
+      "flags": [
+        "performnud"
+      ]
+    },
+    "statistics": {
+      "device": "bridge0",
+      "driver": "bridge0",
+      "index": "20",
+      "flags": "8843",
+      "promiscuous listeners": "0",
+      "send queue length": "0",
+      "send queue max length": "50",
+      "send queue drops": "0",
+      "type": "unknown type 209",
+      "address length": "6",
+      "header length": "14",
+      "link state": "2",
+      "vhid": "0",
+      "datalen": "152",
+      "mtu": "1500",
+      "metric": "0",
+      "line rate": "0 bit/s",
+      "packets received": "597696636",
+      "input errors": "0",
+      "packets transmitted": "426561035",
+      "output errors": "9847",
+      "collisions": "0",
+      "bytes received": "525430962262",
+      "bytes transmitted": "64205233990",
+      "multicasts received": "857600",
+      "multicasts transmitted": "71331",
+      "input queue drops": "0",
+      "packets for unknown protocol": "0",
+      "HW offload capabilities": "0x0",
+      "uptime at attach or stat reset": "78"
+    },
+    "routes": [
+      "10.0.5.0/24",
+      "2601:441:8483:b505::/64"
+    ],
+    "config": {
+      "if": "bridge0",
+      "descr": "VLAN5_ax0_igb3",
+      "enable": "1",
+      "lock": "1",
+      "spoofmac": "",
+      "ipaddr": "10.0.5.1",
+      "subnet": "24",
+      "ipaddrv6": "track6",
+      "track6-interface": "wan",
+      "track6-prefix-id": "5",
+      "track6_ifid": "1",
+      "identifier": "opt10"
+    },
+    "status": "up",
+    "identifier": "opt10",
+    "description": "VLAN5_ax0_igb3",
+    "enabled": true,
+    "link_type": "static",
+    "addr4": "10.0.5.1/24",
+    "addr6": "2601:441:8483:b505::1/64",
+    "ipv4": [
+      {
+        "ipaddr": "10.0.5.1/24"
+      }
+    ],
+    "ipv6": [
+      {
+        "ipaddr": "2601:441:8483:b505::1/64"
+      }
+    ],
+    "vlan_tag": null,
+    "gateways": []
+  },
+  "ax0_vlan5": {
+    "flags": [
+      "up",
+      "broadcast",
+      "running",
+      "promisc",
+      "simplex",
+      "multicast",
+      "lower_up"
+    ],
+    "capabilities": [
+      "rxcsum",
+      "txcsum",
+      "tso4",
+      "tso6",
+      "rxcsum_ipv6",
+      "txcsum_ipv6",
+      "mextpg"
+    ],
+    "options": [
+      "mextpg"
+    ],
+    "macaddr": "f4:90:ea:00:67:c6",
+    "supported_media": [
+      "autoselect"
+    ],
+    "is_physical": false,
+    "device": "ax0_vlan5",
+    "mtu": "1500",
+    "macaddr_hw": "f4:90:ea:00:67:c6",
+    "groups": [
+      "vlan",
+      "labNets",
+      "noguests",
+      "trustedNets"
+    ],
+    "vlan": {
+      "tag": "5",
+      "proto": "802.1q",
+      "pcp": "0",
+      "parent": "ax0"
+    },
+    "media": "10GBase-SFI <full-duplex,rxpause,txpause>",
+    "media_raw": "Ethernet autoselect (10GBase-SFI <full-duplex,rxpause,txpause>)",
+    "status": "up",
+    "nd6": {
+      "flags": [
+        "performnud",
+        "ifdisabled",
+        "auto_linklocal"
+      ]
+    },
+    "statistics": {
+      "device": "ax0_vlan5",
+      "driver": "vlan3",
+      "index": "14",
+      "flags": "8943",
+      "promiscuous listeners": "1",
+      "send queue length": "0",
+      "send queue max length": "50",
+      "send queue drops": "0",
+      "type": "unknown type 135",
+      "address length": "6",
+      "header length": "4",
+      "link state": "2",
+      "vhid": "0",
+      "datalen": "152",
+      "mtu": "1500",
+      "metric": "0",
+      "line rate": "10000000000 bit/s",
+      "packets received": "395222157",
+      "input errors": "0",
+      "packets transmitted": "310510982",
+      "output errors": "9675",
+      "collisions": "0",
+      "bytes received": "277734259520",
+      "bytes transmitted": "46140666228",
+      "multicasts received": "406894",
+      "multicasts transmitted": "51566",
+      "input queue drops": "0",
+      "packets for unknown protocol": "0",
+      "HW offload capabilities": "0x0",
+      "uptime at attach or stat reset": "74"
+    },
+    "config": {
+      "if": "ax0_vlan5",
+      "descr": "VLAN5LAB",
+      "spoofmac": "",
+      "identifier": "opt4"
+    },
+    "identifier": "opt4",
+    "description": "VLAN5LAB",
+    "enabled": false,
+    "link_type": "none",
+    "addr4": "",
+    "addr6": "",
+    "vlan_tag": "5",
+    "gateways": []
+  }
+}

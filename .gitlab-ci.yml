@@ -164,7 +164,8 @@ detect_secrets:
     name: $PYTHON_312_ALPINE_IMAGE
   before_script: *python_before_script
   script:
-    - detect-secrets scan --all-files --exclude-files '\.git/config' > .secrets.baseline
+    # Phase 0 diagnostics fixtures contain live firewall IDs that look like high-entropy secrets.
+    - detect-secrets scan --all-files --exclude-files '\.git/config|tests/fixtures/phase0-diagnostics/.*' > .secrets.baseline
   artifacts:
     when: always
     paths:
