@@ -21,12 +21,14 @@ from opnsense_mcp.tools.firewall_logs import FirewallLogsTool
 from opnsense_mcp.tools.flush_dns import FlushDnsTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.gateway_status import GatewayStatusTool
+from opnsense_mcp.tools.interface_health import InterfaceHealthTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
 from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.mk_dhcp_host import MkDhcpHostTool
 from opnsense_mcp.tools.mkdns import MkdnsTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
 from opnsense_mcp.tools.packet_capture import PacketCaptureTool2 as PacketCaptureTool
+from opnsense_mcp.tools.pf_diagnostics import PfStatesTool, PfStatisticsTool
 from opnsense_mcp.tools.rm_dhcp_host import RmDhcpHostTool
 from opnsense_mcp.tools.rmdns import RmdnsTool
 from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
@@ -92,6 +94,9 @@ def build_mcp_server() -> FastMCP:
     mkfw_rule_tool = MkfwRuleTool(client)
     rmfw_rule_tool = RmfwRuleTool(client)
     interface_list_tool = InterfaceListTool(client)
+    interface_health_tool = InterfaceHealthTool(client)
+    pf_states_tool = PfStatesTool(client)
+    pf_statistics_tool = PfStatisticsTool(client)
     packet_capture_tool = PacketCaptureTool()
     ssh_fw_rule_tool = SSHFirewallRuleTool(client)
     dns_tool = DNSTool(client)
@@ -391,6 +396,28 @@ def build_mcp_server() -> FastMCP:
         return str(result)
 
     @mcp.tool()
+    async def interface_health(
+        interface: str | None = None,
+        include_down: bool = True,
+        include_raw: bool = False,
+        warnings_only: bool = False,
+        sort_by: str = "severity",
+        max_results: int = 50,
+    ) -> str:
+        """Summarize interface status, counters, relationships, and findings."""
+        result = await interface_health_tool.execute(
+            {
+                "interface": interface,
+                "include_down": include_down,
+                "include_raw": include_raw,
+                "warnings_only": warnings_only,
+                "sort_by": sort_by,
+                "max_results": max_results,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
     async def packet_capture(
         action: str = "start",
         interface: str = "wan",
@@ -525,6 +552,11 @@ def build_mcp_server() -> FastMCP:
         src_ip: str | None = None,
         dst_ip: str | None = None,
         protocol: str | None = None,
+        src_port: int | None = None,
+        dst_port: int | None = None,
+        interface: str | None = None,
+        include_rules: bool = False,
+        summary_only: bool = False,
     ) -> str:
         """Get firewall logs with optional filtering."""
         result = await firewall_logs_tool.execute(
@@ -534,8 +566,49 @@ def build_mcp_server() -> FastMCP:
                 "src_ip": src_ip,
                 "dst_ip": dst_ip,
                 "protocol": protocol,
+                "src_port": src_port,
+                "dst_port": dst_port,
+                "interface": interface,
+                "include_rules": include_rules,
+                "summary_only": summary_only,
             }
         )
+        return str(result)
+
+    @mcp.tool()
+    async def pf_states(
+        src_ip: str | None = None,
+        dst_ip: str | None = None,
+        ip: str | None = None,
+        protocol: str | None = None,
+        src_port: int | None = None,
+        dst_port: int | None = None,
+        interface: str | None = None,
+        state: str | None = None,
+        limit: int = 100,
+        summary: bool = True,
+    ) -> str:
+        """List active PF state table entries with filters and summary."""
+        result = await pf_states_tool.execute(
+            {
+                "src_ip": src_ip,
+                "dst_ip": dst_ip,
+                "ip": ip,
+                "protocol": protocol,
+                "src_port": src_port,
+                "dst_port": dst_port,
+                "interface": interface,
+                "state": state,
+                "limit": limit,
+                "summary": summary,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def pf_statistics(include_raw: bool = False) -> str:
+        """Show PF statistics and state table pressure."""
+        result = await pf_statistics_tool.execute({"include_raw": include_raw})
         return str(result)
 
     @mcp.tool()

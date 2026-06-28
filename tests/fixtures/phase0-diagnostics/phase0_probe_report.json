@@ -1,0 +1,28 @@
+{
+  "pf_states_GET": {
+    "ok": true,
+    "type": "dict"
+  },
+  "pf_states_POST": {
+    "ok": true,
+    "type": "dict"
+  },
+  "pf_statistics_GET": {
+    "ok": true,
+    "type": "list"
+  },
+  "pf_statistics_POST": {
+    "ok": true,
+    "type": "list"
+  },
+  "shape_pf_states_sample.json": {
+    "current": [
+      "str",
+      4
+    ],
+    "limit": [
+      "str",
+      7
+    ]
+  }
+}
