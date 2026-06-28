@@ -108,6 +108,7 @@ from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
 from opnsense_mcp.tools.set_fw_rule import SetFwRuleTool
 from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
+from opnsense_mcp.tools.toggle_dhcp_range import ToggleDhcpRangeTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
 from opnsense_mcp.utils.api import OPNsenseClient
 from opnsense_mcp.utils.env import load_opnsense_env
@@ -221,6 +222,7 @@ async def handle_message(
     set_fw_rule_tool: SetFwRuleTool,
     aliases_tool: AliasesTool,
     gateway_status_tool: GatewayStatusTool,
+    toggle_dhcp_range_tool: ToggleDhcpRangeTool,
 ) -> dict[str, Any] | None:
     """Handle incoming MCP messages and route them to appropriate tools."""
     method = message.get("method")
@@ -846,6 +848,11 @@ async def handle_message(
                     "required": [],
                 },
             },
+            {
+                "name": ToggleDhcpRangeTool.name,
+                "description": ToggleDhcpRangeTool.description,
+                "inputSchema": ToggleDhcpRangeTool.input_schema,
+            },
         ]
         return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}}
 
@@ -1082,6 +1089,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if tool_name == "toggle_dhcp_range":
+            result = await toggle_dhcp_range_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
@@ -1148,6 +1162,7 @@ def main() -> None:
     set_fw_rule_tool = SetFwRuleTool(client)
     aliases_tool = AliasesTool(client)
     gateway_status_tool = GatewayStatusTool(client)
+    toggle_dhcp_range_tool = ToggleDhcpRangeTool(client)
 
     # Handle stdin/stdout communication
     async def process_messages() -> None:
@@ -1218,6 +1233,7 @@ def main() -> None:
                     set_fw_rule_tool,
                     aliases_tool,
                     gateway_status_tool,
+                    toggle_dhcp_range_tool,
                 )
                 if response is not None:
                     sys.stdout.write(json.dumps(response) + "\n")

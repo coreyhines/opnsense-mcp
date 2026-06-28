@@ -55,6 +55,8 @@ class DnsmasqProvider:
     OPTION_ADD_ENDPOINT = "/api/dnsmasq/settings/add_option"
     OPTION_DEL_ENDPOINT = "/api/dnsmasq/settings/del_option"
     RANGES_SEARCH_ENDPOINT = "/api/dnsmasq/settings/search_range"
+    RANGE_GET_ENDPOINT = "/api/dnsmasq/settings/get_range"
+    RANGE_SET_ENDPOINT = "/api/dnsmasq/settings/set_range"
     RECONFIGURE_ENDPOINT = "/api/dnsmasq/service/reconfigure"
     WRITE_TIMEOUT_SECONDS = 30
     RECONFIGURE_TIMEOUT_SECONDS = 60
@@ -925,4 +927,136 @@ class DnsmasqProvider:
             "status": "success",
             "backend": self.name,
             "deleted": planned,
+        }
+
+    async def _find_range_row(
+        self,
+        *,
+        subnet: str | None = None,
+        interface: str | None = None,
+        uuid: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Find a dnsmasq DHCP range by uuid or scope selectors."""
+        if uuid:
+            needle = uuid.strip().lower()
+            for row in await self._load_ranges():
+                if str(row.get("uuid") or "").lower() == needle:
+                    return row
+            return None
+        scope = await self.resolve_subnet_scope(subnet=subnet, interface=interface)
+        for row in await self._load_ranges():
+            row_interface = str(row.get("interface") or "").strip()
+            if interface_matches(row_interface, scope.interface):
+                return row
+        return None
+
+    async def _get_range_model(self, uuid: str) -> dict[str, Any]:
+        response = await self._request("GET", f"{self.RANGE_GET_ENDPOINT}/{uuid}")
+        if isinstance(response, dict) and isinstance(response.get("range"), dict):
+            return response["range"]
+        if isinstance(response, dict):
+            return response
+        return {}
+
+    def _flat_range_payload(
+        self, row: dict[str, Any], *, enabled: bool
+    ) -> dict[str, Any]:
+        """Build flat range payload for set_range (preserve pool fields)."""
+        return {
+            "uuid": str(row.get("uuid") or ""),
+            "interface": str(row.get("interface") or ""),
+            "set_tag": str(row.get("set_tag") or ""),
+            "start_addr": str(row.get("start_addr") or ""),
+            "end_addr": str(row.get("end_addr") or ""),
+            "domain": str(row.get("domain") or ""),
+            "domain_search_list": str(row.get("domain_search_list") or ""),
+            "nosync": str(row.get("nosync") or "0"),
+            "dhcpv4": str(row.get("dhcpv4") or "1"),
+            "dhcpv6": str(row.get("dhcpv6") or "0"),
+            "ra_mode": str(row.get("ra_mode") or ""),
+            "ra_priority": str(row.get("ra_priority") or ""),
+            "description": str(row.get("description") or ""),
+            "disabled": "0" if enabled else "1",
+        }
+
+    async def toggle_range(
+        self,
+        *,
+        enabled: bool,
+        subnet: str | None = None,
+        interface: str | None = None,
+        uuid: str | None = None,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Enable or disable a dnsmasq DHCP range and reconfigure."""
+        row = await self._find_range_row(subnet=subnet, interface=interface, uuid=uuid)
+        if row is None:
+            return {
+                "status": "error",
+                "backend": self.name,
+                "error": "No matching DHCP range found for scope",
+                "subnet": subnet,
+                "interface": interface,
+                "uuid": uuid,
+            }
+
+        range_uuid = str(row.get("uuid") or "")
+        current_disabled = str(row.get("disabled") or "0") == "1"
+        target_enabled = enabled
+        if current_disabled == (not target_enabled):
+            return {
+                "status": "noop",
+                "backend": self.name,
+                "uuid": range_uuid,
+                "enabled": target_enabled,
+                "interface": row.get("interface"),
+                "start_addr": row.get("start_addr"),
+                "end_addr": row.get("end_addr"),
+            }
+
+        model = await self._get_range_model(range_uuid)
+        merged = {**row, **model} if model else dict(row)
+        payload = self._flat_range_payload(merged, enabled=target_enabled)
+        planned = {
+            "uuid": range_uuid,
+            "enabled": target_enabled,
+            "interface": payload.get("interface"),
+            "start_addr": payload.get("start_addr"),
+            "end_addr": payload.get("end_addr"),
+        }
+
+        if dry_run:
+            return {
+                "status": "dry_run",
+                "backend": self.name,
+                "planned": planned,
+                "note": "No changes applied. Re-run with apply=true to toggle.",
+            }
+
+        try:
+            await self._request(
+                "POST",
+                f"{self.RANGE_SET_ENDPOINT}/{range_uuid}",
+                json={"range": payload},
+                timeout=self.WRITE_TIMEOUT_SECONDS,
+            )
+            await self._reconfigure()
+        except Exception as exc:
+            logger.exception("dnsmasq range toggle failed")
+            return {
+                "status": "error",
+                "backend": self.name,
+                "planned": planned,
+                "error": str(exc),
+            }
+
+        return {
+            "status": "success",
+            "backend": self.name,
+            "uuid": range_uuid,
+            "enabled": target_enabled,
+            "interface": payload.get("interface"),
+            "start_addr": payload.get("start_addr"),
+            "end_addr": payload.get("end_addr"),
+            "applied": True,
         }
