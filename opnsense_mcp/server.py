@@ -96,12 +96,14 @@ from opnsense_mcp.tools.firewall_logs import FirewallLogsTool
 from opnsense_mcp.tools.flush_dns import FlushDnsTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.gateway_status import GatewayStatusTool
+from opnsense_mcp.tools.interface_health import InterfaceHealthTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
 from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.mk_dhcp_host import MkDhcpHostTool
 from opnsense_mcp.tools.mkdns import MkdnsTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
 from opnsense_mcp.tools.packet_capture import PacketCaptureTool2 as PacketCaptureTool
+from opnsense_mcp.tools.pf_diagnostics import PfStatesTool, PfStatisticsTool
 from opnsense_mcp.tools.rm_dhcp_host import RmDhcpHostTool
 from opnsense_mcp.tools.rmdns import RmdnsTool
 from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
@@ -212,6 +214,9 @@ async def handle_message(
     mkfw_rule_tool: MkfwRuleTool,
     rmfw_rule_tool: RmfwRuleTool,
     interface_list_tool: InterfaceListTool,
+    interface_health_tool: InterfaceHealthTool,
+    pf_states_tool: PfStatesTool,
+    pf_statistics_tool: PfStatisticsTool,
     packet_capture_tool: PacketCaptureTool,
     ssh_fw_rule_tool: SSHFirewallRuleTool,
     dns_tool: DNSTool,
@@ -277,6 +282,11 @@ async def handle_message(
                         "src_ip": {"type": "string", "optional": True},
                         "dst_ip": {"type": "string", "optional": True},
                         "protocol": {"type": "string", "optional": True},
+                        "src_port": {"type": "number", "optional": True},
+                        "dst_port": {"type": "number", "optional": True},
+                        "interface": {"type": "string", "optional": True},
+                        "include_rules": {"type": "boolean", "optional": True},
+                        "summary_only": {"type": "boolean", "optional": True},
                     },
                     "required": [],
                 },
@@ -572,6 +582,53 @@ async def handle_message(
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
+                    "required": [],
+                },
+            },
+            {
+                "name": "interface_health",
+                "description": "Summarize interface status, counters, relationships, and findings",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "interface": {"type": "string", "optional": True},
+                        "include_down": {"type": "boolean", "optional": True},
+                        "include_raw": {"type": "boolean", "optional": True},
+                        "warnings_only": {"type": "boolean", "optional": True},
+                        "sort_by": {"type": "string", "optional": True},
+                        "max_results": {"type": "number", "optional": True},
+                    },
+                    "required": [],
+                },
+            },
+            {
+                "name": "pf_states",
+                "description": "List active PF state table entries with filters and summary",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "src_ip": {"type": "string", "optional": True},
+                        "dst_ip": {"type": "string", "optional": True},
+                        "ip": {"type": "string", "optional": True},
+                        "protocol": {"type": "string", "optional": True},
+                        "src_port": {"type": "number", "optional": True},
+                        "dst_port": {"type": "number", "optional": True},
+                        "interface": {"type": "string", "optional": True},
+                        "state": {"type": "string", "optional": True},
+                        "limit": {"type": "number", "optional": True},
+                        "summary": {"type": "boolean", "optional": True},
+                    },
+                    "required": [],
+                },
+            },
+            {
+                "name": "pf_statistics",
+                "description": "Show PF statistics and state table pressure",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "include_raw": {"type": "boolean", "optional": True},
+                    },
                     "required": [],
                 },
             },
@@ -928,13 +985,7 @@ async def handle_message(
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
         if tool_name == "get_logs":
-            logs = await firewall_logs.get_logs(
-                limit=arguments.get("limit", 500),
-                action=arguments.get("action"),
-                src_ip=arguments.get("src_ip"),
-                dst_ip=arguments.get("dst_ip"),
-                protocol=arguments.get("protocol"),
-            )
+            logs = await firewall_logs.execute(arguments)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -984,6 +1035,27 @@ async def handle_message(
             }
         if tool_name == "interface_list":
             result = await interface_list_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "interface_health":
+            result = await interface_health_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "pf_states":
+            result = await pf_states_tool.execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
+        if tool_name == "pf_statistics":
+            result = await pf_statistics_tool.execute(arguments)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -1152,6 +1224,9 @@ def main() -> None:
     mkfw_rule_tool = MkfwRuleTool(client)
     rmfw_rule_tool = RmfwRuleTool(client)
     interface_list_tool = InterfaceListTool(client)
+    interface_health_tool = InterfaceHealthTool(client)
+    pf_states_tool = PfStatesTool(client)
+    pf_statistics_tool = PfStatisticsTool(client)
     packet_capture_tool = PacketCaptureTool()
     ssh_fw_rule_tool = SSHFirewallRuleTool(client)
     dns_tool = DNSTool(client)
@@ -1223,6 +1298,9 @@ def main() -> None:
                     mkfw_rule_tool,
                     rmfw_rule_tool,
                     interface_list_tool,
+                    interface_health_tool,
+                    pf_states_tool,
+                    pf_statistics_tool,
                     packet_capture_tool,
                     ssh_fw_rule_tool,
                     dns_tool,

@@ -68,6 +68,7 @@ ENDPOINTS = {
         "arp": "/api/diagnostics/interface/get_arp",
         "ndp": "/api/diagnostics/interface/get_ndp",
         "pf_states": "/api/diagnostics/firewall/pf_states",
+        "query_states": "/api/diagnostics/firewall/query_states",
         "pf_stats": "/api/diagnostics/firewall/pf_statistics",
     },
     "unbound": {
@@ -1042,6 +1043,37 @@ class OPNsenseClient:
         except Exception as e:
             logger.warning(f"Error fetching firewall logs: {e}")
             return []
+
+    async def get_pf_states(self: "OPNsenseClient", limit: int = 100) -> dict[str, Any]:
+        """
+        Get active PF state rows from OPNsense.
+
+        OPNsense exposes row data via ``query_states``. The similarly named
+        ``pf_states`` endpoint returns table metadata (current/limit) on recent
+        firmware and is handled separately by ``get_pf_state_table_meta``.
+        """
+        row_count = max(1, min(int(limit), 5000))
+        response = await self._make_request(
+            "POST",
+            ENDPOINTS["diagnostics"]["query_states"],
+            data={"current": 1, "rowCount": row_count},
+        )
+        return response if isinstance(response, dict) else {"rows": []}
+
+    async def get_pf_state_table_meta(self: "OPNsenseClient") -> dict[str, Any]:
+        """Get PF state table pressure metadata (`current` and `limit`)."""
+        response = await self._make_request(
+            "GET",
+            ENDPOINTS["diagnostics"]["pf_states"],
+        )
+        return response if isinstance(response, dict) else {}
+
+    async def get_pf_statistics(self: "OPNsenseClient") -> dict[str, Any] | list[Any]:
+        """Get raw PF statistics from OPNsense when the endpoint returns data."""
+        return await self._make_request(
+            "GET",
+            ENDPOINTS["diagnostics"]["pf_stats"],
+        )
 
     async def search_firewall_logs(
         self: "OPNsenseClient", ip: str, row_count: int = 50

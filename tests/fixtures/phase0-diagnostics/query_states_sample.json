@@ -1,0 +1,328 @@
+{
+  "rows": [
+    {
+      "label": "7eba7aad-cad1-48d7-83ba-24abb39bac19",
+      "descr": "",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "udp",
+      "ipproto": "ipv4",
+      "flags": [
+        "random-id"
+      ],
+      "direction": "in",
+      "dst_addr": "10.0.2.1",
+      "dst_port": "5353",
+      "src_addr": "10.0.2.6",
+      "src_port": "5353",
+      "state": "NO_TRAFFIC:SINGLE",
+      "age": "00:56:10",
+      "expires": "00:00:26",
+      "pkts": [
+        189,
+        0
+      ],
+      "bytes": [
+        102019,
+        0
+      ],
+      "rule": "245",
+      "id": "25001e6c00000000/60bdd758",
+      "interface": "all"
+    },
+    {
+      "label": "a3592386-d8f3-48b3-b066-90216f687d9a",
+      "descr": "Default allow LAN to any rule",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv6",
+      "flags": [
+        "random-id"
+      ],
+      "direction": "in",
+      "dst_addr": "2607:f8b0:4009:81f::2003",
+      "dst_port": "443",
+      "src_addr": "2601:441:8483:b508:6858:e494:a6f6:c131",
+      "src_port": "54020",
+      "state": "ESTABLISHED:ESTABLISHED",
+      "age": "100:36:28",
+      "expires": "20:22:54",
+      "pkts": [
+        879,
+        1505
+      ],
+      "bytes": [
+        104688,
+        285130
+      ],
+      "rule": "313",
+      "id": "4b03946b00000000/60bdd758",
+      "interface": "all"
+    },
+    {
+      "label": "0ba5c7fa9c6ee16f16eae087ee5bdb03",
+      "descr": "let out anything from firewall host itself",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv6",
+      "flags": [
+        "allow-opts"
+      ],
+      "direction": "out",
+      "dst_addr": "2607:f8b0:4009:81f::2003",
+      "dst_port": "443",
+      "src_addr": "2601:441:8483:b508:6858:e494:a6f6:c131",
+      "src_port": "54020",
+      "state": "ESTABLISHED:ESTABLISHED",
+      "age": "100:36:28",
+      "expires": "20:22:54",
+      "pkts": [
+        882,
+        1505
+      ],
+      "bytes": [
+        105267,
+        285130
+      ],
+      "rule": "239",
+      "id": "4c03946b00000000/60bdd758",
+      "interface": "all"
+    },
+    {
+      "label": "a3592386-d8f3-48b3-b066-90216f687d9a",
+      "descr": "Default allow LAN to any rule",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv4",
+      "flags": [
+        "random-id"
+      ],
+      "direction": "in",
+      "dst_addr": "142.251.211.14",
+      "dst_port": "443",
+      "src_addr": "10.0.8.4",
+      "src_port": "54025",
+      "state": "ESTABLISHED:ESTABLISHED",
+      "age": "100:36:26",
+      "expires": "20:20:35",
+      "pkts": [
+        6364,
+        7097
+      ],
+      "bytes": [
+        5552246,
+        1042956
+      ],
+      "rule": "312",
+      "id": "6803946b00000000/60bdd758",
+      "interface": "all"
+    },
+    {
+      "label": "f1c3c640b145e6d4f14eacc66fb62edb",
+      "descr": "let out anything from firewall host itself (force gw)",
+      "nat_addr": "10.0.8.4",
+      "nat_port": "54025",
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv4",
+      "flags": [
+        "allow-opts"
+      ],
+      "direction": "out",
+      "dst_addr": "142.251.211.14",
+      "dst_port": "443",
+      "src_addr": "68.47.7.163",
+      "src_port": "16355",
+      "state": "ESTABLISHED:ESTABLISHED",
+      "age": "100:36:26",
+      "expires": "20:20:35",
+      "pkts": [
+        6364,
+        7097
+      ],
+      "bytes": [
+        5552246,
+        1042956
+      ],
+      "rule": "243",
+      "id": "6903946b00000000/60bdd758",
+      "route-to": "68.47.6.1@ax1",
+      "interface": "all"
+    },
+    {
+      "label": "9c21d7f4-0a59-43af-8433-532c1dcdf96f",
+      "descr": "Default allow LAN to any rule",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv6",
+      "flags": [
+        "random-id"
+      ],
+      "direction": "in",
+      "dst_addr": "2607:f740:e::811",
+      "dst_port": "443",
+      "src_addr": "2601:441:8483:b502:88c9:a90b:cd01:2f1e",
+      "src_port": "50748",
+      "state": "ESTABLISHED:ESTABLISHED",
+      "age": "99:04:56",
+      "expires": "21:10:36",
+      "pkts": [
+        568,
+        416
+      ],
+      "bytes": [
+        117211,
+        44031
+      ],
+      "rule": "309",
+      "id": "3d04966b00000000/60bdd758",
+      "interface": "all"
+    },
+    {
+      "label": "0ba5c7fa9c6ee16f16eae087ee5bdb03",
+      "descr": "let out anything from firewall host itself",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv6",
+      "flags": [
+        "allow-opts"
+      ],
+      "direction": "out",
+      "dst_addr": "2607:f740:e::811",
+      "dst_port": "443",
+      "src_addr": "2601:441:8483:b502:88c9:a90b:cd01:2f1e",
+      "src_port": "50748",
+      "state": "ESTABLISHED:ESTABLISHED",
+      "age": "99:04:56",
+      "expires": "21:10:36",
+      "pkts": [
+        569,
+        416
+      ],
+      "bytes": [
+        117663,
+        44031
+      ],
+      "rule": "239",
+      "id": "3e04966b00000000/60bdd758",
+      "interface": "all"
+    },
+    {
+      "label": "7eba7aad-cad1-48d7-83ba-24abb39bac19",
+      "descr": "",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv6",
+      "flags": [
+        "random-id"
+      ],
+      "direction": "in",
+      "dst_addr": "2601:441:8483:b503::3",
+      "dst_port": "9993",
+      "src_addr": "2601:441:8483:b501::31",
+      "src_port": "56248",
+      "state": "CLOSED:SYN_SENT",
+      "age": "00:55:12",
+      "expires": "00:04:48",
+      "pkts": [
+        1,
+        1
+      ],
+      "bytes": [
+        80,
+        128
+      ],
+      "rule": "246",
+      "id": "40051e6c00000000/60bdd758",
+      "interface": "all"
+    },
+    {
+      "label": "0ba5c7fa9c6ee16f16eae087ee5bdb03",
+      "descr": "let out anything from firewall host itself",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv6",
+      "flags": [
+        "allow-opts"
+      ],
+      "direction": "out",
+      "dst_addr": "2601:441:8483:b503::3",
+      "dst_port": "9993",
+      "src_addr": "2601:441:8483:b501::31",
+      "src_port": "56248",
+      "state": "SYN_SENT:CLOSED",
+      "age": "00:55:12",
+      "expires": "00:04:48",
+      "pkts": [
+        1,
+        1
+      ],
+      "bytes": [
+        80,
+        128
+      ],
+      "rule": "239",
+      "id": "41051e6c00000000/60bdd758",
+      "interface": "all"
+    },
+    {
+      "label": "7eba7aad-cad1-48d7-83ba-24abb39bac19",
+      "descr": "",
+      "nat_addr": null,
+      "nat_port": null,
+      "gateway": null,
+      "iface": "all",
+      "proto": "tcp",
+      "ipproto": "ipv4",
+      "flags": [
+        "random-id"
+      ],
+      "direction": "in",
+      "dst_addr": "10.0.10.15",
+      "dst_port": "443",
+      "src_addr": "192.168.10.3",
+      "src_port": "59623",
+      "state": "ESTABLISHED:ESTABLISHED",
+      "age": "17:51:13",
+      "expires": "102:10:49",
+      "pkts": [
+        23,
+        24
+      ],
+      "bytes": [
+        3557,
+        9784
+      ],
+      "rule": "245",
+      "id": "c305086c00000000/60bdd758",
+      "interface": "all"
+    }
+  ],
+  "rowCount": 10,
+  "total": 6183,
+  "current": 1
+}
