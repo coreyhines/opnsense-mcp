@@ -65,6 +65,7 @@ from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
 from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
+from opnsense_mcp.tools.toggle_dhcp_range import ToggleDhcpRangeTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
 from opnsense_mcp.utils.env import load_opnsense_env
 
@@ -84,6 +85,7 @@ def build_mcp_server() -> FastMCP:
     list_dhcp_hosts_tool = ListDhcpHostsTool(client)
     rm_dhcp_host_tool = RmDhcpHostTool(client)
     mk_dhcp_host_tool = MkDhcpHostTool(client)
+    toggle_dhcp_range_tool = ToggleDhcpRangeTool(client)
     lldp_tool = LLDPTool(client)
     system_tool = SystemTool(client)
     fw_rules_tool = FwRulesTool(client)
@@ -251,6 +253,26 @@ def build_mcp_server() -> FastMCP:
                 "client_id": client_id,
                 "descr": descr,
                 "domain": domain,
+                "apply": apply,
+            }
+        )
+        return str(result)
+
+    @mcp.tool()
+    async def toggle_dhcp_range(
+        enabled: bool,
+        interface: str | None = None,
+        subnet: str | None = None,
+        uuid: str | None = None,
+        apply: bool = False,
+    ) -> str:
+        """Enable or disable a dnsmasq DHCP range on OPNsense."""
+        result = await toggle_dhcp_range_tool.execute(
+            {
+                "enabled": enabled,
+                "interface": interface,
+                "subnet": subnet,
+                "uuid": uuid,
                 "apply": apply,
             }
         )
