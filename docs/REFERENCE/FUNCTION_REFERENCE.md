@@ -229,6 +229,11 @@ ssh_fw_rule description="Emergency block" action="block" source_net="192.168.1.1
 - `src_ip` (optional): Filter by source IP address
 - `dst_ip` (optional): Filter by destination IP address
 - `protocol` (optional): Filter by protocol (tcp, udp, icmp)
+- `src_port` (optional): Filter by source port
+- `dst_port` (optional): Filter by destination port
+- `interface` (optional): Filter by firewall log interface
+- `include_rules` (optional): Correlate top log rules to configured rules (default: false)
+- `summary_only` (optional): Return analysis without full log rows (default: false)
 
 **Quick Example**:
 ```bash
@@ -243,6 +248,54 @@ get_logs dst_port="22" protocol="tcp"
 ```
 
 **What it returns**: Firewall log entries with timestamps, source/destination, actions, and protocols.
+
+---
+
+### `pf_states` - Active PF State Table
+**Purpose**: Lists active PF connection-tracking states with endpoint, protocol, interface, state, byte, and packet data.
+
+**Use Case**: Determine whether a flow is currently established, identify top talkers, and inspect live state-table pressure before changing rules.
+
+**Parameters**:
+- `src_ip` (optional): Filter by exact source IP
+- `dst_ip` (optional): Filter by exact destination IP
+- `ip` (optional): Match either endpoint
+- `protocol` (optional): Filter by protocol (tcp, udp, icmp, etc.)
+- `src_port` (optional): Filter by source port
+- `dst_port` (optional): Filter by destination port
+- `interface` (optional): Filter by interface
+- `state` (optional): Filter by state substring
+- `limit` (optional): Maximum rows to fetch (default: 100, capped at 5000)
+- `summary` (optional): Include aggregate summary (default: true)
+
+**Quick Example**:
+```bash
+# Show active states for one host
+pf_states ip="10.0.8.10" limit=50
+
+# Show current TCP/443 states
+pf_states protocol="tcp" dst_port=443 summary=true
+```
+
+**What it returns**: Normalized state rows plus protocol/interface/source/destination/port summaries and table pressure metadata.
+
+---
+
+### `pf_statistics` - PF Statistics and State Table Pressure
+**Purpose**: Shows PF statistics when available and always reports state-table pressure from OPNsense metadata.
+
+**Use Case**: Check state-table capacity and PF health without SSH or packet capture.
+
+**Parameters**:
+- `include_raw` (optional): Include raw API payload for parser debugging (default: false)
+
+**Quick Example**:
+```bash
+# Show PF state table pressure
+pf_statistics
+```
+
+**What it returns**: State-table current/limit/usage health, PF counters when the API provides them, and warnings when detailed stats are unavailable.
 
 ---
 
@@ -294,6 +347,32 @@ interface_list
 ```
 
 **What it returns**: List of available interfaces with their names and descriptions.
+
+---
+
+### `interface_health` - Interface Health Summary
+**Purpose**: Summarizes interface status, counters, VLAN/bridge relationships, SFP metadata, and suspicious findings.
+
+**Use Case**: Quickly find down, erroring, anomalous, or relationship-problem interfaces without reading the full `interface_list` payload.
+
+**Parameters**:
+- `interface` (optional): Match device name, identifier, or description
+- `include_down` (optional): Include down/unassigned interfaces (default: true)
+- `include_raw` (optional): Include raw interface rows for debugging (default: false)
+- `warnings_only` (optional): Return only warning/critical rows (default: false)
+- `sort_by` (optional): `severity`, `name`, `traffic`, or `errors` (default: severity)
+- `max_results` (optional): Maximum returned rows (default: 50, capped at 200)
+
+**Quick Example**:
+```bash
+# Show only interfaces with warnings or critical findings
+interface_health warnings_only=true
+
+# Inspect WAN health and include source data for debugging
+interface_health interface="WAN" include_raw=true
+```
+
+**What it returns**: Compact interface health rows with findings, key counters, relationships, summary counts, and truncation metadata.
 
 ---
 

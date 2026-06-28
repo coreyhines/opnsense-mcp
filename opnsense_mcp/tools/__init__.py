@@ -7,10 +7,12 @@ from .firewall import FirewallTool
 from .fw_rules import FwRulesTool
 from .get_logs import FirewallLogsTool, GetLogsTool
 from .interface import InterfaceTool
+from .interface_health import InterfaceHealthTool
 from .interface_list import InterfaceListTool
 from .lldp import LLDPTool
 from .mkfw_rule import MkfwRuleTool
 from .packet_capture import PacketCaptureTool2
+from .pf_diagnostics import PfStatesTool, PfStatisticsTool
 from .rmfw_rule import RmfwRuleTool
 from .system import SystemTool
 
@@ -23,6 +25,9 @@ TOOL_CLASSES = {
     "lldp": LLDPTool,
     "interface": InterfaceTool,
     "interface_list": InterfaceListTool,
+    "interface_health": InterfaceHealthTool,
+    "pf_states": PfStatesTool,
+    "pf_statistics": PfStatisticsTool,
     "firewall": FirewallTool,
     "fw_rules": FwRulesTool,
     "get_logs": GetLogsTool,
@@ -54,9 +59,12 @@ __all__ = [
     "FirewallLogsTool",
     "InterfaceTool",
     "InterfaceListTool",
+    "InterfaceHealthTool",
     "LLDPTool",
     "MkfwRuleTool",
     "RmfwRuleTool",
     "SystemTool",
     "PacketCaptureTool2",
+    "PfStatesTool",
+    "PfStatisticsTool",
 ] + list(TOOL_CLASSES.keys())

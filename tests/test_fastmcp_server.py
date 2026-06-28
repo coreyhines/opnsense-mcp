@@ -41,6 +41,7 @@ async def test_fastmcp_server_lists_tools():
         "rmfw_rule",
         "ssh_fw_rule",
         "interface_list",
+        "interface_health",
         "packet_capture",
         "dns",
         "mkdns",
@@ -51,6 +52,8 @@ async def test_fastmcp_server_lists_tools():
         "aliases",
         "gateway_status",
         "get_logs",
+        "pf_states",
+        "pf_statistics",
         "list_shaper_pipes",
         "get_shaper_pipe",
         "list_shaper_queues",
@@ -67,7 +70,7 @@ async def test_fastmcp_server_lists_tools():
 
 @pytest.mark.asyncio
 async def test_fastmcp_server_tool_count():
-    """Server must expose exactly 52 tools."""
+    """Server must expose exactly 55 tools."""
     from fastmcp.client import Client
 
     from opnsense_mcp.fastmcp_server import build_mcp_server
@@ -76,7 +79,7 @@ async def test_fastmcp_server_tool_count():
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    assert len(tools) == 52
+    assert len(tools) == 55
 
 
 def test_main_argparser_accepts_transport():
