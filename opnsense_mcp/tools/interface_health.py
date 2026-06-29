@@ -48,7 +48,16 @@ class InterfaceHealthTool:
         include_raw = bool(params.get("include_raw", False))
         warnings_only = bool(params.get("warnings_only", False))
         sort_by = str(params.get("sort_by") or "severity")
-        requested_max = int(params.get("max_results", 50) or 50)
+        raw_max = params.get("max_results", 50)
+        try:
+            requested_max = int(raw_max or 50)
+        except (TypeError, ValueError):
+            return {
+                "status": "error",
+                "error": f"invalid max_results: {raw_max!r}",
+                "interfaces": [],
+                "summary": {},
+            }
         max_results = max(1, min(requested_max, 200))
 
         rows = [

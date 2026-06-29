@@ -64,14 +64,8 @@ class RmfwRuleTool:
             }
 
         try:
-            # Delete the rule
-            result = await self.client.delete_firewall_rule(rule_uuid)
-
-            if not result.get("success", False):
-                return {
-                    "status": "error",
-                    "error": f"Failed to delete rule: {result.get('error', 'Unknown error')}",
-                }
+            # delete_firewall_rule raises on API failure; success is {"result": "success"}
+            await self.client.delete_firewall_rule(rule_uuid)
 
             # Apply changes if requested (default: true)
             apply_changes = params.get("apply", True)
