@@ -82,8 +82,12 @@ class PfStatesTool:
 
         src_port_raw = params.get("src_port")
         dst_port_raw = params.get("dst_port")
-        src_port = int(src_port_raw) if src_port_raw is not None else None
-        dst_port = int(dst_port_raw) if dst_port_raw is not None else None
+        src_port = parse_int(src_port_raw) if src_port_raw is not None else None
+        dst_port = parse_int(dst_port_raw) if dst_port_raw is not None else None
+        if src_port_raw is not None and src_port is None:
+            return _error_envelope(f"invalid src_port: {src_port_raw!r}")
+        if dst_port_raw is not None and dst_port is None:
+            return _error_envelope(f"invalid dst_port: {dst_port_raw!r}")
 
         try:
             payload = await self.client.get_pf_states(limit)

@@ -219,6 +219,33 @@ def _parse_boolish(val: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def pipe_bandwidth_mbit(bandwidth: int | float, bandwidth_metric: str) -> float:
+    """Convert configured pipe bandwidth to Mbit/s for guardrail checks."""
+    from opnsense_mcp.utils.shaper_interpret import _metric_to_mbit
+
+    return _metric_to_mbit(float(bandwidth), bandwidth_metric)
+
+
+def collect_pipe_bandwidth_hints(
+    flat: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
+    """Return bandwidth guardrail hints using metric-aware Mbit conversion."""
+    bw_mbit = pipe_bandwidth_mbit(
+        flat.get("bandwidth", 0),
+        str(flat.get("bandwidth_metric") or "Mbit"),
+    )
+    line_rate = float(params.get("line_rate_mbit") or 10_000)
+    isp_rate = params.get("isp_rate_mbit")
+    isp_mbit = float(isp_rate) if isp_rate is not None else None
+    return validate_pipe_bandwidth(bw_mbit, line_rate, isp_rate_mbit=isp_mbit)
+
+
+def has_bandwidth_guardrail_error(hints: list[str]) -> bool:
+    """True when any hint is a blocking guardrail error."""
+    return any(h.startswith("error:") for h in hints)
+
+
 def validate_pipe_bandwidth(
     bandwidth_mbit: int | float,
     line_rate_mbit: int | float,
@@ -327,11 +354,8 @@ def pending_apply_fields(
     ``"applied"`` with the reconfigure result.  Otherwise marks the change as
     pending.
     """
-    if apply and reconfigure_result:
-        # Check for success in the reconfigure response
-        ok = reconfigure_result.get("status") == "ok" or (
-            isinstance(reconfigure_result, dict) and not reconfigure_result.get("error")
-        )
+    if apply and reconfigure_result is not None:
+        ok, _detail = shaper_api_result_ok(reconfigure_result)
         return {
             "applied": ok,
             "pending_changes": not ok,
@@ -394,6 +418,9 @@ __all__ = [
     "issue_delete_confirm_token",
     "validate_delete_confirm_token",
     "detect_idempotent_set",
+    "pipe_bandwidth_mbit",
+    "collect_pipe_bandwidth_hints",
+    "has_bandwidth_guardrail_error",
     "validate_pipe_bandwidth",
     "warn_lan_interface",
     "build_mutation_response",

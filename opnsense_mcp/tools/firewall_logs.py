@@ -4,7 +4,7 @@
 import logging
 from typing import Any
 
-from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.api import FirewallLogsFetchError, OPNsenseClient
 from opnsense_mcp.utils.firewall_log_normalize import (
     normalize_log_dict,
     normalize_logs,
@@ -61,7 +61,7 @@ class FirewallLogsTool:
         try:
             if not self.client:
                 logger.warning("No client available")
-                return []
+                raise FirewallLogsFetchError("No client available")
 
             logs = await self.client.get_firewall_logs(limit=limit)
 
@@ -93,9 +93,11 @@ class FirewallLogsTool:
                     return False
                 return not (interface and norm.get("interface") != interface)
 
-        except Exception:
+        except FirewallLogsFetchError:
+            raise
+        except Exception as exc:
             logger.exception("Failed to get firewall logs")
-            return []
+            raise FirewallLogsFetchError(str(exc)) from exc
         else:
             return [log for log in logs if match(log)]
 
@@ -292,16 +294,24 @@ class FirewallLogsTool:
             summary_only = bool(params.get("summary_only", False))
 
             # Get logs
-            logs = await self.get_firewall_logs(
-                limit=limit,
-                src_ip=src_ip,
-                dst_ip=dst_ip,
-                protocol=protocol,
-                action=action,
-                src_port=src_port,
-                dst_port=dst_port,
-                interface=interface,
-            )
+            try:
+                logs = await self.get_firewall_logs(
+                    limit=limit,
+                    src_ip=src_ip,
+                    dst_ip=dst_ip,
+                    protocol=protocol,
+                    action=action,
+                    src_port=src_port,
+                    dst_port=dst_port,
+                    interface=interface,
+                )
+            except FirewallLogsFetchError as exc:
+                return {
+                    "logs": [],
+                    "analysis": {},
+                    "status": "error",
+                    "error": str(exc),
+                }
 
             # Opt-in rule lookup — at most one call per execute, never on default path
             rules: list[dict[str, Any]] = []

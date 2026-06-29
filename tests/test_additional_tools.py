@@ -171,8 +171,9 @@ async def test_get_logs_tool_success_and_client_exception() -> None:
     client_error.get_firewall_logs.side_effect = RuntimeError("boom")
     error_tool = GetLogsTool(client_error)
     error_result = await error_tool.execute({"limit": 10})
-    assert error_result["status"] == "success"
+    assert error_result["status"] == "error"
     assert error_result["logs"] == []
+    assert "boom" in error_result["error"]
 
 
 @pytest.mark.asyncio

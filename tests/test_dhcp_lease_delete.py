@@ -142,6 +142,25 @@ class TestDHCPLeaseDeleteTool:
         assert "No client available" in result["error"]
 
     @pytest.mark.asyncio
+    async def test_execute_provider_error_response(self, tool, mock_client):
+        """Provider error dict without exception must not count as deleted."""
+        mock_client.get_dhcpv4_leases.return_value = [
+            {"ip": "192.168.1.100", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "test1"}
+        ]
+        mock_client.get_dhcpv6_leases.return_value = []
+        mock_client.delete_dhcpv4_lease.return_value = {
+            "status": "error",
+            "error": "Lease deletion not supported by dnsmasq backend",
+        }
+
+        result = await tool.execute({"ip": "192.168.1.100"})
+
+        assert result["status"] == "error"
+        assert result["deleted_leases"] == []
+        assert result["total_deleted"] == 0
+        assert len(result["errors"]) == 1
+
+    @pytest.mark.asyncio
     async def test_execute_api_error(self, tool, mock_client):
         """Test handling of API errors."""
         mock_client.get_dhcpv4_leases.return_value = [
