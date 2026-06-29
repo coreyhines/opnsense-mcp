@@ -163,6 +163,6 @@ Impact: existing `curl | bash` one-liners and manual installs now complete witho
 
 ## Related docs
 
-- [`deploy/README.md`](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/blob/main/deploy/README.md) — deployment quickstart
-- [`docs/CENTRALIZED_DEPLOY_SPEC.md`](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/blob/main/docs/CENTRALIZED_DEPLOY_SPEC.md) — full architecture and spec
-- [`deploy/install.sh`](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/blob/main/deploy/install.sh) — installer script
+- [`deploy/README.md`](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/blob/main/deploy/README.md) — deployment quickstart
+- [`docs/CENTRALIZED_DEPLOY_SPEC.md`](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/blob/main/docs/CENTRALIZED_DEPLOY_SPEC.md) — full architecture and spec
+- [`deploy/install.sh`](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/blob/main/deploy/install.sh) — installer script

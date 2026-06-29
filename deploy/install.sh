@@ -5,14 +5,14 @@
 #   sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh
 #
 # One-liner (auto tag from pyproject + git sha on main):
-#   curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | sudo bash
+#   curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/raw/main/deploy/install.sh' | sudo bash
 #
 # Local dev build (does not push):
 #   sudo OPNSENSE_MCP_IMAGE_TAG=dev-$(git rev-parse --short HEAD) bash deploy/install.sh --build-local
 #
 set -euo pipefail
 
-readonly DEFAULT_REPO_URL="${OPNSENSE_MCP_REPO_URL:-https://gitlab.freeblizz.com/coreyhines/opensense-mcp.git}"
+readonly DEFAULT_REPO_URL="${OPNSENSE_MCP_REPO_URL:-https://gitlab.freeblizz.com/coreyhines/opnsense-mcp.git}"
 readonly GIT_REF="${OPNSENSE_MCP_GIT_REF:-main}"
 readonly INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
 readonly SRC_DIR="${INSTALL_ROOT}/src"
