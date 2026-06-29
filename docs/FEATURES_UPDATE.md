@@ -6,7 +6,7 @@ Five pull requests landed in June 2026. This doc covers what changed, why it mat
 
 ## 1. Streamable HTTP Transport (MCP spec 2025-03-26)
 
-**PR:** [#20](https://github.com/coreyhines/opnsense-mcp/pull/20)  
+**Historical PR:** #20  
 **Commit:** `dd51949`
 
 ### What changed
@@ -44,7 +44,7 @@ Deployment scripts already default to Streamable HTTP; no manual flag is needed 
 
 ## 2. DHCP client_id (DUID) Support for Host Reservations
 
-**PR:** [#21](https://github.com/coreyhines/opnsense-mcp/pull/21)  
+**Historical PR:** #21  
 **Commit:** `82646d9`
 
 ### What changed
@@ -109,7 +109,7 @@ The helper script `deploy/ci/compute-image-tag.sh` reads `version` from `pyproje
 
 ## 4. hub.freeblizz.com Registry with Pinned Tags
 
-**PR:** [#23](https://github.com/coreyhines/opnsense-mcp/pull/23)  
+**Historical PR:** #23  
 **Commit:** `24f13d2`
 
 ### What changed
@@ -136,7 +136,7 @@ CI uses Kaniko to build and push images. A manual `deploy:strongpod` job is avai
 
 ## 5. Readonly Clash Fix in install.sh
 
-**PR:** [#24](https://github.com/coreyhines/opnsense-mcp/pull/24)  
+**Historical PR:** #24  
 **Commit:** `6845616`
 
 ### What changed
@@ -163,6 +163,6 @@ Impact: existing `curl | bash` one-liners and manual installs now complete witho
 
 ## Related docs
 
-- [`deploy/README.md`](https://github.com/coreyhines/opnsense-mcp/blob/main/deploy/README.md) — deployment quickstart
-- [`docs/CENTRALIZED_DEPLOY_SPEC.md`](https://github.com/coreyhines/opnsense-mcp/blob/main/docs/CENTRALIZED_DEPLOY_SPEC.md) — full architecture and spec
-- [`deploy/install.sh`](https://github.com/coreyhines/opnsense-mcp/blob/main/deploy/install.sh) — installer script
+- [`deploy/README.md`](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/blob/main/deploy/README.md) — deployment quickstart
+- [`docs/CENTRALIZED_DEPLOY_SPEC.md`](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/blob/main/docs/CENTRALIZED_DEPLOY_SPEC.md) — full architecture and spec
+- [`deploy/install.sh`](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/blob/main/deploy/install.sh) — installer script
