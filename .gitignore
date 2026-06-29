@@ -53,3 +53,6 @@ test_fixes.py
 working_demo.py
 config.py
 scripts/render_readme_demo_gif_agg.sh
+
+# Python build artifacts
+*.egg-info/

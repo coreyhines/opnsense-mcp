@@ -201,7 +201,7 @@ def find_ipv4_conflicts(
         addr = str(lease.get("address") or lease.get("ip") or "")
         if addr != target_ipv4:
             continue
-        lease_mac = str(lease.get("hwaddr") or "").lower()
+        lease_mac = str(lease.get("hwaddr") or lease.get("mac") or "").lower()
         if promote and lease_mac == promote:
             continue
         conflicts.append(

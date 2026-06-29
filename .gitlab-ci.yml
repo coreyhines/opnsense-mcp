@@ -126,7 +126,7 @@ pytest:
       --cov-report=xml:coverage.xml
       --cov-report=term
       --cov-fail-under=${PYTEST_COV_FAIL_UNDER}
-  coverage: '/Total coverage: (\d+(?:\.\d+)?%)/'
+  coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+%)/'
   artifacts:
     reports:
       coverage_report:

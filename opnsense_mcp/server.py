@@ -108,6 +108,38 @@ from opnsense_mcp.tools.rm_dhcp_host import RmDhcpHostTool
 from opnsense_mcp.tools.rmdns import RmdnsTool
 from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
 from opnsense_mcp.tools.set_fw_rule import SetFwRuleTool
+from opnsense_mcp.tools.shaper_audit import (
+    AuditShaperConfigTool,
+    ExplainShaperConfigTool,
+)
+from opnsense_mcp.tools.shaper_pipes import (
+    AddShaperPipeTool,
+    DeleteShaperPipeTool,
+    GetShaperPipeTool,
+    ListShaperPipesTool,
+    SetShaperPipeTool,
+    ToggleShaperPipeTool,
+)
+from opnsense_mcp.tools.shaper_presets import ApplyShaperPresetTool
+from opnsense_mcp.tools.shaper_queues import (
+    AddShaperQueueTool,
+    DeleteShaperQueueTool,
+    GetShaperQueueTool,
+    ListShaperQueuesTool,
+    SetShaperQueueTool,
+    ToggleShaperQueueTool,
+)
+from opnsense_mcp.tools.shaper_rules import (
+    AddShaperRuleTool,
+    DeleteShaperRuleTool,
+    GetShaperRuleTool,
+    ListShaperRulesTool,
+    SetShaperRuleTool,
+    ToggleShaperRuleTool,
+)
+from opnsense_mcp.tools.shaper_service import ApplyShaperTool, ShaperStatisticsTool
+from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
+from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
 from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.toggle_dhcp_range import ToggleDhcpRangeTool
@@ -228,8 +260,14 @@ async def handle_message(
     aliases_tool: AliasesTool,
     gateway_status_tool: GatewayStatusTool,
     toggle_dhcp_range_tool: ToggleDhcpRangeTool,
+    shaper_tools: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Handle incoming MCP messages and route them to appropriate tools."""
+    """Handle incoming MCP messages and route them to appropriate tools.
+
+    ``shaper_tools`` maps traffic-shaper tool names to instances so the stdio
+    server exposes the same surface as the FastMCP/HTTP server. It is keyword
+    optional for backward compatibility with existing direct callers/tests.
+    """
     method = message.get("method")
     msg_id = message.get("id")
 
@@ -911,6 +949,19 @@ async def handle_message(
                 "inputSchema": ToggleDhcpRangeTool.input_schema,
             },
         ]
+        if shaper_tools:
+            tools.extend(
+                {
+                    "name": name,
+                    "description": getattr(tool, "description", name),
+                    "inputSchema": getattr(
+                        tool,
+                        "input_schema",
+                        {"type": "object", "properties": {}, "required": []},
+                    ),
+                }
+                for name, tool in shaper_tools.items()
+            )
         return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}}
 
     # Support both tools/call and tool/call
@@ -1168,6 +1219,13 @@ async def handle_message(
                 "id": msg_id,
                 "result": {"content": [{"type": "text", "text": str(result)}]},
             }
+        if shaper_tools and tool_name in shaper_tools:
+            result = await shaper_tools[tool_name].execute(arguments)
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {"content": [{"type": "text", "text": str(result)}]},
+            }
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
@@ -1238,6 +1296,36 @@ def main() -> None:
     aliases_tool = AliasesTool(client)
     gateway_status_tool = GatewayStatusTool(client)
     toggle_dhcp_range_tool = ToggleDhcpRangeTool(client)
+
+    # Traffic-shaper tool surface (parity with FastMCP/HTTP server).
+    shaper_tool_instances: list[Any] = [
+        ListShaperPipesTool(client),
+        GetShaperPipeTool(client),
+        AddShaperPipeTool(client),
+        SetShaperPipeTool(client),
+        ToggleShaperPipeTool(client),
+        DeleteShaperPipeTool(client),
+        ListShaperQueuesTool(client),
+        GetShaperQueueTool(client),
+        AddShaperQueueTool(client),
+        SetShaperQueueTool(client),
+        ToggleShaperQueueTool(client),
+        DeleteShaperQueueTool(client),
+        ListShaperRulesTool(client),
+        GetShaperRuleTool(client),
+        AddShaperRuleTool(client),
+        SetShaperRuleTool(client),
+        ToggleShaperRuleTool(client),
+        DeleteShaperRuleTool(client),
+        GetShaperSettingsTool(client),
+        ShaperStatisticsTool(client),
+        ApplyShaperTool(client),
+        RestoreShaperSnapshotTool(client),
+        ApplyShaperPresetTool(client),
+        AuditShaperConfigTool(client),
+        ExplainShaperConfigTool(client),
+    ]
+    shaper_tools: dict[str, Any] = {t.name: t for t in shaper_tool_instances}
 
     # Handle stdin/stdout communication
     async def process_messages() -> None:
@@ -1312,6 +1400,7 @@ def main() -> None:
                     aliases_tool,
                     gateway_status_tool,
                     toggle_dhcp_range_tool,
+                    shaper_tools,
                 )
                 if response is not None:
                     sys.stdout.write(json.dumps(response) + "\n")
