@@ -73,6 +73,30 @@ def test_pending_apply_fields() -> None:
     assert pending["pending_changes"] is True
     applied = pending_apply_fields(True, {"status": "ok"})
     assert applied["applied"] is True
+    failed = pending_apply_fields(True, {"status": "failed"})
+    assert failed["applied"] is False
+    assert failed["pending_changes"] is True
+
+
+def test_pipe_bandwidth_mbit_gbit() -> None:
+    from opnsense_mcp.utils.shaper_write_helpers import pipe_bandwidth_mbit
+
+    assert pipe_bandwidth_mbit(1, "Gbit") == 1000.0
+
+
+def test_collect_pipe_bandwidth_hints_metric_aware() -> None:
+    from opnsense_mcp.utils.shaper_write_helpers import collect_pipe_bandwidth_hints
+
+    flat = {"bandwidth": 1, "bandwidth_metric": "Gbit"}
+    hints = collect_pipe_bandwidth_hints(flat, {"line_rate_mbit": 500})
+    assert any("error" in h for h in hints)
+
+
+def test_has_bandwidth_guardrail_error() -> None:
+    from opnsense_mcp.utils.shaper_write_helpers import has_bandwidth_guardrail_error
+
+    assert has_bandwidth_guardrail_error(["error: too big"]) is True
+    assert has_bandwidth_guardrail_error(["warning: high"]) is False
 
 
 def test_shaper_api_result_ok() -> None:

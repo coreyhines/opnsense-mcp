@@ -141,6 +141,10 @@ class APIError(Exception):
     """Base exception for OPNsense API errors."""
 
 
+class FirewallLogsFetchError(APIError):
+    """Raised when firewall logs cannot be retrieved."""
+
+
 class ConnectionError(APIError):
     """Raised when connection to OPNsense fails."""
 
@@ -526,7 +530,7 @@ class OPNsenseClient:
             response = await self._make_request(
                 "POST",
                 f"{ENDPOINTS['firewall']['set_rule']}/{uuid}",
-                json={"rule": rule_data},
+                json={"rule": _firewall_rule_inner_for_add_api(rule_data)},
             )
 
             if response.get("result") != "saved":
@@ -1024,8 +1028,9 @@ class OPNsenseClient:
         await self._ensure_firewall_log_endpoint()
 
         if not self.firewall_log_endpoint:
-            logger.warning("No working firewall log endpoint available")
-            return []
+            msg = "No working firewall log endpoint available"
+            logger.warning(msg)
+            raise FirewallLogsFetchError(msg)
 
         try:
             params = {"limit": limit} if limit else {}
@@ -1038,11 +1043,14 @@ class OPNsenseClient:
                 for key in ("logs", "data", "rows"):
                     if key in response and isinstance(response[key], list):
                         return response[key][:limit] if limit else response[key]
-            logger.warning(f"Unexpected firewall log response format: {response}")
-            return []
+            msg = f"Unexpected firewall log response format: {type(response).__name__}"
+            logger.warning(msg)
+            raise FirewallLogsFetchError(msg)
+        except FirewallLogsFetchError:
+            raise
         except Exception as e:
             logger.warning(f"Error fetching firewall logs: {e}")
-            return []
+            raise FirewallLogsFetchError(f"Error fetching firewall logs: {e}") from e
 
     async def get_pf_states(self: "OPNsenseClient", limit: int = 100) -> dict[str, Any]:
         """
