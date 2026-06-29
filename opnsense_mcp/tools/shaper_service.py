@@ -16,6 +16,7 @@ from opnsense_mcp.utils.shaper_interpret import (
     store_baseline,
 )
 from opnsense_mcp.utils.shaper_types import TOOL_STATUS_ERROR, make_tool_response
+from opnsense_mcp.utils.shaper_write_helpers import shaper_api_result_ok
 
 if TYPE_CHECKING:
     from opnsense_mcp.utils.api import OPNsenseClient
@@ -140,6 +141,18 @@ class ApplyShaperTool:
                 status=TOOL_STATUS_ERROR,
                 structured={"error": str(exc)},
                 summary=f"**Error:** {exc}",
+            )
+        ok, detail = shaper_api_result_ok(result)
+        if not ok:
+            msg = detail or "reconfigure failed"
+            return make_tool_response(
+                status=TOOL_STATUS_ERROR,
+                structured={
+                    "reconfigure_result": result,
+                    "applied": False,
+                    "error": msg,
+                },
+                summary=f"**Error:** Traffic shaper reconfigure failed — {msg}",
             )
         return make_tool_response(
             status=TOOL_STATUS_SUCCESS,

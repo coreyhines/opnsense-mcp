@@ -101,6 +101,16 @@ class DHCPLeaseDeleteTool:
 
         return matching_leases
 
+    @staticmethod
+    def _lease_delete_succeeded(response: Any) -> bool:
+        """Return True when a DHCP provider delete response indicates success."""
+        if not isinstance(response, dict):
+            return False
+        status = str(response.get("status", "")).lower()
+        if status in {"error", "failed", "failure"}:
+            return False
+        return not response.get("error")
+
     async def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         Execute DHCP lease deletion.
@@ -152,6 +162,14 @@ class DHCPLeaseDeleteTool:
                     try:
                         # Delete IPv4 lease
                         response = await self.client.delete_dhcpv4_lease(lease_ip)
+                        if not self._lease_delete_succeeded(response):
+                            error_msg = (
+                                f"Failed to delete IPv4 lease {lease_ip}: "
+                                f"{response.get('error', response)}"
+                            )
+                            errors.append(error_msg)
+                            logger.error(error_msg)
+                            continue
                         deleted_leases.append(
                             {
                                 "ip": lease_ip,
@@ -174,6 +192,14 @@ class DHCPLeaseDeleteTool:
                     try:
                         # Delete IPv6 lease
                         response = await self.client.delete_dhcpv6_lease(lease_ip)
+                        if not self._lease_delete_succeeded(response):
+                            error_msg = (
+                                f"Failed to delete IPv6 lease {lease_ip}: "
+                                f"{response.get('error', response)}"
+                            )
+                            errors.append(error_msg)
+                            logger.error(error_msg)
+                            continue
                         deleted_leases.append(
                             {
                                 "ip": lease_ip,

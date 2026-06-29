@@ -28,10 +28,11 @@ from opnsense_mcp.utils.shaper_types import (
     make_tool_response,
 )
 from opnsense_mcp.utils.shaper_write_helpers import (
+    collect_pipe_bandwidth_hints,
     detect_idempotent_set,
+    has_bandwidth_guardrail_error,
     issue_delete_confirm_token,
     validate_delete_confirm_token,
-    validate_pipe_bandwidth,
 )
 
 if TYPE_CHECKING:
@@ -323,11 +324,14 @@ class AddShaperPipeTool:
             )
         apply = bool(params.get("apply", True))
         flat = _flat_pipe_from_params(params)
-        hints = validate_pipe_bandwidth(
-            flat.get("bandwidth", 0),
-            float(params.get("line_rate_mbit") or 10_000),
-            isp_rate_mbit=params.get("isp_rate_mbit"),
-        )
+        hints = collect_pipe_bandwidth_hints(flat, params)
+        if has_bandwidth_guardrail_error(hints):
+            return make_tool_response(
+                status=TOOL_STATUS_ERROR,
+                structured={"error": "bandwidth guardrail", "pipe": flat},
+                summary="**Error:** Pipe bandwidth exceeds configured limits.",
+                hints=hints,
+            )
         try:
             snapshot_id = await mutation_snapshot_for_tool(
                 self.client,
@@ -421,6 +425,14 @@ class SetShaperPipeTool:
             ):
                 if key in params and params[key] is not None:
                     proposed[key] = params[key]  # type: ignore[index]
+            hints = collect_pipe_bandwidth_hints(proposed, params)
+            if has_bandwidth_guardrail_error(hints):
+                return make_tool_response(
+                    status=TOOL_STATUS_ERROR,
+                    structured={"error": "bandwidth guardrail", "pipe": proposed},
+                    summary="**Error:** Pipe bandwidth exceeds configured limits.",
+                    hints=hints,
+                )
             if detect_idempotent_set(existing_flat, proposed):
                 return make_tool_response(
                     status=TOOL_STATUS_WARNING,
