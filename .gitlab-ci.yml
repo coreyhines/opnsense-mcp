@@ -261,6 +261,12 @@ build:image:
   timeout: 30m
   tags:
     - strongpod
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+      - script_failure
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
@@ -291,6 +297,7 @@ build:image:
       --build-arg "GIT_COMMIT=${CI_COMMIT_SHORT_SHA}"
       --build-arg "GIT_REF=${CI_COMMIT_REF_NAME}"
       --build-arg "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      --push-retry 3
       --destination "${OPNSENSE_MCP_IMAGE}:${OPNSENSE_MCP_IMAGE_TAG}"
   artifacts:
     reports:
