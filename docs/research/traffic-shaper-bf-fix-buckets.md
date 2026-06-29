@@ -8,10 +8,10 @@
 
 | Wave | ID | Fix | GitLab | Status |
 |------|-----|-----|--------|--------|
-| 1 | **BF1a** | Shaper write POST: `{pipe\|queue\|rule}` wrapper + string enums | [#4](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/4) | Done |
-| 1 | **BF1b** | `SCHEDULER_DRIFT` false positive when FQ-CoDel flowset layout OK (OPNsense #8572) | [#5](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/5) | Done |
+| 1 | **BF1a** | Shaper write POST: `{pipe\|queue\|rule}` wrapper + string enums | [#4](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/4) | Done |
+| 1 | **BF1b** | `SCHEDULER_DRIFT` false positive when FQ-CoDel flowset layout OK (OPNsense #8572) | [#5](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/5) | Done |
 | 2 | **BF2a** | Deploy runbook: recreate containers after image tag change | — | Done |
-| 2 | **BF2b** | MCP-first rule: file GitLab issues before bypass | [#6](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/6) | Done |
+| 2 | **BF2b** | MCP-first rule: file GitLab issues before bypass | [#6](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/6) | Done |
 | 3 | **BF3** | Unit tests + live MCP re-smoke | — | In progress |
 
 ## Still open (not in this pass)

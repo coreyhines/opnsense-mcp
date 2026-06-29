@@ -44,7 +44,7 @@ Single planning/implementation reference for the **network service** path. **IDE
 ## Installer (v1)
 
 - **Scripts:** `deploy/install.sh`, `deploy/uninstall.sh` (run as **root**).
-- **Default clone URL (GitLab):** `https://gitlab.freeblizz.com/coreyhines/opensense-mcp.git` — override with **`OPNSENSE_MCP_REPO_URL`**.
+- **Default clone URL (GitLab):** `https://gitlab.freeblizz.com/coreyhines/opnsense-mcp.git` — override with **`OPNSENSE_MCP_REPO_URL`**.
 - **Default git ref:** **`main`** (override with **`OPNSENSE_MCP_GIT_REF`** for forks or release branches).
 - **Install root:** **`OPNSENSE_MCP_INSTALL_ROOT`** (default **`/opt/containerdata/opnsense-mcp`**); checkout lives at **`$INSTALL_ROOT/src`** (config templates only; app runs from registry image).
 - **Image (Podman):** **`OPNSENSE_MCP_IMAGE_REPO`** (default **`hub.freeblizz.com/opnsense-mcp`**) and **`OPNSENSE_MCP_IMAGE_TAG`** (**required**, semver **`X.Y.Z`** or **`X.Y.Z-dev.<sha>`**; not **`latest`**). Omit **`OPNSENSE_MCP_IMAGE_TAG`** to auto-select via **`deploy/ci/compute-image-tag.sh`**.
@@ -53,7 +53,7 @@ Single planning/implementation reference for the **network service** path. **IDE
 - **Docker:** `deploy/install.sh --runtime docker` runs **`docker compose -p opnsense-mcp -f deploy/docker-compose.yml up -d --build`** from the checkout.
 - **One-liner (raw script on `main`):**
   ```bash
-  curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/raw/main/deploy/install.sh' | sudo bash
+  curl -fsSL 'https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/raw/main/deploy/install.sh' | sudo bash
   ```
   (Installer auto-selects `$(pyproject version)-dev.<short-sha>` when **`OPNSENSE_MCP_IMAGE_TAG`** is unset.)
 - **Uninstall:** `sudo bash deploy/uninstall.sh` (from checkout) or copy the script to the host. **Docker:** `--runtime docker`. Optional **`--purge-env`** removes **`$INSTALL_ROOT/environment`**.

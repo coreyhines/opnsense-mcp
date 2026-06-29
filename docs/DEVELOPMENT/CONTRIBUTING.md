@@ -17,7 +17,7 @@ Thank you for your interest in contributing to the OPNsense MCP Server! This gui
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/your-username/opnsense-mcp.git
+   git clone https://gitlab.freeblizz.com/coreyhines/opnsense-mcp.git
    cd opnsense-mcp
    ```
 

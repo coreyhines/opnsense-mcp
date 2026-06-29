@@ -1,6 +1,6 @@
 # Diagnostics features — Phase 0 session (2026-06-28)
 
-GitLab issues: [#7](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/7) PF states/stats, [#8](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/8) log analysis, [#9](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/9) interface health.
+GitLab issues: [#7](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/7) PF states/stats, [#8](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/8) log analysis, [#9](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/9) interface health.
 
 ## Verdict
 
