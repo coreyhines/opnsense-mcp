@@ -100,7 +100,7 @@ Execution mode: mixed backend review wave plus Cursor inline synthesis
 
 19. GitLab coverage regex never matches pytest-cov term output, so GitLab coverage tracking is silently broken.
 20. `requirements.txt` is not in sync with `pyproject.toml` for `pydantic-settings`.
-21. `deploy/install.sh` uses the `opensense-mcp` typo in default repository URLs.
+21. ~~`deploy/install.sh` uses the `opensense-mcp` typo in default repository URLs.~~ Fixed: GitLab project renamed to `opnsense-mcp`; installer URLs updated.
 22. `gitleaks` scans `main` history instead of feature-branch deltas.
 23. Several deployment and scanner images are floating tags or otherwise inconsistent.
 24. `MCP_SECRET_KEY` has a default but is not enforced by the runtime.

@@ -1,7 +1,7 @@
 # Diagnostics MCP features — bucket plan (#7 + #8 + #9)
 
 Generated: 2026-06-28  
-Specs: GitLab [#7](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/7), [#8](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/8), [#9](https://gitlab.freeblizz.com/coreyhines/opensense-mcp/-/work_items/9) (v2 in issue comments)  
+Specs: GitLab [#7](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/7), [#8](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/8), [#9](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/work_items/9) (v2 in issue comments)  
 Phase 0: [diagnostics-features-phase0-session-2026-06-28.md](diagnostics-features-phase0-session-2026-06-28.md)  
 Integration branch: `feat/diagnostics-mcp`  
 Coordination skill: Parallel Buckets v0.1.0
