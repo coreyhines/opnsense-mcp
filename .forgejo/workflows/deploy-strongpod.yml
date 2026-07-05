@@ -1,0 +1,43 @@
+name: Deploy to strongpod
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (e.g. 1.0.0-dev.abcd1234)"
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ansible-net10
+    container:
+      image: docker.io/library/alpine:3.22.0
+    environment:
+      name: strongpod
+      url: https://opnsense-mcp.freeblizz.com/mcp
+    steps:
+      - name: Install git, node, and ssh client
+        # actions/checkout is a Node-based action; this plain alpine image
+        # has neither by default.
+        run: apk add --no-cache git nodejs openssh-client bash
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Deploy
+        env:
+          OPNSENSE_MCP_DEPLOY_SSH_KEY_B64: ${{ secrets.OPNSENSE_MCP_DEPLOY_SSH_KEY_B64 }}
+          OPNSENSE_MCP_DEPLOY_HOST: ${{ secrets.OPNSENSE_MCP_DEPLOY_HOST }}
+          OPNSENSE_MCP_IMAGE_TAG: ${{ inputs.image_tag }}
+          # Optional. Same repo variable as ci.yml's build job; leave unset
+          # to deploy the bare local image name.
+          REGISTRY: ${{ vars.OPNSENSE_MCP_REGISTRY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${REGISTRY:-}" ]; then
+            OPNSENSE_MCP_IMAGE_REPO="${REGISTRY}/opnsense-mcp"
+          else
+            OPNSENSE_MCP_IMAGE_REPO="opnsense-mcp"
+          fi
+          bash deploy/ci/ssh-setup.sh
+          scp -o StrictHostKeyChecking=no deploy/ci/deploy-strongpod.sh \
+            "${OPNSENSE_MCP_DEPLOY_USER:-root}@${OPNSENSE_MCP_DEPLOY_HOST}:/tmp/opnsense-mcp-deploy.sh"
+          ssh -o StrictHostKeyChecking=no "${OPNSENSE_MCP_DEPLOY_USER:-root}@${OPNSENSE_MCP_DEPLOY_HOST}" \
+            "sudo env OPNSENSE_MCP_IMAGE_REPO=${OPNSENSE_MCP_IMAGE_REPO} OPNSENSE_MCP_IMAGE_TAG=${OPNSENSE_MCP_IMAGE_TAG} bash /tmp/opnsense-mcp-deploy.sh"

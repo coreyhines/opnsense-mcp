@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ruff:
+    runs-on: ansible-net10
+    container:
+      image: docker.io/library/python:3.12-alpine
+    steps:
+      - name: Install git and node
+        # actions/checkout is a Node-based action; these plain Python images
+        # have neither by default.
+        run: apk add --no-cache git nodejs
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install ruff
+        run: pip install --quiet ruff
+      - name: Ruff check
+        run: |
+          ruff check .
+          ruff format --check .
+
+  pytest:
+    runs-on: ansible-net10
+    container:
+      image: docker.io/library/python:3.12-bookworm
+    steps:
+      - name: Install git and node
+        # actions/checkout is a Node-based action; these plain Python images
+        # have neither by default.
+        run: apt-get update && apt-get install -y --no-install-recommends git nodejs
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install dependencies
+        run: pip install --quiet -r requirements.txt -r requirements-dev.txt
+      - name: Run tests
+        run: |
+          pytest tests/ -q --tb=short \
+            --cov=opnsense_mcp \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term \
+            --cov-fail-under=40
+      # Coverage artifact upload is a known follow-up: upload-artifact@v4
+      # fails against this Forgejo instance (investigated separately from
+      # the core lint/test/build/deploy path).
+
+  build_image:
+    needs: [ruff, pytest]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ansible-net10
+    container:
+      image: quay.io/buildah/stable:v1.38
+      # --device /dev/fuse requires the runner's container.privileged: true
+      # (set in config.yml on both strongpod and fedora1 runners).
+      options: --privileged --device /dev/fuse
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      image: ${{ steps.build.outputs.image }}
+    steps:
+      - name: Install git and node
+        # actions/checkout is a Node-based action; buildah/stable has
+        # neither by default.
+        run: dnf install -y git nodejs
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Compute image tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            export CI_COMMIT_TAG="${{ github.ref_name }}"
+          fi
+          export CI_COMMIT_SHORT_SHA="$(git rev-parse --short HEAD)"
+          TAG="$(bash deploy/ci/compute-image-tag.sh)"
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+      - name: Build and push
+        id: build
+        env:
+          # Optional. Set the repo variable OPNSENSE_MCP_REGISTRY (e.g.
+          # hub.freeblizz.com) to push a built image; leave unset to build
+          # locally only (no push).
+          REGISTRY: ${{ vars.OPNSENSE_MCP_REGISTRY }}
+          HUB_FREEBLIZZ_USER: ${{ secrets.HUB_FREEBLIZZ_USER }}
+          HUB_FREEBLIZZ_PASSWORD: ${{ secrets.HUB_FREEBLIZZ_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${REGISTRY:-}" ]; then
+            IMAGE="${REGISTRY}/opnsense-mcp:${{ steps.tag.outputs.image_tag }}"
+          else
+            IMAGE="opnsense-mcp:${{ steps.tag.outputs.image_tag }}"
+          fi
+          buildah build \
+            -f deploy/Containerfile \
+            --build-arg GIT_COMMIT="$(git rev-parse --short HEAD)" \
+            --build-arg GIT_REF="${{ github.ref_name }}" \
+            --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -t "${IMAGE}" .
+          if [ -n "${REGISTRY:-}" ]; then
+            if [ -n "${HUB_FREEBLIZZ_USER:-}" ] && [ -n "${HUB_FREEBLIZZ_PASSWORD:-}" ]; then
+              buildah login -u "${HUB_FREEBLIZZ_USER}" -p "${HUB_FREEBLIZZ_PASSWORD}" "${REGISTRY}"
+            fi
+            buildah push "${IMAGE}"
+          else
+            echo "OPNSENSE_MCP_REGISTRY not set; built ${IMAGE} locally, not pushed."
+          fi
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
