@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 class InterfaceListTool:
     """Tool for getting available firewall interface names."""
 
+    name = "interface_list"
+    description = "Get available interface names for firewall rules"
+    input_schema = {"properties": {}, "required": [], "type": "object"}
+
     def __init__(self, client: OPNsenseClient | None) -> None:
         """
         Initialize the interface list tool.

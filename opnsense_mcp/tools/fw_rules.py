@@ -112,6 +112,37 @@ class FirewallRule(BaseModel):
 class FwRulesTool:
     """Tool for retrieving and managing firewall rules in OPNsense."""
 
+    name = "fw_rules"
+    description = "Get firewall rules exposed by the OPNsense Firewall Automation API (Firewall → Automation). Rules that exist only under the classic Firewall → Rules UI may not appear here; see OPNsense API docs. Returns the current rule set for context and reasoning."
+    input_schema = {
+        "properties": {
+            "action": {
+                "description": "Filter by action (pass, block, reject, etc.)",
+                "optional": True,
+                "type": "string",
+            },
+            "enabled": {
+                "description": "Filter by enabled status",
+                "optional": True,
+                "type": "boolean",
+            },
+            "interface": {
+                "description": "Filter by interface name "
+                "(supports partial matching and "
+                "groups)",
+                "optional": True,
+                "type": "string",
+            },
+            "protocol": {
+                "description": "Filter by protocol (tcp, udp, icmp, etc.)",
+                "optional": True,
+                "type": "string",
+            },
+        },
+        "required": [],
+        "type": "object",
+    }
+
     def __init__(self, client: OPNsenseClient | MockOPNsenseClient | None) -> None:
         """
         Initialize the firewall rules tool.

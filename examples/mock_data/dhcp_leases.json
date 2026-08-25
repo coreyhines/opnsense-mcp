@@ -1,0 +1,27 @@
+{
+    "v4": [
+        {
+            "address": "10.0.8.80",
+            "hwaddr": "aa:bb:cc:dd:ee:01",
+            "hostname": "host1.example.com",
+            "if": "ax0_vlan81",
+            "state": "active"
+        },
+        {
+            "address": "10.0.8.81",
+            "hwaddr": "aa:bb:cc:dd:ee:02",
+            "hostname": "host2.example.com",
+            "if": "ax0_vlan81",
+            "state": "active"
+        }
+    ],
+    "v6": [
+        {
+            "address": "2001:db8:1e5:b508::80",
+            "duid": "00:01:00:01:aa:bb:cc:dd:ee:01",
+            "hostname": "host1.example.com",
+            "if": "ax0_vlan81",
+            "state": "active"
+        }
+    ]
+}

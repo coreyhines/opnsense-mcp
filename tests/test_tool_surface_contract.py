@@ -30,22 +30,18 @@ from tests.tool_surface import (
     load_golden,
 )
 
-# Classes a registry cannot emit as-is, because they carry no name, description
-# or input_schema. Wave 2b step 1 retrofits them; this list shrinks as it does,
-# and must never grow.
+# Classes with no name/description/input_schema. These are deliberately not
+# exposed as tools, so a registry keyed on `name` skips them:
+#   FirewallLogsTool  base class that GetLogsTool extends
+#   FirewallTool      legacy, referenced only by tools/__init__.TOOL_CLASSES
+#   InterfaceTool     legacy, its get_interface_configuration returns {}
+# Asserted as an exact set: a new tool class landing without metadata fails
+# here rather than going missing after the dispatch rewrite.
 KNOWN_MISSING_METADATA = frozenset(
     {
-        "ARPTool",
         "FirewallLogsTool",
         "FirewallTool",
-        "FwRulesTool",
-        "GetLogsTool",
-        "InterfaceHealthTool",
-        "InterfaceListTool",
         "InterfaceTool",
-        "PfStatesTool",
-        "PfStatisticsTool",
-        "SystemTool",
     }
 )
 

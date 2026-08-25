@@ -10,6 +10,7 @@ import importlib
 import inspect
 import json
 import pkgutil
+import re
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,11 @@ GOLDEN = Path(__file__).parent / "fixtures" / "tool_surface.json"
 NO_CLIENT_TOOLS = {"packet_capture"}
 
 
+def _is_tool_class(class_name: str) -> bool:
+    """Match tool classes, including suffixed variants such as PacketCaptureTool2."""
+    return re.search(r"Tool\d*$", class_name) is not None
+
+
 def discover_tool_classes() -> dict[str, type]:
     """Every *Tool class that advertises a name, keyed by tool name."""
     found: dict[str, type] = {}
@@ -30,7 +36,7 @@ def discover_tool_classes() -> dict[str, type]:
         except Exception:  # noqa: BLE001 - optional deps must not break discovery
             continue
         for _, obj in inspect.getmembers(mod, inspect.isclass):
-            if not obj.__name__.endswith("Tool"):
+            if not _is_tool_class(obj.__name__):
                 continue
             name = getattr(obj, "name", None)
             if isinstance(name, str) and name:
@@ -52,7 +58,7 @@ def discover_all_tool_classes() -> dict[str, type]:
         except Exception:  # noqa: BLE001
             continue
         for _, obj in inspect.getmembers(mod, inspect.isclass):
-            if obj.__name__.endswith("Tool") and obj.__module__ == mod.__name__:
+            if _is_tool_class(obj.__name__) and obj.__module__ == mod.__name__:
                 found[obj.__name__] = obj
     return found
 

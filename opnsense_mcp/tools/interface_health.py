@@ -18,6 +18,21 @@ if TYPE_CHECKING:
 class InterfaceHealthTool:
     """Summarize interface status, counters, and relationships."""
 
+    name = "interface_health"
+    description = "Summarize interface status, counters, relationships, and findings"
+    input_schema = {
+        "properties": {
+            "include_down": {"optional": True, "type": "boolean"},
+            "include_raw": {"optional": True, "type": "boolean"},
+            "interface": {"optional": True, "type": "string"},
+            "max_results": {"optional": True, "type": "number"},
+            "sort_by": {"optional": True, "type": "string"},
+            "warnings_only": {"optional": True, "type": "boolean"},
+        },
+        "required": [],
+        "type": "object",
+    }
+
     def __init__(self, client: OPNsenseClient | None) -> None:
         """Initialize the tool."""
         self.client = client

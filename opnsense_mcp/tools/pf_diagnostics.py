@@ -45,6 +45,25 @@ def _error_envelope(error: str, warnings: list[str] | None = None) -> dict[str, 
 class PfStatesTool:
     """Retrieve, filter, and summarize active PF connection states."""
 
+    name = "pf_states"
+    description = "List active PF state table entries with filters and summary"
+    input_schema = {
+        "properties": {
+            "dst_ip": {"optional": True, "type": "string"},
+            "dst_port": {"optional": True, "type": "number"},
+            "interface": {"optional": True, "type": "string"},
+            "ip": {"optional": True, "type": "string"},
+            "limit": {"optional": True, "type": "number"},
+            "protocol": {"optional": True, "type": "string"},
+            "src_ip": {"optional": True, "type": "string"},
+            "src_port": {"optional": True, "type": "number"},
+            "state": {"optional": True, "type": "string"},
+            "summary": {"optional": True, "type": "boolean"},
+        },
+        "required": [],
+        "type": "object",
+    }
+
     def __init__(self, client: OPNsenseClient | None) -> None:
         """Initialize the tool."""
         self.client = client
@@ -177,6 +196,14 @@ class PfStatesTool:
 
 class PfStatisticsTool:
     """Retrieve and normalize PF firewall statistics and state table pressure."""
+
+    name = "pf_statistics"
+    description = "Show PF statistics and state table pressure"
+    input_schema = {
+        "properties": {"include_raw": {"optional": True, "type": "boolean"}},
+        "required": [],
+        "type": "object",
+    }
 
     def __init__(self, client: OPNsenseClient | None) -> None:
         """Initialize the tool."""

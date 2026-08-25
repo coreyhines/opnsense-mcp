@@ -225,23 +225,10 @@ async def test_unknown_tool_is_rejected() -> None:
     assert response["error"]["code"] == TOOL_NOT_FOUND
 
 
-# Advertised only as hand-written literals in server.py's tools/list, because
-# their classes carry no name, description or input_schema. A registry cannot
-# emit these until Wave 2b step 1 retrofits them, so the list shrinks as that
-# lands and must never grow.
-LITERAL_ONLY_TOOLS = frozenset(
-    {
-        "arp",
-        "fw_rules",
-        "get_logs",
-        "interface_health",
-        "interface_list",
-        "packet_capture",
-        "pf_states",
-        "pf_statistics",
-        "system",
-    }
-)
+# Every tool advertised by server.py now carries class metadata, so tools/list
+# and the class-derived snapshot agree. Kept as an explicit empty set so a
+# regression names itself instead of silently reopening the gap.
+LITERAL_ONLY_TOOLS: frozenset[str] = frozenset()
 
 
 @pytest.mark.asyncio

@@ -19,6 +19,60 @@ logger = logging.getLogger(__name__)
 class PacketCaptureTool2:
     """Tool for running packet captures on OPNsense via SSH with automatic error detection and correction."""
 
+    name = "packet_capture"
+    description = "Start, stop, or fetch a packet capture file"
+    input_schema = {
+        "properties": {
+            "action": {
+                "description": "start, stop, or fetch (default: start)",
+                "optional": True,
+                "type": "string",
+            },
+            "count": {
+                "description": "Packet count limit (optional)",
+                "optional": True,
+                "type": "number",
+            },
+            "duration": {
+                "description": "Duration in seconds (default: 30)",
+                "optional": True,
+                "type": "number",
+            },
+            "filter": {
+                "description": "BPF filter expression (optional)",
+                "optional": True,
+                "type": "string",
+            },
+            "interface": {
+                "description": "Interface to capture on (default: wan)",
+                "optional": True,
+                "type": "string",
+            },
+            "local_path": {
+                "description": "Local path to save PCAP (optional)",
+                "optional": True,
+                "type": "string",
+            },
+            "preview_bytes": {
+                "description": "Number of bytes to preview (default: 1000)",
+                "optional": True,
+                "type": "number",
+            },
+            "raw": {
+                "description": "Return raw PCAP file if true (default: false)",
+                "optional": True,
+                "type": "boolean",
+            },
+            "stream": {
+                "description": "If true, stream pcap data to chat (hex preview)",
+                "optional": True,
+                "type": "boolean",
+            },
+        },
+        "required": [],
+        "type": "object",
+    }
+
     def __init__(
         self,
         client=None,

@@ -27,6 +27,10 @@ class SystemStatus(BaseModel):
 class SystemTool:
     """Tool for retrieving system status information from OPNsense."""
 
+    name = "system"
+    description = "Show system status information"
+    input_schema = {"properties": {}, "required": [], "type": "object"}
+
     def __init__(self, client: OPNsenseClient | None) -> None:
         """
         Initialize the system tool.
