@@ -24,21 +24,7 @@ jobs:
       options: --entrypoint ""
     steps:
       - name: Install git and node
-        run: |
-          set -eu
-          # Some runners in this fleet cannot verify the Alpine CDN certificate
-          # (TLS: server certificate not trusted), which fails the job before
-          # checkout. apk verifies package signatures independently of the
-          # transport, so falling back to http is safe here.
-          _apk() { apk add --no-cache git nodejs; }
-          _apk || {
-            echo "apk over https failed; retrying over http"
-            [ -f /etc/apk/repositories ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories || true
-            [ -d /etc/apk/repositories.d ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
-            _apk
-          }
+        run: apk add --no-cache git nodejs
       - uses: https://data.forgejo.org/actions/checkout@v6
         with:
           # gitleaks scans history; a shallow clone hides prior commits.
@@ -52,24 +38,7 @@ jobs:
       image: docker.io/gitguardian/ggshield:latest
     steps:
       - name: Install git and node
-        run: |
-          set -eu
-          # Some runners in this fleet cannot verify the Alpine CDN certificate
-          # (TLS: server certificate not trusted), which fails the job before
-          # checkout. apk verifies package signatures independently of the
-          # transport, so falling back to http is safe here.
-          _apk() { apk add --no-cache git nodejs; }
-          _apk || {
-            echo "apk over https failed; retrying over http"
-            [ -f /etc/apk/repositories ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories || true
-            [ -d /etc/apk/repositories.d ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
-            _apk || {
-              echo "not an apk image; using apt"
-              apt-get update && apt-get install -y git nodejs
-            }
-          }
+        run: apk add --no-cache git nodejs || (apt-get update && apt-get install -y git nodejs)
       - uses: https://data.forgejo.org/actions/checkout@v6
         with:
           fetch-depth: 0
@@ -94,24 +63,7 @@ jobs:
       image: docker.io/semgrep/semgrep:latest
     steps:
       - name: Install git and node
-        run: |
-          set -eu
-          # Some runners in this fleet cannot verify the Alpine CDN certificate
-          # (TLS: server certificate not trusted), which fails the job before
-          # checkout. apk verifies package signatures independently of the
-          # transport, so falling back to http is safe here.
-          _apk() { apk add --no-cache git nodejs; }
-          _apk || {
-            echo "apk over https failed; retrying over http"
-            [ -f /etc/apk/repositories ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories || true
-            [ -d /etc/apk/repositories.d ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
-            _apk || {
-              echo "not an apk image; using apt"
-              apt-get update && apt-get install -y git nodejs
-            }
-          }
+        run: apk add --no-cache git nodejs || (apt-get update && apt-get install -y git nodejs)
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Semgrep scan
         run: |
@@ -137,21 +89,7 @@ jobs:
       image: docker.io/library/python:3.12-alpine
     steps:
       - name: Install git and node
-        run: |
-          set -eu
-          # Some runners in this fleet cannot verify the Alpine CDN certificate
-          # (TLS: server certificate not trusted), which fails the job before
-          # checkout. apk verifies package signatures independently of the
-          # transport, so falling back to http is safe here.
-          _apk() { apk add --no-cache git nodejs; }
-          _apk || {
-            echo "apk over https failed; retrying over http"
-            [ -f /etc/apk/repositories ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories || true
-            [ -d /etc/apk/repositories.d ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
-            _apk
-          }
+        run: apk add --no-cache git nodejs
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Audit production dependencies
         run: |
@@ -177,21 +115,7 @@ jobs:
       image: docker.io/library/python:3.12-alpine
     steps:
       - name: Install git and node
-        run: |
-          set -eu
-          # Some runners in this fleet cannot verify the Alpine CDN certificate
-          # (TLS: server certificate not trusted), which fails the job before
-          # checkout. apk verifies package signatures independently of the
-          # transport, so falling back to http is safe here.
-          _apk() { apk add --no-cache git nodejs; }
-          _apk || {
-            echo "apk over https failed; retrying over http"
-            [ -f /etc/apk/repositories ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories || true
-            [ -d /etc/apk/repositories.d ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
-            _apk
-          }
+        run: apk add --no-cache git nodejs
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Generate CycloneDX SBOM
         run: |
@@ -211,71 +135,16 @@ jobs:
 
   trivy_fs:
     # Repo filesystem, HIGH/CRITICAL only.
-    #
-    # Non-blocking until the runners trust the intercepting CA. Registry TLS is
-    # intercepted inconsistently across this fleet: one run reached ghcr.io and
-    # got DENIED from its token endpoint, the next failed certificate
-    # verification against ghcr.io, public.ecr.aws and mirror.gcr.io alike. The
-    # scan cannot start without its vulnerability DB, so the job fails for
-    # reasons unrelated to the code under review.
-    #
-    # Restore blocking (drop continue-on-error) once `trivy image
-    # --download-db-only` succeeds from a runner container.
     runs-on: ansible-net10
-    continue-on-error: true
     container:
       image: docker.io/aquasec/trivy:latest
       options: --entrypoint ""
     steps:
       - name: Install git and node
-        run: |
-          set -eu
-          # Some runners in this fleet cannot verify the Alpine CDN certificate
-          # (TLS: server certificate not trusted), which fails the job before
-          # checkout. apk verifies package signatures independently of the
-          # transport, so falling back to http is safe here.
-          _apk() { apk add --no-cache git nodejs; }
-          _apk || {
-            echo "apk over https failed; retrying over http"
-            [ -f /etc/apk/repositories ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories || true
-            [ -d /etc/apk/repositories.d ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
-            _apk
-          }
+        run: apk add --no-cache git nodejs
       - uses: https://data.forgejo.org/actions/checkout@v6
-      - name: Download trivy vulnerability DB
-        env:
-          TRIVY_SKIP_VERSION_CHECK: "true"
-        run: |
-          set -eu
-          # Anonymous pulls fail with "DENIED: denied" when a stale registry
-          # credential is picked up from a mounted docker config, so point
-          # DOCKER_CONFIG at an empty dir to force anonymous access.
-          DOCKER_CONFIG="$(mktemp -d)"; export DOCKER_CONFIG
-          # mirror.gcr.io (the image default) is intercepted on these runners
-          # with an untrusted certificate; try the alternatives in turn.
-          ok=0
-          for repo in \
-            ghcr.io/aquasecurity/trivy-db:2 \
-            public.ecr.aws/aquasecurity/trivy-db:2 \
-            mirror.gcr.io/aquasec/trivy-db:2
-          do
-            echo "Trying DB repository: ${repo}"
-            if trivy image --download-db-only --db-repository "${repo}"; then
-              ok=1; break
-            fi
-            echo "Failed: ${repo}"
-          done
-          [ "$ok" = "1" ] || { echo "No trivy DB source reachable"; exit 1; }
       - name: Trivy filesystem scan
-        env:
-          TRIVY_SKIP_VERSION_CHECK: "true"
-        # DB is already local, so --exit-code 1 here means findings, not a
-        # download failure.
-        run: |
-          trivy fs --skip-db-update --exit-code 1 \
-            --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
+        run: trivy fs --exit-code 1 --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
       - name: Upload trivy-fs-report
         if: always()
         continue-on-error: true
@@ -294,21 +163,7 @@ jobs:
       image: docker.io/library/python:3.12-alpine
     steps:
       - name: Install git and node
-        run: |
-          set -eu
-          # Some runners in this fleet cannot verify the Alpine CDN certificate
-          # (TLS: server certificate not trusted), which fails the job before
-          # checkout. apk verifies package signatures independently of the
-          # transport, so falling back to http is safe here.
-          _apk() { apk add --no-cache git nodejs; }
-          _apk || {
-            echo "apk over https failed; retrying over http"
-            [ -f /etc/apk/repositories ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories || true
-            [ -d /etc/apk/repositories.d ] && \
-              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
-            _apk
-          }
+        run: apk add --no-cache git nodejs
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Install scanners
         run: pip install --quiet --upgrade "pip>=26.0" bandit detect-secrets pip-audit
