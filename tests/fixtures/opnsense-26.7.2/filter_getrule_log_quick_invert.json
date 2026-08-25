@@ -69,15 +69,15 @@
       },
       "WAN_DHCP": {
         "selected": 0,
-        "value": "WAN_DHCP - 68.47.6.1"
+        "value": "WAN_DHCP - 203.0.113.1"
       },
       "WAN_DHCP6": {
         "selected": 0,
-        "value": "WAN_DHCP6 - fe80::21c:73ff:fe00:99"
+        "value": "WAN_DHCP6 - fe80::db8:73ff:fe00:99"
       },
-      "wgs2s": {
+      "wgtunnel": {
         "selected": 0,
-        "value": "wgs2s - 10.181.0.1"
+        "value": "wgtunnel - 172.20.99.1"
       }
     },
     "icmp6type": {
@@ -304,7 +304,7 @@
       },
       "opt1": {
         "selected": 0,
-        "value": "720xpmgmt"
+        "value": "flatheadmgmt"
       },
       "opt10": {
         "selected": 0,
@@ -316,7 +316,7 @@
       },
       "opt13": {
         "selected": 0,
-        "value": "VLAN10Podman"
+        "value": "VLAN10pods"
       },
       "opt2": {
         "selected": 0,
@@ -336,11 +336,11 @@
       },
       "opt6": {
         "selected": 0,
-        "value": "VLAN4guest_wifi"
+        "value": "VLAN4guest"
       },
       "opt7": {
         "selected": 0,
-        "value": "VLAN6SolarDMZ"
+        "value": "VLAN6dmz"
       },
       "opt8": {
         "selected": 0,
@@ -400,7 +400,7 @@
       },
       "17e8f49b-5e9b-4fe1-8303-755989981964": {
         "selected": 0,
-        "value": "APAC_Region"
+        "value": "FrobozzRegion"
       },
       "26ca6d3b-df4e-4b03-ad1d-17aad0c04ba3": {
         "selected": 0,
@@ -599,9 +599,9 @@
         "selected": 0,
         "value": "AH"
       },
-      "ARGUS": {
+      "GRUE": {
         "selected": 0,
-        "value": "ARGUS"
+        "value": "GRUE"
       },
       "ARIS": {
         "selected": 0,
@@ -1136,15 +1136,15 @@
       },
       "WAN_DHCP": {
         "selected": 0,
-        "value": "WAN_DHCP - 68.47.6.1"
+        "value": "WAN_DHCP - 203.0.113.1"
       },
       "WAN_DHCP6": {
         "selected": 0,
-        "value": "WAN_DHCP6 - fe80::21c:73ff:fe00:99"
+        "value": "WAN_DHCP6 - fe80::db8:73ff:fe00:99"
       },
-      "wgs2s": {
+      "wgtunnel": {
         "selected": 0,
-        "value": "wgs2s - 10.181.0.1"
+        "value": "wgtunnel - 172.20.99.1"
       }
     },
     "sched": {
@@ -1275,7 +1275,7 @@
       }
     },
     "sort_order": "400000.0000101",
-    "source_net": "APAC_Region",
+    "source_net": "FrobozzRegion",
     "source_not": "1",
     "source_port": "",
     "state-policy": {

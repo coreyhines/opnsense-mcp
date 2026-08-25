@@ -3,7 +3,8 @@
 The add-shaped payload helper emits 13 of the 58 real fields a ``getRule`` node
 carries, so every partial edit silently reset the other 45 to model defaults.
 Fixture captured from live OPNsense 26.7.2 (rule ``3e5d8614``: wan, pass,
-``source_not=1``, ``log=1``, ``quick=1``).
+``source_not=1``, ``log=1``, ``quick=1``). Site-identifying
+values are sanitised; see the fixture README.
 """
 
 from __future__ import annotations
@@ -71,7 +72,7 @@ async def test_description_only_edit_preserves_source_and_destination() -> None:
     inner = await _capture_set_payload({"description": "renamed"})
 
     assert inner["description"] == "renamed"
-    assert inner["source_net"] == "APAC_Region"
+    assert inner["source_net"] == "FrobozzRegion"
     assert inner["destination_net"] == "(self)"
 
 
