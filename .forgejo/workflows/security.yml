@@ -211,7 +211,18 @@ jobs:
 
   trivy_fs:
     # Repo filesystem, HIGH/CRITICAL only.
+    #
+    # Non-blocking until the runners trust the intercepting CA. Registry TLS is
+    # intercepted inconsistently across this fleet: one run reached ghcr.io and
+    # got DENIED from its token endpoint, the next failed certificate
+    # verification against ghcr.io, public.ecr.aws and mirror.gcr.io alike. The
+    # scan cannot start without its vulnerability DB, so the job fails for
+    # reasons unrelated to the code under review.
+    #
+    # Restore blocking (drop continue-on-error) once `trivy image
+    # --download-db-only` succeeds from a runner container.
     runs-on: ansible-net10
+    continue-on-error: true
     container:
       image: docker.io/aquasec/trivy:latest
       options: --entrypoint ""
