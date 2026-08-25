@@ -1,0 +1,1311 @@
+{
+  "add_shaper_pipe": {
+    "description": "Create a traffic shaper pipe (apply=true by default)",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "bandwidth": {
+          "type": "integer"
+        },
+        "bandwidth_metric": {
+          "default": "Mbit",
+          "type": "string"
+        },
+        "capture_snapshot": {
+          "default": true,
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mutation_snapshot_id": {
+          "type": "string"
+        },
+        "scheduler": {
+          "default": "fq_codel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "bandwidth"
+      ],
+      "type": "object"
+    }
+  },
+  "add_shaper_queue": {
+    "description": "Create a traffic shaper queue",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "capture_snapshot": {
+          "default": true,
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "mutation_snapshot_id": {
+          "type": "string"
+        },
+        "pipe_uuid": {
+          "type": "string"
+        },
+        "weight": {
+          "default": 100,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "description",
+        "pipe_uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "add_shaper_rule": {
+    "description": "Create a traffic shaper rule",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "capture_snapshot": {
+          "default": true,
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "mutation_snapshot_id": {
+          "type": "string"
+        },
+        "proto": {
+          "type": "string"
+        },
+        "sequence": {
+          "description": "Rule order; auto-assigned when omitted",
+          "type": "integer"
+        },
+        "target_uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "interface",
+        "target_uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "aliases": {
+    "description": "List firewall aliases (IP groups, port groups, etc)",
+    "inputSchema": {
+      "properties": {
+        "search": {
+          "description": "Filter by alias name, type, or content",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "apply_shaper": {
+    "description": "Apply pending traffic shaper configuration via service/reconfigure",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "apply_shaper_preset": {
+    "description": "Apply bufferbloat_wan preset: FQ-CoDel pipes at 85% ISP rates, queues, dual-stack WAN rules",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "download_mbit": {
+          "type": "number"
+        },
+        "preset": {
+          "default": "bufferbloat_wan",
+          "type": "string"
+        },
+        "upload_mbit": {
+          "type": "number"
+        },
+        "wan_interface": {
+          "default": "wan",
+          "type": "string"
+        }
+      },
+      "required": [
+        "download_mbit",
+        "upload_mbit"
+      ],
+      "type": "object"
+    }
+  },
+  "audit_shaper_config": {
+    "description": "Audit traffic shaper configuration against best practices; optional ISP rates and WAN line rate for bandwidth checks",
+    "inputSchema": {
+      "properties": {
+        "isp_download_mbit": {
+          "description": "Reference ISP download rate in Mbit/s",
+          "type": "number"
+        },
+        "isp_upload_mbit": {
+          "description": "Reference ISP upload rate in Mbit/s",
+          "type": "number"
+        },
+        "wan_line_rate_mbit": {
+          "description": "WAN physical line rate cap in Mbit/s",
+          "type": "number"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "delete_shaper_pipe": {
+    "description": "Delete a traffic shaper pipe; requires confirm token from prior call",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "delete_shaper_queue": {
+    "description": "Delete a queue (confirm token required)",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "delete_shaper_rule": {
+    "description": "Delete a rule (confirm token required)",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "dhcp": {
+    "description": "Show DHCPv4 and DHCPv6 lease tables",
+    "inputSchema": {
+      "properties": {
+        "search": {
+          "description": "Filter leases by hostname, IP, or MAC address. Omit for full table.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "dhcp_lease_delete": {
+    "description": "Delete DHCP leases by hostname, IP, or MAC address",
+    "inputSchema": {
+      "anyOf": [
+        {
+          "required": [
+            "hostname"
+          ]
+        },
+        {
+          "required": [
+            "ip"
+          ]
+        },
+        {
+          "required": [
+            "mac"
+          ]
+        }
+      ],
+      "properties": {
+        "hostname": {
+          "description": "Hostname to search for",
+          "type": "string"
+        },
+        "ip": {
+          "description": "IP address to delete",
+          "type": "string"
+        },
+        "mac": {
+          "description": "MAC address to search for",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "dns": {
+    "description": "List Unbound DNS host overrides",
+    "inputSchema": {
+      "properties": {
+        "search": {
+          "description": "Filter by hostname, IP, or description",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "explain_shaper_config": {
+    "description": "Explain traffic shaper configuration in plain language for non-technical users",
+    "inputSchema": {
+      "properties": {
+        "include_audit": {
+          "default": true,
+          "description": "When true, run audit first and weave findings into the narrative",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "flush_dns": {
+    "description": "Flush Unbound DNS cache for a hostname (SSH unbound-control) or restart Unbound (API) to clear all cached answers",
+    "inputSchema": {
+      "properties": {
+        "hostname": {
+          "description": "FQDN to flush from cache (e.g. headroom.freeblizz.com). Required when mode=name.",
+          "optional": true,
+          "type": "string"
+        },
+        "mode": {
+          "description": "name: flush one hostname via unbound-control (default); restart: restart Unbound via API (clears full cache)",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "gateway_status": {
+    "description": "Show WAN gateway health (latency, packet loss)",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "get_shaper_pipe": {
+    "description": "Get one traffic shaper pipe by uuid or description substring",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Description substring when uuid is omitted",
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Pipe UUID",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "get_shaper_queue": {
+    "description": "Get one traffic shaper queue by uuid or description substring",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Description substring when uuid is omitted",
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Queue UUID",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "get_shaper_rule": {
+    "description": "Get one traffic shaper rule by uuid or description substring",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Description substring when uuid is omitted",
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Rule UUID",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "get_shaper_settings": {
+    "description": "Get global traffic shaper settings and normalized pipe/queue/rule summary",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_dhcp_hosts": {
+    "description": "List DHCP host reservations from the dnsmasq host table (Services \u2192 DHCPv4 \u2192 Hosts). Unlike the dhcp tool (leases), this returns configured static mappings including IPv4, optional ::N IPv6 suffix, MAC, client_id, and descr.",
+    "inputSchema": {
+      "properties": {
+        "descr": {
+          "description": "Optional client-side filter: reservation descr substring (e.g. VLAN2wired)",
+          "optional": true,
+          "type": "string"
+        },
+        "missing_ipv6": {
+          "description": "When true, return only reservations with IPv4 but no ::N IPv6 suffix",
+          "optional": true,
+          "type": "boolean"
+        },
+        "search": {
+          "description": "Optional filter passed to OPNsense searchPhrase (hostname, MAC, IP fragment, etc.)",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_dhcp_subnet_dns": {
+    "description": "List DHCP-provided DNS servers for a subnet scope (dnsmasq or Kea backends)",
+    "inputSchema": {
+      "anyOf": [
+        {
+          "required": [
+            "subnet"
+          ]
+        },
+        {
+          "required": [
+            "interface"
+          ]
+        }
+      ],
+      "properties": {
+        "interface": {
+          "description": "Interface identifier or description (e.g. opt2, VLAN2wired)",
+          "optional": true,
+          "type": "string"
+        },
+        "subnet": {
+          "description": "Subnet in CIDR notation (e.g. 10.0.2.0/24)",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "list_shaper_pipes": {
+    "description": "List traffic shaper pipes with optional enabled/description filters",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Optional description substring filter",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "When set, filter to enabled or disabled pipes only",
+          "type": "boolean"
+        },
+        "fetch_all": {
+          "default": true,
+          "description": "When true, paginate until all rows are returned",
+          "type": "boolean"
+        },
+        "row_count": {
+          "description": "Search API page size (default 50, max 500)",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_shaper_queues": {
+    "description": "List traffic shaper queues with optional enabled/description filters",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Optional description substring filter",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "When set, filter to enabled or disabled queues only",
+          "type": "boolean"
+        },
+        "fetch_all": {
+          "default": true,
+          "description": "When true, paginate until all rows are returned",
+          "type": "boolean"
+        },
+        "row_count": {
+          "description": "Search API page size (default 50, max 500)",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_shaper_rules": {
+    "description": "List traffic shaper rules with optional filters",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Optional description substring filter",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "When set, filter to enabled or disabled rules only",
+          "type": "boolean"
+        },
+        "fetch_all": {
+          "default": true,
+          "description": "When true, paginate until all rows are returned",
+          "type": "boolean"
+        },
+        "interface": {
+          "description": "Optional interface name filter (e.g. wan)",
+          "type": "string"
+        },
+        "row_count": {
+          "description": "Search API page size (default 50, max 500)",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "lldp": {
+    "description": "Show LLDP neighbor table",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "mk_dhcp_host": {
+    "description": "Create a DHCP host reservation in the dnsmasq host table (Services \u2192 DHCPv4 \u2192 Hosts). Requires hostname and MAC; at least one of ipv4 or ipv6 suffix must be provided. Optional client_id (DUID) improves stateful DHCPv6 matching when MAC alone is insufficient \u2014 copy from the dhcp tool v6 lease client_id. Defaults to a dry run; pass apply=true to write and reconfigure dnsmasq.",
+    "inputSchema": {
+      "anyOf": [
+        {
+          "required": [
+            "ipv4"
+          ]
+        },
+        {
+          "required": [
+            "ipv6"
+          ]
+        }
+      ],
+      "properties": {
+        "apply": {
+          "description": "Apply the change. Omit/false = dry run.",
+          "type": "boolean"
+        },
+        "client_id": {
+          "description": "Optional DHCP client identifier / DUID for IPv6 (e.g. '00:03:00:01:52:54:00:ab:cd:01'). Accepts optional 'id:' prefix.",
+          "type": "string"
+        },
+        "descr": {
+          "description": "Optional description",
+          "type": "string"
+        },
+        "domain": {
+          "description": "Optional domain for the host (e.g. 'lan')",
+          "type": "string"
+        },
+        "hostname": {
+          "description": "Hostname for the reservation (e.g. 'mydevice')",
+          "type": "string"
+        },
+        "ipv4": {
+          "description": "IPv4 address to assign (e.g. '10.0.8.50')",
+          "type": "string"
+        },
+        "ipv6": {
+          "description": "IPv6 suffix: integer (e.g. 50 \u2192 ::50) or '::abcd'",
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "mac": {
+          "description": "MAC address (e.g. 'aa:bb:cc:dd:ee:ff')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hostname",
+        "mac"
+      ],
+      "type": "object"
+    }
+  },
+  "mkdns": {
+    "description": "Add a DNS host override in Unbound",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Optional description",
+          "optional": true,
+          "type": "string"
+        },
+        "domain": {
+          "description": "Domain (e.g. 'local' or 'example.com')",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Whether the override is active (default: true)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "hostname": {
+          "description": "Hostname (without domain, e.g. 'myserver')",
+          "type": "string"
+        },
+        "server": {
+          "description": "IP address this hostname resolves to",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hostname",
+        "domain",
+        "server"
+      ],
+      "type": "object"
+    }
+  },
+  "mkfw_rule": {
+    "description": "Create firewall rules",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "default": "pass",
+          "type": "string"
+        },
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "destination_net": {
+          "default": "any",
+          "type": "string"
+        },
+        "destination_port": {
+          "default": "any",
+          "type": "string"
+        },
+        "direction": {
+          "default": "in",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "gateway": {
+          "default": "",
+          "type": "string"
+        },
+        "interface": {
+          "default": "lan",
+          "type": "string"
+        },
+        "ipprotocol": {
+          "default": "inet",
+          "type": "string"
+        },
+        "protocol": {
+          "default": "any",
+          "type": "string"
+        },
+        "source_net": {
+          "default": "any",
+          "type": "string"
+        },
+        "source_port": {
+          "default": "any",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "type": "object"
+    }
+  },
+  "move_dhcp_host": {
+    "description": "Move or rename a DHCP host reservation (dnsmasq). IPv4 is the reliable contract; IPv6 (::N suffix) applies only to stateful-DHCPv6 clients. Defaults to a dry run; pass apply=true to write. The client keeps its old address until it renews or reboots.",
+    "inputSchema": {
+      "anyOf": [
+        {
+          "required": [
+            "ipv4"
+          ]
+        },
+        {
+          "required": [
+            "ipv6"
+          ]
+        },
+        {
+          "required": [
+            "new_hostname"
+          ]
+        },
+        {
+          "required": [
+            "client_id"
+          ]
+        }
+      ],
+      "properties": {
+        "apply": {
+          "description": "Apply the change. Omit/false = dry run.",
+          "type": "boolean"
+        },
+        "client_id": {
+          "description": "Set or replace DHCP client identifier / DUID for IPv6 (e.g. '00:03:00:01:52:54:00:ab:cd:01'). Accepts optional 'id:' prefix.",
+          "type": "string"
+        },
+        "host": {
+          "description": "Hostname or MAC of the reservation to move",
+          "type": "string"
+        },
+        "ipv4": {
+          "description": "New IPv4: last octet (e.g. 2) or full address",
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "ipv6": {
+          "description": "New IPv6 suffix: e.g. 2 -> ::2, or '::abcd'",
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "new_hostname": {
+          "description": "New dnsmasq host reservation name (optional rename)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "type": "object"
+    }
+  },
+  "restore_shaper_snapshot": {
+    "description": "Restore traffic shaper config from a prior snapshot_id. Set remove_orphans=true to delete pipes/queues/rules not in the snapshot.",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "remove_orphans": {
+          "default": false,
+          "description": "Delete live objects whose UUID is absent from the snapshot",
+          "type": "boolean"
+        },
+        "snapshot_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id"
+      ],
+      "type": "object"
+    }
+  },
+  "rm_dhcp_host": {
+    "description": "Delete a DHCP host reservation from the dnsmasq host table (Services \u2192 DHCPv4 \u2192 Hosts). Accepts hostname, MAC, or reservation uuid. Defaults to a dry run; pass apply=true to delete and reconfigure dnsmasq.",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Apply the deletion. Omit/false = dry run.",
+          "type": "boolean"
+        },
+        "host": {
+          "description": "Hostname, MAC, or reservation uuid to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "type": "object"
+    }
+  },
+  "rmdns": {
+    "description": "Delete a DNS host override from Unbound",
+    "inputSchema": {
+      "properties": {
+        "uuid": {
+          "description": "UUID of the host override to delete (from dns tool output)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "rmfw_rule": {
+    "description": "Delete firewall rules",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "description": "Whether to apply changes immediately",
+          "type": "boolean"
+        },
+        "rule_uuid": {
+          "description": "UUID of the rule to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_dhcp_subnet_dns": {
+    "description": "Update DHCP-provided DNS servers for one address family on a subnet scope (dnsmasq or Kea backends). Single address updates slot 1 unless slot=2.",
+    "inputSchema": {
+      "anyOf": [
+        {
+          "required": [
+            "subnet"
+          ]
+        },
+        {
+          "required": [
+            "interface"
+          ]
+        }
+      ],
+      "properties": {
+        "dns_server": {
+          "description": "Single DNS server address",
+          "optional": true,
+          "type": "string"
+        },
+        "dns_servers": {
+          "description": "One or two DNS server addresses",
+          "items": {
+            "type": "string"
+          },
+          "optional": true,
+          "type": "array"
+        },
+        "family": {
+          "description": "Address family to update: ipv4 or ipv6",
+          "type": "string"
+        },
+        "interface": {
+          "description": "Interface identifier or description (e.g. opt2, VLAN2wired)",
+          "optional": true,
+          "type": "string"
+        },
+        "slot": {
+          "description": "Optional slot index (1 or 2) for single-address updates",
+          "optional": true,
+          "type": "integer"
+        },
+        "subnet": {
+          "description": "Subnet in CIDR notation (e.g. 10.0.2.0/24)",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "family"
+      ],
+      "type": "object"
+    }
+  },
+  "set_fw_rule": {
+    "description": "Edit fields of an existing firewall rule",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "'pass', 'block', or 'reject'",
+          "optional": true,
+          "type": "string"
+        },
+        "apply": {
+          "description": "Apply changes immediately (default: true)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "description": "New rule description",
+          "optional": true,
+          "type": "string"
+        },
+        "destination_net": {
+          "description": "Destination network/IP (e.g. 'any', '10.0.0.1')",
+          "optional": true,
+          "type": "string"
+        },
+        "destination_not": {
+          "description": "Invert the destination match",
+          "optional": true,
+          "type": "boolean"
+        },
+        "destination_port": {
+          "description": "Destination port or 'any'",
+          "optional": true,
+          "type": "string"
+        },
+        "direction": {
+          "description": "'in' or 'out'",
+          "optional": true,
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Enable or disable the rule",
+          "optional": true,
+          "type": "boolean"
+        },
+        "gateway": {
+          "description": "Gateway for policy routing (optional)",
+          "optional": true,
+          "type": "string"
+        },
+        "interface": {
+          "description": "Network interface (e.g. 'lan', 'wan', 'opt1')",
+          "optional": true,
+          "type": "string"
+        },
+        "interfacenot": {
+          "description": "Invert the interface match",
+          "optional": true,
+          "type": "boolean"
+        },
+        "ipprotocol": {
+          "description": "'inet' (IPv4) or 'inet6' (IPv6)",
+          "optional": true,
+          "type": "string"
+        },
+        "log": {
+          "description": "Log packets matched by this rule",
+          "optional": true,
+          "type": "boolean"
+        },
+        "protocol": {
+          "description": "Protocol: 'any', 'tcp', 'udp', 'icmp', etc.",
+          "optional": true,
+          "type": "string"
+        },
+        "quick": {
+          "description": "Stop evaluating further rules on a match",
+          "optional": true,
+          "type": "boolean"
+        },
+        "rule_uuid": {
+          "description": "UUID of the rule to edit (from fw_rules output)",
+          "type": "string"
+        },
+        "source_net": {
+          "description": "Source network/IP (e.g. 'any', '192.168.1.0/24')",
+          "optional": true,
+          "type": "string"
+        },
+        "source_not": {
+          "description": "Invert the source match",
+          "optional": true,
+          "type": "boolean"
+        },
+        "source_port": {
+          "description": "Source port or 'any'",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_shaper_pipe": {
+    "description": "Update a traffic shaper pipe by uuid (apply=true by default)",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "bandwidth": {
+          "type": "integer"
+        },
+        "bandwidth_metric": {
+          "type": "string"
+        },
+        "capture_snapshot": {
+          "default": true,
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "mutation_snapshot_id": {
+          "type": "string"
+        },
+        "scheduler": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_shaper_queue": {
+    "description": "Update a traffic shaper queue",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "capture_snapshot": {
+          "default": true,
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "mutation_snapshot_id": {
+          "type": "string"
+        },
+        "pipe_uuid": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_shaper_rule": {
+    "description": "Update a traffic shaper rule",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "capture_snapshot": {
+          "default": true,
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "mutation_snapshot_id": {
+          "type": "string"
+        },
+        "proto": {
+          "type": "string"
+        },
+        "target_uuid": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "shaper_statistics": {
+    "description": "Get traffic shaper runtime statistics with structured hints; optional baseline_id compares against a prior snapshot",
+    "inputSchema": {
+      "properties": {
+        "baseline_id": {
+          "description": "Optional baseline id from a prior shaper_statistics call for pkts/bytes delta comparison",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "ssh_fw_rule": {
+    "description": "Create firewall rules via SSH (bypasses API issues)",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "default": "block",
+          "type": "string"
+        },
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "destination_net": {
+          "default": "any",
+          "type": "string"
+        },
+        "destination_port": {
+          "default": "any",
+          "type": "string"
+        },
+        "direction": {
+          "default": "in",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "interface": {
+          "default": "lan",
+          "type": "string"
+        },
+        "ipprotocol": {
+          "default": "inet",
+          "type": "string"
+        },
+        "protocol": {
+          "default": "any",
+          "type": "string"
+        },
+        "source_net": {
+          "default": "any",
+          "type": "string"
+        },
+        "source_port": {
+          "default": "any",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_dhcp_range": {
+    "description": "Enable or disable a dnsmasq DHCP range on OPNsense. Identify the range by interface (e.g. opt10), subnet CIDR (e.g. 10.0.5.0/24), or range uuid. Defaults to dry run; pass apply=true to write and reconfigure dnsmasq.",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Apply changes (default false = dry run)",
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "True to enable the range, False to disable DHCP on it",
+          "type": "boolean"
+        },
+        "interface": {
+          "description": "Interface name (e.g. opt10) or description",
+          "type": "string"
+        },
+        "subnet": {
+          "description": "Subnet in CIDR notation (e.g. 10.0.5.0/24)",
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Range uuid from dnsmasq settings",
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_fw_rule": {
+    "description": "Enable or disable a firewall rule",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Apply changes immediately (default: true)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "True to enable the rule, False to disable it",
+          "type": "boolean"
+        },
+        "rule_uuid": {
+          "description": "UUID of the rule to toggle (from fw_rules output)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_uuid",
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_shaper_pipe": {
+    "description": "Toggle a traffic shaper pipe enabled state",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_shaper_queue": {
+    "description": "Toggle queue enabled state",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "type": "boolean"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_shaper_rule": {
+    "description": "Toggle rule enabled state",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "type": "boolean"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  }
+}
