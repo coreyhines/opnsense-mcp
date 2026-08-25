@@ -244,7 +244,9 @@ async def reconfigure_shaper(client: ClientT) -> dict[str, Any]:
     """POST service/reconfigure."""
     if not client:
         raise RuntimeError("No client available")
-    return await client._make_request("POST", "/trafficshaper/service/reconfigure")
+    return await client._make_request(
+        "POST", "/trafficshaper/service/reconfigure", call_class="apply"
+    )
 
 
 def pipe_description_map(pipes: list[dict[str, Any]]) -> dict[str, str]:

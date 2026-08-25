@@ -133,6 +133,23 @@ def _firewall_rule_overrides_for_set(rule_data: dict[str, Any]) -> dict[str, Any
     return overrides
 
 
+# Request call classes.
+#
+# Every request used to share one 5s timeout, which is fine for reads and wrong
+# for everything else: `reconfigure` and `apply` routinely run longer, so the
+# client reported failure while the firewall carried on applying, and a retry
+# duplicated the object. Callers name the class; the timeout follows from it.
+CALL_CLASS_TIMEOUTS: dict[str, int] = {
+    "read": 5,
+    "write": 30,
+    "apply": 120,
+    "download": 60,
+}
+DEFAULT_CALL_CLASS = "read"
+# Classes routed onto the second session so a long call cannot block reads.
+LONG_CALL_CLASSES = frozenset({"write", "apply", "download"})
+
+
 def _firewall_rule_inner_for_add_api(rule_data: dict[str, Any]) -> dict[str, Any]:
     """
     Build the JSON object posted under the ``rule`` key for ``/api/firewall/filter/addRule``.
@@ -238,6 +255,13 @@ class OPNsenseClient:
         self.session.verify = False
         self._session_lock = threading.Lock()
 
+        # Writes, applies and downloads run on their own session and lock, so a
+        # 120s apply does not serialise every read sharing this client.
+        self.long_session = requests.Session()
+        self.long_session.headers.update(self.headers)
+        self.long_session.verify = False
+        self._long_session_lock = threading.Lock()
+
         # DHCP provider is detected lazily on first DHCP operation.
         self._dhcp_provider: DHCPProvider | None = None
         self._dhcp_provider_lock = asyncio.Lock()
@@ -330,23 +354,56 @@ class OPNsenseClient:
         """Raise error for failed savepoint creation."""
         raise ResponseError("Failed to create firewall savepoint")
 
+    def _timeout_for(self: "OPNsenseClient", call_class: str) -> int:
+        """Return the timeout for *call_class*, rejecting unknown names.
+
+        A typo must not silently fall back to the read timeout and cut an apply
+        short at 5s.
+        """
+        try:
+            return CALL_CLASS_TIMEOUTS[call_class]
+        except KeyError:
+            known = ", ".join(sorted(CALL_CLASS_TIMEOUTS))
+            raise ValueError(
+                f"unknown call_class {call_class!r}; expected one of: {known}"
+            ) from None
+
+    def _session_for(self: "OPNsenseClient", call_class: str) -> requests.Session:
+        """Return the session a call of *call_class* should use."""
+        return self.long_session if call_class in LONG_CALL_CLASSES else self.session
+
+    def _lock_for(self: "OPNsenseClient", call_class: str) -> threading.Lock:
+        """Return the lock guarding the session for *call_class*."""
+        return (
+            self._long_session_lock
+            if call_class in LONG_CALL_CLASSES
+            else self._session_lock
+        )
+
     async def _make_request(
         self,
         method: str,
         endpoint: str,
+        call_class: str = DEFAULT_CALL_CLASS,
         **kwargs: str | dict[str, str] | list[str] | int | bool | None,
     ) -> dict[str, Any]:
-        """Make a non-blocking request to the OPNsense API."""
+        """Make a non-blocking request to the OPNsense API.
+
+        ``call_class`` selects the timeout and which session carries the call.
+        An explicit ``timeout`` in *kwargs* still wins.
+        """
         if not endpoint.startswith("/api") and not endpoint.startswith("/core"):
             endpoint = f"/api{endpoint}"
 
         url = f"{self.base_url}{endpoint}"
-        kwargs.setdefault("timeout", 5)  # Hard cap — never hang indefinitely
+        kwargs.setdefault("timeout", self._timeout_for(call_class))
+        session = self._session_for(call_class)
+        lock = self._lock_for(call_class)
 
         def _do_request() -> dict[str, Any]:
             try:
-                with self._session_lock:
-                    response = self.session.request(method, url, **kwargs)
+                with lock:
+                    response = session.request(method, url, **kwargs)
 
                 if response.status_code == 200:
                     try:
@@ -543,6 +600,7 @@ class OPNsenseClient:
             response = await self._make_request(
                 "POST",
                 ENDPOINTS["firewall"]["add_rule"],
+                call_class="write",
                 json=payload,
             )
 
@@ -593,6 +651,7 @@ class OPNsenseClient:
             response = await self._make_request(
                 "POST",
                 f"{ENDPOINTS['firewall']['set_rule']}/{uuid}",
+                call_class="write",
                 json={"rule": merged},
             )
 
@@ -616,6 +675,7 @@ class OPNsenseClient:
             response = await self._make_request(
                 "POST",
                 f"{ENDPOINTS['firewall']['del_rule']}/{uuid}",
+                call_class="write",
             )
 
             if not isinstance(response, dict) or response.get("result") != "deleted":
@@ -641,6 +701,7 @@ class OPNsenseClient:
             response = await self._make_request(
                 "POST",
                 f"{ENDPOINTS['firewall']['toggle_rule']}/{uuid}/{status}",
+                call_class="write",
             )
 
             if not isinstance(response, dict) or response.get("result") != "ok":
@@ -670,6 +731,7 @@ class OPNsenseClient:
             savepoint_resp = await self._make_request(
                 "POST",
                 "/api/firewall/filter/savepoint",
+                call_class="apply",
             )
 
             if "revision" not in savepoint_resp:
@@ -684,6 +746,7 @@ class OPNsenseClient:
             apply_resp = await self._make_request(
                 "POST",
                 f"/api/firewall/filter/apply/{revision}",
+                call_class="apply",
             )
 
             # Handle different response formats for apply operation
@@ -716,6 +779,7 @@ class OPNsenseClient:
             response = await self._make_request(
                 "POST",
                 f"/api/firewall/filter/cancelRollback/{revision}",
+                call_class="apply",
             )
 
             if response.get("status") != "ok":
@@ -1393,6 +1457,7 @@ class OPNsenseClient:
         return await self._make_request(
             "POST",
             ENDPOINTS["unbound"]["add"],
+            call_class="write",
             json={
                 "host": {
                     "enabled": "1" if enabled else "0",
@@ -1410,15 +1475,20 @@ class OPNsenseClient:
         return await self._make_request(
             "POST",
             f"{ENDPOINTS['unbound']['delete']}/{uuid}",
+            call_class="write",
         )
 
     async def reconfigure_unbound(self) -> dict[str, Any]:
         """Apply Unbound DNS configuration changes."""
-        return await self._make_request("POST", ENDPOINTS["unbound"]["reconfigure"])
+        return await self._make_request(
+            "POST", ENDPOINTS["unbound"]["reconfigure"], call_class="apply"
+        )
 
     async def restart_unbound(self) -> dict[str, Any]:
         """Restart Unbound (clears resolver cache; brief DNS interruption)."""
-        return await self._make_request("POST", ENDPOINTS["unbound"]["restart"])
+        return await self._make_request(
+            "POST", ENDPOINTS["unbound"]["restart"], call_class="apply"
+        )
 
     async def search_aliases(self, search: str = "") -> list[dict[str, Any]]:
         """List firewall aliases, optionally filtered."""

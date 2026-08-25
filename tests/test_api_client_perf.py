@@ -17,16 +17,20 @@ def client_config():
     }
 
 
-def test_client_uses_persistent_session(client_config):
-    """OPNsenseClient must hold a requests.Session instance."""
+def test_client_uses_persistent_sessions(client_config):
+    """OPNsenseClient holds persistent sessions, not one per request.
+
+    Two are created: reads share one, and writes/applies/downloads use a second
+    so a long call cannot serialise them.
+    """
     with (
         patch("opnsense_mcp.utils.api.requests.Session") as mock_session_cls,
         patch.object(OPNsenseClient, "_detect_endpoint", return_value=None),
     ):
-        mock_session_cls.return_value = MagicMock()
+        mock_session_cls.side_effect = lambda: MagicMock()
         client = OPNsenseClient(client_config)
-        mock_session_cls.assert_called_once()
-        assert client.session is mock_session_cls.return_value
+        assert mock_session_cls.call_count == 2
+        assert client.session is not client.long_session
 
 
 async def test_make_request_uses_session(client_config):
