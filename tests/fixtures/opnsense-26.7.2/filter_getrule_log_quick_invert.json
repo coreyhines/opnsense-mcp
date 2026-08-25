@@ -1,0 +1,2531 @@
+{
+  "rule": {
+    "%destination_net": "This Firewall",
+    "action": {
+      "block": {
+        "selected": 0,
+        "value": "Block"
+      },
+      "pass": {
+        "selected": 1,
+        "value": "Pass"
+      },
+      "reject": {
+        "selected": 0,
+        "value": "Reject"
+      }
+    },
+    "adaptiveend": "",
+    "adaptivestart": "",
+    "allowopts": "0",
+    "categories": {
+      "1f97698d-cd58-4a3c-bd6d-14d570fdebef": {
+        "selected": 0,
+        "value": "IoT external communication control"
+      }
+    },
+    "description": "",
+    "destination_net": "(self)",
+    "destination_not": "0",
+    "destination_port": "",
+    "direction": {
+      "any": {
+        "selected": 0,
+        "value": "Both"
+      },
+      "in": {
+        "selected": 1,
+        "value": "In"
+      },
+      "out": {
+        "selected": 0,
+        "value": "Out"
+      }
+    },
+    "disablereplyto": "0",
+    "divert-to": {
+      "": {
+        "selected": 1,
+        "value": "None"
+      },
+      "8000": {
+        "selected": 0,
+        "value": "Intrusion Detection"
+      }
+    },
+    "enabled": "1",
+    "gateway": {
+      "": {
+        "selected": 1,
+        "value": "None"
+      },
+      "Null4": {
+        "selected": 0,
+        "value": "Null4 - 127.0.0.1"
+      },
+      "Null6": {
+        "selected": 0,
+        "value": "Null6 - ::1"
+      },
+      "WAN_DHCP": {
+        "selected": 0,
+        "value": "WAN_DHCP - 68.47.6.1"
+      },
+      "WAN_DHCP6": {
+        "selected": 0,
+        "value": "WAN_DHCP6 - fe80::21c:73ff:fe00:99"
+      },
+      "wgs2s": {
+        "selected": 0,
+        "value": "wgs2s - 10.181.0.1"
+      }
+    },
+    "icmp6type": {
+      "1": {
+        "selected": 0,
+        "value": "Destination unreachable"
+      },
+      "128": {
+        "selected": 0,
+        "value": "Echo service request"
+      },
+      "129": {
+        "selected": 0,
+        "value": "Echo service reply"
+      },
+      "130": {
+        "selected": 0,
+        "value": "Multicast Listener Query"
+      },
+      "131": {
+        "selected": 0,
+        "value": "Multicast listener report"
+      },
+      "132": {
+        "selected": 0,
+        "value": "Multicast listener done"
+      },
+      "133": {
+        "selected": 0,
+        "value": "Router solicitation"
+      },
+      "134": {
+        "selected": 0,
+        "value": "Router advertisement"
+      },
+      "135": {
+        "selected": 0,
+        "value": "Neighbor solicitation"
+      },
+      "136": {
+        "selected": 0,
+        "value": "Neighbor advertisement"
+      },
+      "137": {
+        "selected": 0,
+        "value": "Shorter route exists"
+      },
+      "138": {
+        "selected": 0,
+        "value": "Route renumbering"
+      },
+      "139": {
+        "selected": 0,
+        "value": "ICMP Node Information Query"
+      },
+      "140": {
+        "selected": 0,
+        "value": "Node information reply"
+      },
+      "2": {
+        "selected": 0,
+        "value": "Packet too big"
+      },
+      "200": {
+        "selected": 0,
+        "value": "mtrace response"
+      },
+      "201": {
+        "selected": 0,
+        "value": "mtrace messages"
+      },
+      "3": {
+        "selected": 0,
+        "value": "Time exceeded"
+      },
+      "4": {
+        "selected": 0,
+        "value": "Invalid IPv6 header"
+      }
+    },
+    "icmptype": {
+      "althost": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Alternate Host Address"
+      },
+      "dataconv": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Data conversion problem"
+      },
+      "echorep": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Echo Reply"
+      },
+      "echoreq": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Echo Request"
+      },
+      "inforep": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Information Reply"
+      },
+      "inforeq": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Information Request"
+      },
+      "ipv6-here": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "IPv6 i-am-here"
+      },
+      "ipv6-where": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "IPv6 where-are-you"
+      },
+      "maskrep": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Address Mask Reply"
+      },
+      "maskreq": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Address Mask Request"
+      },
+      "mobredir": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Mobile host redirection"
+      },
+      "mobregrep": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Mobile registration reply"
+      },
+      "mobregreq": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Mobile registration request"
+      },
+      "paramprob": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Parameter Problem"
+      },
+      "photuris": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Photuris"
+      },
+      "redir": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Redirect"
+      },
+      "routeradv": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Router Advertisement"
+      },
+      "routersol": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Router Solicitation"
+      },
+      "skip": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "SKIP"
+      },
+      "squench": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Source Quench"
+      },
+      "timerep": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Timestamp Reply"
+      },
+      "timereq": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Timestamp"
+      },
+      "timex": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Time Exceeded"
+      },
+      "trace": {
+        "optgroup": "Deprecated",
+        "selected": 0,
+        "value": "Traceroute"
+      },
+      "unreach": {
+        "optgroup": "Common",
+        "selected": 0,
+        "value": "Destination Unreachable"
+      }
+    },
+    "interface": {
+      "cams": {
+        "selected": 0,
+        "value": "cams"
+      },
+      "labNets": {
+        "selected": 0,
+        "value": "labNets"
+      },
+      "noguests": {
+        "selected": 0,
+        "value": "noguests"
+      },
+      "openvpn": {
+        "selected": 0,
+        "value": "OpenVPN (Group)"
+      },
+      "opt1": {
+        "selected": 0,
+        "value": "720xpmgmt"
+      },
+      "opt10": {
+        "selected": 0,
+        "value": "VLAN5_ax0_igb3"
+      },
+      "opt11": {
+        "selected": 0,
+        "value": "MGMT_LAN"
+      },
+      "opt13": {
+        "selected": 0,
+        "value": "VLAN10Podman"
+      },
+      "opt2": {
+        "selected": 0,
+        "value": "VLAN2wired"
+      },
+      "opt3": {
+        "selected": 0,
+        "value": "VLAN3LAB"
+      },
+      "opt4": {
+        "selected": 0,
+        "value": "VLAN5LAB"
+      },
+      "opt5": {
+        "selected": 0,
+        "value": "VLAN81wifi"
+      },
+      "opt6": {
+        "selected": 0,
+        "value": "VLAN4guest_wifi"
+      },
+      "opt7": {
+        "selected": 0,
+        "value": "VLAN6SolarDMZ"
+      },
+      "opt8": {
+        "selected": 0,
+        "value": "VLAN7cam"
+      },
+      "opt9": {
+        "selected": 0,
+        "value": "wg0"
+      },
+      "trustedNets": {
+        "selected": 0,
+        "value": "trustedNets"
+      },
+      "unTrustedNets": {
+        "selected": 0,
+        "value": "unTrustedNets"
+      },
+      "wan": {
+        "selected": 1,
+        "value": "WAN"
+      },
+      "wireguard": {
+        "selected": 0,
+        "value": "WireGuard (Group)"
+      }
+    },
+    "interfacenot": "0",
+    "ipprotocol": {
+      "inet": {
+        "selected": 0,
+        "value": "IPv4"
+      },
+      "inet46": {
+        "selected": 0,
+        "value": "any"
+      },
+      "inet6": {
+        "selected": 1,
+        "value": "IPv6"
+      }
+    },
+    "log": "1",
+    "max": "",
+    "max-pkt-rate-number": "",
+    "max-pkt-rate-seconds": "",
+    "max-src-conn": "",
+    "max-src-conn-rate": "",
+    "max-src-conn-rates": "",
+    "max-src-nodes": "",
+    "max-src-states": "",
+    "nopfsync": "0",
+    "nosync": "0",
+    "overload": {
+      "": {
+        "selected": 1,
+        "value": "None"
+      },
+      "17e8f49b-5e9b-4fe1-8303-755989981964": {
+        "selected": 0,
+        "value": "APAC_Region"
+      },
+      "26ca6d3b-df4e-4b03-ad1d-17aad0c04ba3": {
+        "selected": 0,
+        "value": "trustedDevices"
+      },
+      "3347cc62-2aa7-40e2-8944-80eaccb682a5": {
+        "selected": 0,
+        "value": "ntpServers"
+      },
+      "39d25ef8-f25b-45cb-acb4-8f890aaae5b2": {
+        "selected": 0,
+        "value": "bootstrpDNS"
+      },
+      "592b80ef-c00a-42a7-a3db-a4271d02a474": {
+        "selected": 0,
+        "value": "dnsServers"
+      },
+      "8db8307a-30c9-4fb1-90b8-810c3efe9400": {
+        "selected": 0,
+        "value": "NTPv6Servers"
+      },
+      "9d6dbe4b-cb2a-4908-b379-876a94a39fd9": {
+        "selected": 0,
+        "value": "Americas_Region"
+      },
+      "__cams_network": {
+        "selected": 0,
+        "value": "__cams_network"
+      },
+      "__labNets_network": {
+        "selected": 0,
+        "value": "__labNets_network"
+      },
+      "__lo0_network": {
+        "selected": 0,
+        "value": "__lo0_network"
+      },
+      "__noguests_network": {
+        "selected": 0,
+        "value": "__noguests_network"
+      },
+      "__openvpn_network": {
+        "selected": 0,
+        "value": "__openvpn_network"
+      },
+      "__opt10_network": {
+        "selected": 0,
+        "value": "__opt10_network"
+      },
+      "__opt11_network": {
+        "selected": 0,
+        "value": "__opt11_network"
+      },
+      "__opt13_network": {
+        "selected": 0,
+        "value": "__opt13_network"
+      },
+      "__opt1_network": {
+        "selected": 0,
+        "value": "__opt1_network"
+      },
+      "__opt2_network": {
+        "selected": 0,
+        "value": "__opt2_network"
+      },
+      "__opt3_network": {
+        "selected": 0,
+        "value": "__opt3_network"
+      },
+      "__opt4_network": {
+        "selected": 0,
+        "value": "__opt4_network"
+      },
+      "__opt5_network": {
+        "selected": 0,
+        "value": "__opt5_network"
+      },
+      "__opt6_network": {
+        "selected": 0,
+        "value": "__opt6_network"
+      },
+      "__opt7_network": {
+        "selected": 0,
+        "value": "__opt7_network"
+      },
+      "__opt8_network": {
+        "selected": 0,
+        "value": "__opt8_network"
+      },
+      "__opt9_network": {
+        "selected": 0,
+        "value": "__opt9_network"
+      },
+      "__trustedNets_network": {
+        "selected": 0,
+        "value": "__trustedNets_network"
+      },
+      "__unTrustedNets_network": {
+        "selected": 0,
+        "value": "__unTrustedNets_network"
+      },
+      "__wan_network": {
+        "selected": 0,
+        "value": "__wan_network"
+      },
+      "__wireguard_network": {
+        "selected": 0,
+        "value": "__wireguard_network"
+      },
+      "b5afdf5b-e24d-48b9-ba74-8a608c297d79": {
+        "selected": 0,
+        "value": "FWdnsServers"
+      },
+      "bdc4c72f-b6ce-4739-9d38-14d10d744ab6": {
+        "selected": 0,
+        "value": "dnsv6Servers"
+      },
+      "bogons": {
+        "selected": 0,
+        "value": "bogons"
+      },
+      "bogonsv6": {
+        "selected": 0,
+        "value": "bogonsv6"
+      },
+      "e26beac8-3563-4873-b76f-eb85eeb486f5": {
+        "selected": 0,
+        "value": "FWdnsv6Servers"
+      },
+      "ef1047c2-a9a2-49a1-a762-2b1a40150032": {
+        "selected": 0,
+        "value": "cameras"
+      },
+      "f48fd22c-e69e-4afc-be3e-0b175b1f559b": {
+        "selected": 0,
+        "value": "homeassistantNAS"
+      },
+      "sshlockout": {
+        "selected": 0,
+        "value": "sshlockout"
+      },
+      "virusprot": {
+        "selected": 0,
+        "value": "virusprot"
+      }
+    },
+    "prio": {
+      "": {
+        "selected": 1,
+        "value": "Any priority"
+      },
+      "0": {
+        "selected": 0,
+        "value": "Best Effort (0, default)"
+      },
+      "1": {
+        "selected": 0,
+        "value": "Background (1, lowest)"
+      },
+      "2": {
+        "selected": 0,
+        "value": "Excellent Effort (2)"
+      },
+      "3": {
+        "selected": 0,
+        "value": "Critical Applications (3)"
+      },
+      "4": {
+        "selected": 0,
+        "value": "Video (4)"
+      },
+      "5": {
+        "selected": 0,
+        "value": "Voice (5)"
+      },
+      "6": {
+        "selected": 0,
+        "value": "Internetwork Control (6)"
+      },
+      "7": {
+        "selected": 0,
+        "value": "Network Control (7, highest)"
+      }
+    },
+    "prio_group": "400000",
+    "protocol": {
+      "3PC": {
+        "selected": 0,
+        "value": "3PC"
+      },
+      "A/N": {
+        "selected": 0,
+        "value": "A/N"
+      },
+      "AH": {
+        "selected": 0,
+        "value": "AH"
+      },
+      "ARGUS": {
+        "selected": 0,
+        "value": "ARGUS"
+      },
+      "ARIS": {
+        "selected": 0,
+        "value": "ARIS"
+      },
+      "AX.25": {
+        "selected": 0,
+        "value": "AX.25"
+      },
+      "BBN-RCC": {
+        "selected": 0,
+        "value": "BBN-RCC"
+      },
+      "BNA": {
+        "selected": 0,
+        "value": "BNA"
+      },
+      "BR-SAT-MON": {
+        "selected": 0,
+        "value": "BR-SAT-MON"
+      },
+      "CARP": {
+        "selected": 0,
+        "value": "CARP"
+      },
+      "CBT": {
+        "selected": 0,
+        "value": "CBT"
+      },
+      "CFTP": {
+        "selected": 0,
+        "value": "CFTP"
+      },
+      "CHAOS": {
+        "selected": 0,
+        "value": "CHAOS"
+      },
+      "COMPAQ-PEER": {
+        "selected": 0,
+        "value": "COMPAQ-PEER"
+      },
+      "CPHB": {
+        "selected": 0,
+        "value": "CPHB"
+      },
+      "CPNX": {
+        "selected": 0,
+        "value": "CPNX"
+      },
+      "CRTP": {
+        "selected": 0,
+        "value": "CRTP"
+      },
+      "CRUDP": {
+        "selected": 0,
+        "value": "CRUDP"
+      },
+      "DCCP": {
+        "selected": 0,
+        "value": "DCCP"
+      },
+      "DCN": {
+        "selected": 0,
+        "value": "DCN"
+      },
+      "DDP": {
+        "selected": 0,
+        "value": "DDP"
+      },
+      "DDX": {
+        "selected": 0,
+        "value": "DDX"
+      },
+      "DGP": {
+        "selected": 0,
+        "value": "DGP"
+      },
+      "DIVERT": {
+        "selected": 0,
+        "value": "DIVERT"
+      },
+      "DSR": {
+        "selected": 0,
+        "value": "DSR"
+      },
+      "EGP": {
+        "selected": 0,
+        "value": "EGP"
+      },
+      "EIGRP": {
+        "selected": 0,
+        "value": "EIGRP"
+      },
+      "EMCON": {
+        "selected": 0,
+        "value": "EMCON"
+      },
+      "ENCAP": {
+        "selected": 0,
+        "value": "ENCAP"
+      },
+      "ESP": {
+        "selected": 0,
+        "value": "ESP"
+      },
+      "ETHERIP": {
+        "selected": 0,
+        "value": "ETHERIP"
+      },
+      "FC": {
+        "selected": 0,
+        "value": "FC"
+      },
+      "GGP": {
+        "selected": 0,
+        "value": "GGP"
+      },
+      "GMTP": {
+        "selected": 0,
+        "value": "GMTP"
+      },
+      "GRE": {
+        "selected": 0,
+        "value": "GRE"
+      },
+      "HIP": {
+        "selected": 0,
+        "value": "HIP"
+      },
+      "HMP": {
+        "selected": 0,
+        "value": "HMP"
+      },
+      "I-NLSP": {
+        "selected": 0,
+        "value": "I-NLSP"
+      },
+      "IATP": {
+        "selected": 0,
+        "value": "IATP"
+      },
+      "ICMP": {
+        "selected": 1,
+        "value": "ICMP"
+      },
+      "IDPR": {
+        "selected": 0,
+        "value": "IDPR"
+      },
+      "IDPR-CMTP": {
+        "selected": 0,
+        "value": "IDPR-CMTP"
+      },
+      "IDRP": {
+        "selected": 0,
+        "value": "IDRP"
+      },
+      "IFMP": {
+        "selected": 0,
+        "value": "IFMP"
+      },
+      "IGMP": {
+        "selected": 0,
+        "value": "IGMP"
+      },
+      "IGP": {
+        "selected": 0,
+        "value": "IGP"
+      },
+      "IL": {
+        "selected": 0,
+        "value": "IL"
+      },
+      "IPCOMP": {
+        "selected": 0,
+        "value": "IPCOMP"
+      },
+      "IPCV": {
+        "selected": 0,
+        "value": "IPCV"
+      },
+      "IPENCAP": {
+        "selected": 0,
+        "value": "IPENCAP"
+      },
+      "IPIP": {
+        "selected": 0,
+        "value": "IPIP"
+      },
+      "IPPC": {
+        "selected": 0,
+        "value": "IPPC"
+      },
+      "IPV6": {
+        "selected": 0,
+        "value": "IPV6"
+      },
+      "IPV6-ICMP": {
+        "selected": 0,
+        "value": "IPV6-ICMP"
+      },
+      "IPX-IN-IP": {
+        "selected": 0,
+        "value": "IPX-IN-IP"
+      },
+      "IRTP": {
+        "selected": 0,
+        "value": "IRTP"
+      },
+      "ISIS": {
+        "selected": 0,
+        "value": "ISIS"
+      },
+      "ISO-IP": {
+        "selected": 0,
+        "value": "ISO-IP"
+      },
+      "ISO-TP4": {
+        "selected": 0,
+        "value": "ISO-TP4"
+      },
+      "KRYPTOLAN": {
+        "selected": 0,
+        "value": "KRYPTOLAN"
+      },
+      "L2TP": {
+        "selected": 0,
+        "value": "L2TP"
+      },
+      "LARP": {
+        "selected": 0,
+        "value": "LARP"
+      },
+      "LEAF-1": {
+        "selected": 0,
+        "value": "LEAF-1"
+      },
+      "LEAF-2": {
+        "selected": 0,
+        "value": "LEAF-2"
+      },
+      "MANET": {
+        "selected": 0,
+        "value": "MANET"
+      },
+      "MERIT-INP": {
+        "selected": 0,
+        "value": "MERIT-INP"
+      },
+      "MFE-NSP": {
+        "selected": 0,
+        "value": "MFE-NSP"
+      },
+      "MICP": {
+        "selected": 0,
+        "value": "MICP"
+      },
+      "MOBILE": {
+        "selected": 0,
+        "value": "MOBILE"
+      },
+      "MPLS-IN-IP": {
+        "selected": 0,
+        "value": "MPLS-IN-IP"
+      },
+      "MTP": {
+        "selected": 0,
+        "value": "MTP"
+      },
+      "MUX": {
+        "selected": 0,
+        "value": "MUX"
+      },
+      "NARP": {
+        "selected": 0,
+        "value": "NARP"
+      },
+      "NETBLT": {
+        "selected": 0,
+        "value": "NETBLT"
+      },
+      "NSFNET-IGP": {
+        "selected": 0,
+        "value": "NSFNET-IGP"
+      },
+      "NVP": {
+        "selected": 0,
+        "value": "NVP"
+      },
+      "OSPF": {
+        "selected": 0,
+        "value": "OSPF"
+      },
+      "PFSYNC": {
+        "selected": 0,
+        "value": "PFSYNC"
+      },
+      "PGM": {
+        "selected": 0,
+        "value": "PGM"
+      },
+      "PIM": {
+        "selected": 0,
+        "value": "PIM"
+      },
+      "PIPE": {
+        "selected": 0,
+        "value": "PIPE"
+      },
+      "PNNI": {
+        "selected": 0,
+        "value": "PNNI"
+      },
+      "PRM": {
+        "selected": 0,
+        "value": "PRM"
+      },
+      "PTP": {
+        "selected": 0,
+        "value": "PTP"
+      },
+      "PUP": {
+        "selected": 0,
+        "value": "PUP"
+      },
+      "PVP": {
+        "selected": 0,
+        "value": "PVP"
+      },
+      "QNX": {
+        "selected": 0,
+        "value": "QNX"
+      },
+      "RDP": {
+        "selected": 0,
+        "value": "RDP"
+      },
+      "ROHC": {
+        "selected": 0,
+        "value": "ROHC"
+      },
+      "RSVP": {
+        "selected": 0,
+        "value": "RSVP"
+      },
+      "RSVP-E2E-IGNORE": {
+        "selected": 0,
+        "value": "RSVP-E2E-IGNORE"
+      },
+      "RVD": {
+        "selected": 0,
+        "value": "RVD"
+      },
+      "SAT-EXPAK": {
+        "selected": 0,
+        "value": "SAT-EXPAK"
+      },
+      "SAT-MON": {
+        "selected": 0,
+        "value": "SAT-MON"
+      },
+      "SCC-SP": {
+        "selected": 0,
+        "value": "SCC-SP"
+      },
+      "SCPS": {
+        "selected": 0,
+        "value": "SCPS"
+      },
+      "SCTP": {
+        "selected": 0,
+        "value": "SCTP"
+      },
+      "SDRP": {
+        "selected": 0,
+        "value": "SDRP"
+      },
+      "SECURE-VMTP": {
+        "selected": 0,
+        "value": "SECURE-VMTP"
+      },
+      "SHIM6": {
+        "selected": 0,
+        "value": "SHIM6"
+      },
+      "SKIP": {
+        "selected": 0,
+        "value": "SKIP"
+      },
+      "SM": {
+        "selected": 0,
+        "value": "SM"
+      },
+      "SMP": {
+        "selected": 0,
+        "value": "SMP"
+      },
+      "SNP": {
+        "selected": 0,
+        "value": "SNP"
+      },
+      "SPRITE-RPC": {
+        "selected": 0,
+        "value": "SPRITE-RPC"
+      },
+      "SPS": {
+        "selected": 0,
+        "value": "SPS"
+      },
+      "SRP": {
+        "selected": 0,
+        "value": "SRP"
+      },
+      "ST2": {
+        "selected": 0,
+        "value": "ST2"
+      },
+      "STP": {
+        "selected": 0,
+        "value": "STP"
+      },
+      "SUN-ND": {
+        "selected": 0,
+        "value": "SUN-ND"
+      },
+      "SWIPE": {
+        "selected": 0,
+        "value": "SWIPE"
+      },
+      "TCF": {
+        "selected": 0,
+        "value": "TCF"
+      },
+      "TCP": {
+        "selected": 0,
+        "value": "TCP"
+      },
+      "TCP/UDP": {
+        "selected": 0,
+        "value": "TCP/UDP"
+      },
+      "TLSP": {
+        "selected": 0,
+        "value": "TLSP"
+      },
+      "TP++": {
+        "selected": 0,
+        "value": "TP++"
+      },
+      "TRUNK-1": {
+        "selected": 0,
+        "value": "TRUNK-1"
+      },
+      "TRUNK-2": {
+        "selected": 0,
+        "value": "TRUNK-2"
+      },
+      "TTP": {
+        "selected": 0,
+        "value": "TTP"
+      },
+      "UDP": {
+        "selected": 0,
+        "value": "UDP"
+      },
+      "UDPLITE": {
+        "selected": 0,
+        "value": "UDPLITE"
+      },
+      "UTI": {
+        "selected": 0,
+        "value": "UTI"
+      },
+      "VINES": {
+        "selected": 0,
+        "value": "VINES"
+      },
+      "VISA": {
+        "selected": 0,
+        "value": "VISA"
+      },
+      "VMTP": {
+        "selected": 0,
+        "value": "VMTP"
+      },
+      "WB-EXPAK": {
+        "selected": 0,
+        "value": "WB-EXPAK"
+      },
+      "WB-MON": {
+        "selected": 0,
+        "value": "WB-MON"
+      },
+      "WESP": {
+        "selected": 0,
+        "value": "WESP"
+      },
+      "WSN": {
+        "selected": 0,
+        "value": "WSN"
+      },
+      "XNET": {
+        "selected": 0,
+        "value": "XNET"
+      },
+      "XNS-IDP": {
+        "selected": 0,
+        "value": "XNS-IDP"
+      },
+      "XTP": {
+        "selected": 0,
+        "value": "XTP"
+      },
+      "any": {
+        "selected": 0,
+        "value": "any"
+      }
+    },
+    "quick": "1",
+    "replyto": {
+      "": {
+        "selected": 1,
+        "value": "None"
+      },
+      "Null4": {
+        "selected": 0,
+        "value": "Null4 - 127.0.0.1"
+      },
+      "Null6": {
+        "selected": 0,
+        "value": "Null6 - ::1"
+      },
+      "WAN_DHCP": {
+        "selected": 0,
+        "value": "WAN_DHCP - 68.47.6.1"
+      },
+      "WAN_DHCP6": {
+        "selected": 0,
+        "value": "WAN_DHCP6 - fe80::21c:73ff:fe00:99"
+      },
+      "wgs2s": {
+        "selected": 0,
+        "value": "wgs2s - 10.181.0.1"
+      }
+    },
+    "sched": {
+      "": {
+        "selected": 1,
+        "value": "None"
+      }
+    },
+    "sequence": "101",
+    "set-prio": {
+      "": {
+        "selected": 1,
+        "value": "Keep current priority"
+      },
+      "0": {
+        "selected": 0,
+        "value": "Best Effort (0, default)"
+      },
+      "1": {
+        "selected": 0,
+        "value": "Background (1, lowest)"
+      },
+      "2": {
+        "selected": 0,
+        "value": "Excellent Effort (2)"
+      },
+      "3": {
+        "selected": 0,
+        "value": "Critical Applications (3)"
+      },
+      "4": {
+        "selected": 0,
+        "value": "Video (4)"
+      },
+      "5": {
+        "selected": 0,
+        "value": "Voice (5)"
+      },
+      "6": {
+        "selected": 0,
+        "value": "Internetwork Control (6)"
+      },
+      "7": {
+        "selected": 0,
+        "value": "Network Control (7, highest)"
+      }
+    },
+    "set-prio-low": {
+      "": {
+        "selected": 1,
+        "value": "Keep current priority"
+      },
+      "0": {
+        "selected": 0,
+        "value": "Best Effort (0, default)"
+      },
+      "1": {
+        "selected": 0,
+        "value": "Background (1, lowest)"
+      },
+      "2": {
+        "selected": 0,
+        "value": "Excellent Effort (2)"
+      },
+      "3": {
+        "selected": 0,
+        "value": "Critical Applications (3)"
+      },
+      "4": {
+        "selected": 0,
+        "value": "Video (4)"
+      },
+      "5": {
+        "selected": 0,
+        "value": "Voice (5)"
+      },
+      "6": {
+        "selected": 0,
+        "value": "Internetwork Control (6)"
+      },
+      "7": {
+        "selected": 0,
+        "value": "Network Control (7, highest)"
+      }
+    },
+    "shaper1": {
+      "": {
+        "selected": 1,
+        "value": "None"
+      },
+      "24b08c17-0826-4d29-92ac-4a8d94f77bbf": {
+        "selected": 0,
+        "value": "Download queue"
+      },
+      "c0c67e1c-3846-40bc-b3e0-ab733796d538": {
+        "selected": 0,
+        "value": "Download pipe"
+      },
+      "e9c8f319-c12f-4fcd-9c0c-df007c1f2d9a": {
+        "selected": 0,
+        "value": "Upload pipe"
+      },
+      "ea96a964-2989-40ce-9df7-214c48345f1b": {
+        "selected": 0,
+        "value": "Upload queue"
+      }
+    },
+    "shaper2": {
+      "": {
+        "selected": 1,
+        "value": "None"
+      },
+      "24b08c17-0826-4d29-92ac-4a8d94f77bbf": {
+        "selected": 0,
+        "value": "Download queue"
+      },
+      "c0c67e1c-3846-40bc-b3e0-ab733796d538": {
+        "selected": 0,
+        "value": "Download pipe"
+      },
+      "e9c8f319-c12f-4fcd-9c0c-df007c1f2d9a": {
+        "selected": 0,
+        "value": "Upload pipe"
+      },
+      "ea96a964-2989-40ce-9df7-214c48345f1b": {
+        "selected": 0,
+        "value": "Upload queue"
+      }
+    },
+    "sort_order": "400000.0000101",
+    "source_net": "APAC_Region",
+    "source_not": "1",
+    "source_port": "",
+    "state-policy": {
+      "": {
+        "selected": 1,
+        "value": "default"
+      },
+      "floating": {
+        "selected": 0,
+        "value": "Floating states"
+      },
+      "if-bound": {
+        "selected": 0,
+        "value": "Bind states to interface"
+      }
+    },
+    "statetimeout": "",
+    "statetype": {
+      "keep": {
+        "selected": 1,
+        "value": "keep state"
+      },
+      "modulate": {
+        "selected": 0,
+        "value": "modulate state"
+      },
+      "none": {
+        "selected": 0,
+        "value": "no state"
+      },
+      "sloppy": {
+        "selected": 0,
+        "value": "sloppy state"
+      },
+      "synproxy": {
+        "selected": 0,
+        "value": "synproxy state"
+      }
+    },
+    "tag": "",
+    "tagged": "",
+    "tcpflags1": {
+      "ack": {
+        "selected": 0,
+        "value": "ack"
+      },
+      "cwr": {
+        "selected": 0,
+        "value": "cwr"
+      },
+      "ece": {
+        "selected": 0,
+        "value": "ece"
+      },
+      "fin": {
+        "selected": 0,
+        "value": "fin"
+      },
+      "psh": {
+        "selected": 0,
+        "value": "psh"
+      },
+      "rst": {
+        "selected": 0,
+        "value": "rst"
+      },
+      "syn": {
+        "selected": 0,
+        "value": "syn"
+      },
+      "urg": {
+        "selected": 0,
+        "value": "urg"
+      }
+    },
+    "tcpflags2": {
+      "ack": {
+        "selected": 0,
+        "value": "ack"
+      },
+      "cwr": {
+        "selected": 0,
+        "value": "cwr"
+      },
+      "ece": {
+        "selected": 0,
+        "value": "ece"
+      },
+      "fin": {
+        "selected": 0,
+        "value": "fin"
+      },
+      "psh": {
+        "selected": 0,
+        "value": "psh"
+      },
+      "rst": {
+        "selected": 0,
+        "value": "rst"
+      },
+      "syn": {
+        "selected": 0,
+        "value": "syn"
+      },
+      "urg": {
+        "selected": 0,
+        "value": "urg"
+      }
+    },
+    "tcpflags_any": "0",
+    "tos": {
+      "": {
+        "selected": 1,
+        "value": "Any"
+      },
+      "0x0": {
+        "selected": 0,
+        "value": "0x00"
+      },
+      "0x1": {
+        "selected": 0,
+        "value": "0x01"
+      },
+      "0x10": {
+        "selected": 0,
+        "value": "0x10"
+      },
+      "0x11": {
+        "selected": 0,
+        "value": "0x11"
+      },
+      "0x12": {
+        "selected": 0,
+        "value": "0x12"
+      },
+      "0x13": {
+        "selected": 0,
+        "value": "0x13"
+      },
+      "0x14": {
+        "selected": 0,
+        "value": "0x14"
+      },
+      "0x15": {
+        "selected": 0,
+        "value": "0x15"
+      },
+      "0x16": {
+        "selected": 0,
+        "value": "0x16"
+      },
+      "0x17": {
+        "selected": 0,
+        "value": "0x17"
+      },
+      "0x18": {
+        "selected": 0,
+        "value": "0x18"
+      },
+      "0x19": {
+        "selected": 0,
+        "value": "0x19"
+      },
+      "0x1a": {
+        "selected": 0,
+        "value": "0x1A"
+      },
+      "0x1b": {
+        "selected": 0,
+        "value": "0x1B"
+      },
+      "0x1c": {
+        "selected": 0,
+        "value": "0x1C"
+      },
+      "0x1d": {
+        "selected": 0,
+        "value": "0x1D"
+      },
+      "0x1e": {
+        "selected": 0,
+        "value": "0x1E"
+      },
+      "0x1f": {
+        "selected": 0,
+        "value": "0x1F"
+      },
+      "0x2": {
+        "selected": 0,
+        "value": "0x02"
+      },
+      "0x20": {
+        "selected": 0,
+        "value": "0x20"
+      },
+      "0x21": {
+        "selected": 0,
+        "value": "0x21"
+      },
+      "0x22": {
+        "selected": 0,
+        "value": "0x22"
+      },
+      "0x23": {
+        "selected": 0,
+        "value": "0x23"
+      },
+      "0x24": {
+        "selected": 0,
+        "value": "0x24"
+      },
+      "0x25": {
+        "selected": 0,
+        "value": "0x25"
+      },
+      "0x26": {
+        "selected": 0,
+        "value": "0x26"
+      },
+      "0x27": {
+        "selected": 0,
+        "value": "0x27"
+      },
+      "0x28": {
+        "selected": 0,
+        "value": "0x28"
+      },
+      "0x29": {
+        "selected": 0,
+        "value": "0x29"
+      },
+      "0x2a": {
+        "selected": 0,
+        "value": "0x2A"
+      },
+      "0x2b": {
+        "selected": 0,
+        "value": "0x2B"
+      },
+      "0x2c": {
+        "selected": 0,
+        "value": "0x2C"
+      },
+      "0x2d": {
+        "selected": 0,
+        "value": "0x2D"
+      },
+      "0x2e": {
+        "selected": 0,
+        "value": "0x2E"
+      },
+      "0x2f": {
+        "selected": 0,
+        "value": "0x2F"
+      },
+      "0x3": {
+        "selected": 0,
+        "value": "0x03"
+      },
+      "0x30": {
+        "selected": 0,
+        "value": "0x30"
+      },
+      "0x31": {
+        "selected": 0,
+        "value": "0x31"
+      },
+      "0x32": {
+        "selected": 0,
+        "value": "0x32"
+      },
+      "0x33": {
+        "selected": 0,
+        "value": "0x33"
+      },
+      "0x34": {
+        "selected": 0,
+        "value": "0x34"
+      },
+      "0x35": {
+        "selected": 0,
+        "value": "0x35"
+      },
+      "0x36": {
+        "selected": 0,
+        "value": "0x36"
+      },
+      "0x37": {
+        "selected": 0,
+        "value": "0x37"
+      },
+      "0x38": {
+        "selected": 0,
+        "value": "0x38"
+      },
+      "0x39": {
+        "selected": 0,
+        "value": "0x39"
+      },
+      "0x3a": {
+        "selected": 0,
+        "value": "0x3A"
+      },
+      "0x3b": {
+        "selected": 0,
+        "value": "0x3B"
+      },
+      "0x3c": {
+        "selected": 0,
+        "value": "0x3C"
+      },
+      "0x3d": {
+        "selected": 0,
+        "value": "0x3D"
+      },
+      "0x3e": {
+        "selected": 0,
+        "value": "0x3E"
+      },
+      "0x3f": {
+        "selected": 0,
+        "value": "0x3F"
+      },
+      "0x4": {
+        "selected": 0,
+        "value": "0x04"
+      },
+      "0x40": {
+        "selected": 0,
+        "value": "0x40"
+      },
+      "0x41": {
+        "selected": 0,
+        "value": "0x41"
+      },
+      "0x42": {
+        "selected": 0,
+        "value": "0x42"
+      },
+      "0x43": {
+        "selected": 0,
+        "value": "0x43"
+      },
+      "0x44": {
+        "selected": 0,
+        "value": "0x44"
+      },
+      "0x45": {
+        "selected": 0,
+        "value": "0x45"
+      },
+      "0x46": {
+        "selected": 0,
+        "value": "0x46"
+      },
+      "0x47": {
+        "selected": 0,
+        "value": "0x47"
+      },
+      "0x48": {
+        "selected": 0,
+        "value": "0x48"
+      },
+      "0x49": {
+        "selected": 0,
+        "value": "0x49"
+      },
+      "0x4a": {
+        "selected": 0,
+        "value": "0x4A"
+      },
+      "0x4b": {
+        "selected": 0,
+        "value": "0x4B"
+      },
+      "0x4c": {
+        "selected": 0,
+        "value": "0x4C"
+      },
+      "0x4d": {
+        "selected": 0,
+        "value": "0x4D"
+      },
+      "0x4e": {
+        "selected": 0,
+        "value": "0x4E"
+      },
+      "0x4f": {
+        "selected": 0,
+        "value": "0x4F"
+      },
+      "0x5": {
+        "selected": 0,
+        "value": "0x05"
+      },
+      "0x50": {
+        "selected": 0,
+        "value": "0x50"
+      },
+      "0x51": {
+        "selected": 0,
+        "value": "0x51"
+      },
+      "0x52": {
+        "selected": 0,
+        "value": "0x52"
+      },
+      "0x53": {
+        "selected": 0,
+        "value": "0x53"
+      },
+      "0x54": {
+        "selected": 0,
+        "value": "0x54"
+      },
+      "0x55": {
+        "selected": 0,
+        "value": "0x55"
+      },
+      "0x56": {
+        "selected": 0,
+        "value": "0x56"
+      },
+      "0x57": {
+        "selected": 0,
+        "value": "0x57"
+      },
+      "0x58": {
+        "selected": 0,
+        "value": "0x58"
+      },
+      "0x59": {
+        "selected": 0,
+        "value": "0x59"
+      },
+      "0x5a": {
+        "selected": 0,
+        "value": "0x5A"
+      },
+      "0x5b": {
+        "selected": 0,
+        "value": "0x5B"
+      },
+      "0x5c": {
+        "selected": 0,
+        "value": "0x5C"
+      },
+      "0x5d": {
+        "selected": 0,
+        "value": "0x5D"
+      },
+      "0x5e": {
+        "selected": 0,
+        "value": "0x5E"
+      },
+      "0x5f": {
+        "selected": 0,
+        "value": "0x5F"
+      },
+      "0x6": {
+        "selected": 0,
+        "value": "0x06"
+      },
+      "0x60": {
+        "selected": 0,
+        "value": "0x60"
+      },
+      "0x61": {
+        "selected": 0,
+        "value": "0x61"
+      },
+      "0x62": {
+        "selected": 0,
+        "value": "0x62"
+      },
+      "0x63": {
+        "selected": 0,
+        "value": "0x63"
+      },
+      "0x64": {
+        "selected": 0,
+        "value": "0x64"
+      },
+      "0x65": {
+        "selected": 0,
+        "value": "0x65"
+      },
+      "0x66": {
+        "selected": 0,
+        "value": "0x66"
+      },
+      "0x67": {
+        "selected": 0,
+        "value": "0x67"
+      },
+      "0x68": {
+        "selected": 0,
+        "value": "0x68"
+      },
+      "0x69": {
+        "selected": 0,
+        "value": "0x69"
+      },
+      "0x6a": {
+        "selected": 0,
+        "value": "0x6A"
+      },
+      "0x6b": {
+        "selected": 0,
+        "value": "0x6B"
+      },
+      "0x6c": {
+        "selected": 0,
+        "value": "0x6C"
+      },
+      "0x6d": {
+        "selected": 0,
+        "value": "0x6D"
+      },
+      "0x6e": {
+        "selected": 0,
+        "value": "0x6E"
+      },
+      "0x6f": {
+        "selected": 0,
+        "value": "0x6F"
+      },
+      "0x7": {
+        "selected": 0,
+        "value": "0x07"
+      },
+      "0x70": {
+        "selected": 0,
+        "value": "0x70"
+      },
+      "0x71": {
+        "selected": 0,
+        "value": "0x71"
+      },
+      "0x72": {
+        "selected": 0,
+        "value": "0x72"
+      },
+      "0x73": {
+        "selected": 0,
+        "value": "0x73"
+      },
+      "0x74": {
+        "selected": 0,
+        "value": "0x74"
+      },
+      "0x75": {
+        "selected": 0,
+        "value": "0x75"
+      },
+      "0x76": {
+        "selected": 0,
+        "value": "0x76"
+      },
+      "0x77": {
+        "selected": 0,
+        "value": "0x77"
+      },
+      "0x78": {
+        "selected": 0,
+        "value": "0x78"
+      },
+      "0x79": {
+        "selected": 0,
+        "value": "0x79"
+      },
+      "0x7a": {
+        "selected": 0,
+        "value": "0x7A"
+      },
+      "0x7b": {
+        "selected": 0,
+        "value": "0x7B"
+      },
+      "0x7c": {
+        "selected": 0,
+        "value": "0x7C"
+      },
+      "0x7d": {
+        "selected": 0,
+        "value": "0x7D"
+      },
+      "0x7e": {
+        "selected": 0,
+        "value": "0x7E"
+      },
+      "0x7f": {
+        "selected": 0,
+        "value": "0x7F"
+      },
+      "0x8": {
+        "selected": 0,
+        "value": "0x08"
+      },
+      "0x80": {
+        "selected": 0,
+        "value": "0x80"
+      },
+      "0x81": {
+        "selected": 0,
+        "value": "0x81"
+      },
+      "0x82": {
+        "selected": 0,
+        "value": "0x82"
+      },
+      "0x83": {
+        "selected": 0,
+        "value": "0x83"
+      },
+      "0x84": {
+        "selected": 0,
+        "value": "0x84"
+      },
+      "0x85": {
+        "selected": 0,
+        "value": "0x85"
+      },
+      "0x86": {
+        "selected": 0,
+        "value": "0x86"
+      },
+      "0x87": {
+        "selected": 0,
+        "value": "0x87"
+      },
+      "0x88": {
+        "selected": 0,
+        "value": "0x88"
+      },
+      "0x89": {
+        "selected": 0,
+        "value": "0x89"
+      },
+      "0x8a": {
+        "selected": 0,
+        "value": "0x8A"
+      },
+      "0x8b": {
+        "selected": 0,
+        "value": "0x8B"
+      },
+      "0x8c": {
+        "selected": 0,
+        "value": "0x8C"
+      },
+      "0x8d": {
+        "selected": 0,
+        "value": "0x8D"
+      },
+      "0x8e": {
+        "selected": 0,
+        "value": "0x8E"
+      },
+      "0x8f": {
+        "selected": 0,
+        "value": "0x8F"
+      },
+      "0x9": {
+        "selected": 0,
+        "value": "0x09"
+      },
+      "0x90": {
+        "selected": 0,
+        "value": "0x90"
+      },
+      "0x91": {
+        "selected": 0,
+        "value": "0x91"
+      },
+      "0x92": {
+        "selected": 0,
+        "value": "0x92"
+      },
+      "0x93": {
+        "selected": 0,
+        "value": "0x93"
+      },
+      "0x94": {
+        "selected": 0,
+        "value": "0x94"
+      },
+      "0x95": {
+        "selected": 0,
+        "value": "0x95"
+      },
+      "0x96": {
+        "selected": 0,
+        "value": "0x96"
+      },
+      "0x97": {
+        "selected": 0,
+        "value": "0x97"
+      },
+      "0x98": {
+        "selected": 0,
+        "value": "0x98"
+      },
+      "0x99": {
+        "selected": 0,
+        "value": "0x99"
+      },
+      "0x9a": {
+        "selected": 0,
+        "value": "0x9A"
+      },
+      "0x9b": {
+        "selected": 0,
+        "value": "0x9B"
+      },
+      "0x9c": {
+        "selected": 0,
+        "value": "0x9C"
+      },
+      "0x9d": {
+        "selected": 0,
+        "value": "0x9D"
+      },
+      "0x9e": {
+        "selected": 0,
+        "value": "0x9E"
+      },
+      "0x9f": {
+        "selected": 0,
+        "value": "0x9F"
+      },
+      "0xa": {
+        "selected": 0,
+        "value": "0x0A"
+      },
+      "0xa0": {
+        "selected": 0,
+        "value": "0xA0"
+      },
+      "0xa1": {
+        "selected": 0,
+        "value": "0xA1"
+      },
+      "0xa2": {
+        "selected": 0,
+        "value": "0xA2"
+      },
+      "0xa3": {
+        "selected": 0,
+        "value": "0xA3"
+      },
+      "0xa4": {
+        "selected": 0,
+        "value": "0xA4"
+      },
+      "0xa5": {
+        "selected": 0,
+        "value": "0xA5"
+      },
+      "0xa6": {
+        "selected": 0,
+        "value": "0xA6"
+      },
+      "0xa7": {
+        "selected": 0,
+        "value": "0xA7"
+      },
+      "0xa8": {
+        "selected": 0,
+        "value": "0xA8"
+      },
+      "0xa9": {
+        "selected": 0,
+        "value": "0xA9"
+      },
+      "0xaa": {
+        "selected": 0,
+        "value": "0xAA"
+      },
+      "0xab": {
+        "selected": 0,
+        "value": "0xAB"
+      },
+      "0xac": {
+        "selected": 0,
+        "value": "0xAC"
+      },
+      "0xad": {
+        "selected": 0,
+        "value": "0xAD"
+      },
+      "0xae": {
+        "selected": 0,
+        "value": "0xAE"
+      },
+      "0xaf": {
+        "selected": 0,
+        "value": "0xAF"
+      },
+      "0xb": {
+        "selected": 0,
+        "value": "0x0B"
+      },
+      "0xb0": {
+        "selected": 0,
+        "value": "0xB0"
+      },
+      "0xb1": {
+        "selected": 0,
+        "value": "0xB1"
+      },
+      "0xb2": {
+        "selected": 0,
+        "value": "0xB2"
+      },
+      "0xb3": {
+        "selected": 0,
+        "value": "0xB3"
+      },
+      "0xb4": {
+        "selected": 0,
+        "value": "0xB4"
+      },
+      "0xb5": {
+        "selected": 0,
+        "value": "0xB5"
+      },
+      "0xb6": {
+        "selected": 0,
+        "value": "0xB6"
+      },
+      "0xb7": {
+        "selected": 0,
+        "value": "0xB7"
+      },
+      "0xb8": {
+        "selected": 0,
+        "value": "0xB8"
+      },
+      "0xb9": {
+        "selected": 0,
+        "value": "0xB9"
+      },
+      "0xba": {
+        "selected": 0,
+        "value": "0xBA"
+      },
+      "0xbb": {
+        "selected": 0,
+        "value": "0xBB"
+      },
+      "0xbc": {
+        "selected": 0,
+        "value": "0xBC"
+      },
+      "0xbd": {
+        "selected": 0,
+        "value": "0xBD"
+      },
+      "0xbe": {
+        "selected": 0,
+        "value": "0xBE"
+      },
+      "0xbf": {
+        "selected": 0,
+        "value": "0xBF"
+      },
+      "0xc": {
+        "selected": 0,
+        "value": "0x0C"
+      },
+      "0xc0": {
+        "selected": 0,
+        "value": "0xC0"
+      },
+      "0xc1": {
+        "selected": 0,
+        "value": "0xC1"
+      },
+      "0xc2": {
+        "selected": 0,
+        "value": "0xC2"
+      },
+      "0xc3": {
+        "selected": 0,
+        "value": "0xC3"
+      },
+      "0xc4": {
+        "selected": 0,
+        "value": "0xC4"
+      },
+      "0xc5": {
+        "selected": 0,
+        "value": "0xC5"
+      },
+      "0xc6": {
+        "selected": 0,
+        "value": "0xC6"
+      },
+      "0xc7": {
+        "selected": 0,
+        "value": "0xC7"
+      },
+      "0xc8": {
+        "selected": 0,
+        "value": "0xC8"
+      },
+      "0xc9": {
+        "selected": 0,
+        "value": "0xC9"
+      },
+      "0xca": {
+        "selected": 0,
+        "value": "0xCA"
+      },
+      "0xcb": {
+        "selected": 0,
+        "value": "0xCB"
+      },
+      "0xcc": {
+        "selected": 0,
+        "value": "0xCC"
+      },
+      "0xcd": {
+        "selected": 0,
+        "value": "0xCD"
+      },
+      "0xce": {
+        "selected": 0,
+        "value": "0xCE"
+      },
+      "0xcf": {
+        "selected": 0,
+        "value": "0xCF"
+      },
+      "0xd": {
+        "selected": 0,
+        "value": "0x0D"
+      },
+      "0xd0": {
+        "selected": 0,
+        "value": "0xD0"
+      },
+      "0xd1": {
+        "selected": 0,
+        "value": "0xD1"
+      },
+      "0xd2": {
+        "selected": 0,
+        "value": "0xD2"
+      },
+      "0xd3": {
+        "selected": 0,
+        "value": "0xD3"
+      },
+      "0xd4": {
+        "selected": 0,
+        "value": "0xD4"
+      },
+      "0xd5": {
+        "selected": 0,
+        "value": "0xD5"
+      },
+      "0xd6": {
+        "selected": 0,
+        "value": "0xD6"
+      },
+      "0xd7": {
+        "selected": 0,
+        "value": "0xD7"
+      },
+      "0xd8": {
+        "selected": 0,
+        "value": "0xD8"
+      },
+      "0xd9": {
+        "selected": 0,
+        "value": "0xD9"
+      },
+      "0xda": {
+        "selected": 0,
+        "value": "0xDA"
+      },
+      "0xdb": {
+        "selected": 0,
+        "value": "0xDB"
+      },
+      "0xdc": {
+        "selected": 0,
+        "value": "0xDC"
+      },
+      "0xdd": {
+        "selected": 0,
+        "value": "0xDD"
+      },
+      "0xde": {
+        "selected": 0,
+        "value": "0xDE"
+      },
+      "0xdf": {
+        "selected": 0,
+        "value": "0xDF"
+      },
+      "0xe": {
+        "selected": 0,
+        "value": "0x0E"
+      },
+      "0xe0": {
+        "selected": 0,
+        "value": "0xE0"
+      },
+      "0xe1": {
+        "selected": 0,
+        "value": "0xE1"
+      },
+      "0xe2": {
+        "selected": 0,
+        "value": "0xE2"
+      },
+      "0xe3": {
+        "selected": 0,
+        "value": "0xE3"
+      },
+      "0xe4": {
+        "selected": 0,
+        "value": "0xE4"
+      },
+      "0xe5": {
+        "selected": 0,
+        "value": "0xE5"
+      },
+      "0xe6": {
+        "selected": 0,
+        "value": "0xE6"
+      },
+      "0xe7": {
+        "selected": 0,
+        "value": "0xE7"
+      },
+      "0xe8": {
+        "selected": 0,
+        "value": "0xE8"
+      },
+      "0xe9": {
+        "selected": 0,
+        "value": "0xE9"
+      },
+      "0xea": {
+        "selected": 0,
+        "value": "0xEA"
+      },
+      "0xeb": {
+        "selected": 0,
+        "value": "0xEB"
+      },
+      "0xec": {
+        "selected": 0,
+        "value": "0xEC"
+      },
+      "0xed": {
+        "selected": 0,
+        "value": "0xED"
+      },
+      "0xee": {
+        "selected": 0,
+        "value": "0xEE"
+      },
+      "0xef": {
+        "selected": 0,
+        "value": "0xEF"
+      },
+      "0xf": {
+        "selected": 0,
+        "value": "0x0F"
+      },
+      "0xf0": {
+        "selected": 0,
+        "value": "0xF0"
+      },
+      "0xf1": {
+        "selected": 0,
+        "value": "0xF1"
+      },
+      "0xf2": {
+        "selected": 0,
+        "value": "0xF2"
+      },
+      "0xf3": {
+        "selected": 0,
+        "value": "0xF3"
+      },
+      "0xf4": {
+        "selected": 0,
+        "value": "0xF4"
+      },
+      "0xf5": {
+        "selected": 0,
+        "value": "0xF5"
+      },
+      "0xf6": {
+        "selected": 0,
+        "value": "0xF6"
+      },
+      "0xf7": {
+        "selected": 0,
+        "value": "0xF7"
+      },
+      "0xf8": {
+        "selected": 0,
+        "value": "0xF8"
+      },
+      "0xf9": {
+        "selected": 0,
+        "value": "0xF9"
+      },
+      "0xfa": {
+        "selected": 0,
+        "value": "0xFA"
+      },
+      "0xfb": {
+        "selected": 0,
+        "value": "0xFB"
+      },
+      "0xfc": {
+        "selected": 0,
+        "value": "0xFC"
+      },
+      "0xfd": {
+        "selected": 0,
+        "value": "0xFD"
+      },
+      "0xfe": {
+        "selected": 0,
+        "value": "0xFE"
+      },
+      "0xff": {
+        "selected": 0,
+        "value": "0xFF"
+      },
+      "af11": {
+        "selected": 0,
+        "value": "AF11"
+      },
+      "af12": {
+        "selected": 0,
+        "value": "AF12"
+      },
+      "af13": {
+        "selected": 0,
+        "value": "AF13"
+      },
+      "af21": {
+        "selected": 0,
+        "value": "AF21"
+      },
+      "af22": {
+        "selected": 0,
+        "value": "AF22"
+      },
+      "af23": {
+        "selected": 0,
+        "value": "AF23"
+      },
+      "af31": {
+        "selected": 0,
+        "value": "AF31"
+      },
+      "af32": {
+        "selected": 0,
+        "value": "AF32"
+      },
+      "af33": {
+        "selected": 0,
+        "value": "AF33"
+      },
+      "af41": {
+        "selected": 0,
+        "value": "AF41"
+      },
+      "af42": {
+        "selected": 0,
+        "value": "AF42"
+      },
+      "af43": {
+        "selected": 0,
+        "value": "AF43"
+      },
+      "critical": {
+        "selected": 0,
+        "value": "critical"
+      },
+      "cs0": {
+        "selected": 0,
+        "value": "CS0"
+      },
+      "cs1": {
+        "selected": 0,
+        "value": "CS1"
+      },
+      "cs2": {
+        "selected": 0,
+        "value": "CS2"
+      },
+      "cs3": {
+        "selected": 0,
+        "value": "CS3"
+      },
+      "cs4": {
+        "selected": 0,
+        "value": "CS4"
+      },
+      "cs5": {
+        "selected": 0,
+        "value": "CS5"
+      },
+      "cs6": {
+        "selected": 0,
+        "value": "CS6"
+      },
+      "cs7": {
+        "selected": 0,
+        "value": "CS7"
+      },
+      "ef": {
+        "selected": 0,
+        "value": "EF"
+      },
+      "inetcontrol": {
+        "selected": 0,
+        "value": "inetcontrol"
+      },
+      "lowdelay": {
+        "selected": 0,
+        "value": "lowdelay"
+      },
+      "netcontrol": {
+        "selected": 0,
+        "value": "netcontrol"
+      },
+      "reliability": {
+        "selected": 0,
+        "value": "reliability"
+      },
+      "throughput": {
+        "selected": 0,
+        "value": "throughput"
+      }
+    },
+    "udp-first": "",
+    "udp-multiple": "",
+    "udp-single": ""
+  }
+}
