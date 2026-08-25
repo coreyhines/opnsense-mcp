@@ -233,16 +233,38 @@ jobs:
             _apk
           }
       - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Download trivy vulnerability DB
+        env:
+          TRIVY_SKIP_VERSION_CHECK: "true"
+        run: |
+          set -eu
+          # Anonymous pulls fail with "DENIED: denied" when a stale registry
+          # credential is picked up from a mounted docker config, so point
+          # DOCKER_CONFIG at an empty dir to force anonymous access.
+          DOCKER_CONFIG="$(mktemp -d)"; export DOCKER_CONFIG
+          # mirror.gcr.io (the image default) is intercepted on these runners
+          # with an untrusted certificate; try the alternatives in turn.
+          ok=0
+          for repo in \
+            ghcr.io/aquasecurity/trivy-db:2 \
+            public.ecr.aws/aquasecurity/trivy-db:2 \
+            mirror.gcr.io/aquasec/trivy-db:2
+          do
+            echo "Trying DB repository: ${repo}"
+            if trivy image --download-db-only --db-repository "${repo}"; then
+              ok=1; break
+            fi
+            echo "Failed: ${repo}"
+          done
+          [ "$ok" = "1" ] || { echo "No trivy DB source reachable"; exit 1; }
       - name: Trivy filesystem scan
         env:
-          # The image defaults to mirror.gcr.io, which this network intercepts
-          # with an untrusted certificate. ghcr.io is reachable and trusted here
-          # (the gitleaks image pulls from it), so use the upstream DB repo
-          # rather than disabling certificate verification.
-          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
-          TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db:1
           TRIVY_SKIP_VERSION_CHECK: "true"
-        run: trivy fs --exit-code 1 --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
+        # DB is already local, so --exit-code 1 here means findings, not a
+        # download failure.
+        run: |
+          trivy fs --skip-db-update --exit-code 1 \
+            --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
       - name: Upload trivy-fs-report
         if: always()
         continue-on-error: true
