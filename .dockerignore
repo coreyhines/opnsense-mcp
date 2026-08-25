@@ -1,6 +1,6 @@
 .git
 .github
-.gitlab-ci.yml
+.forgejo/workflows/
 .cursor
 .venv
 venv

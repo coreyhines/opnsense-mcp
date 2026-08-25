@@ -103,7 +103,7 @@ The helper script `deploy/ci/compute-image-tag.sh` reads `version` from `pyproje
 1. Bump `version` in `pyproject.toml`.
 2. Commit and push to `main`.
 3. Tag and push: `git tag v1.0.1 && git push origin v1.0.1`
-4. GitLab CI publishes `hub.freeblizz.com/opnsense-mcp:1.0.1`.
+4. Forgejo Actions publishes `hub.freeblizz.com/opnsense-mcp:1.0.1`.
 
 ---
 
@@ -163,6 +163,6 @@ Impact: existing `curl | bash` one-liners and manual installs now complete witho
 
 ## Related docs
 
-- [`deploy/README.md`](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/blob/main/deploy/README.md) — deployment quickstart
-- [`docs/CENTRALIZED_DEPLOY_SPEC.md`](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/blob/main/docs/CENTRALIZED_DEPLOY_SPEC.md) — full architecture and spec
-- [`deploy/install.sh`](https://gitlab.freeblizz.com/coreyhines/opnsense-mcp/-/blob/main/deploy/install.sh) — installer script
+- [`deploy/README.md`](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/src/branch/main/deploy/README.md) — deployment quickstart
+- [`docs/CENTRALIZED_DEPLOY_SPEC.md`](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/src/branch/main/docs/CENTRALIZED_DEPLOY_SPEC.md) — full architecture and spec
+- [`deploy/install.sh`](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/src/branch/main/deploy/install.sh) — installer script

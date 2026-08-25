@@ -5,7 +5,7 @@
 #   sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh
 #
 # One-liner (auto tag from pyproject + git sha on main):
-#   curl -fsSL 'https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/-/raw/main/deploy/install.sh' | sudo bash
+#   curl -fsSL 'https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/raw/branch/main/deploy/install.sh' | sudo bash
 #
 # Local dev build (does not push):
 #   sudo OPNSENSE_MCP_IMAGE_TAG=dev-$(git rev-parse --short HEAD) bash deploy/install.sh --build-local
