@@ -234,6 +234,14 @@ jobs:
           }
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Trivy filesystem scan
+        env:
+          # The image defaults to mirror.gcr.io, which this network intercepts
+          # with an untrusted certificate. ghcr.io is reachable and trusted here
+          # (the gitleaks image pulls from it), so use the upstream DB repo
+          # rather than disabling certificate verification.
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
+          TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db:1
+          TRIVY_SKIP_VERSION_CHECK: "true"
         run: trivy fs --exit-code 1 --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
       - name: Upload trivy-fs-report
         if: always()
