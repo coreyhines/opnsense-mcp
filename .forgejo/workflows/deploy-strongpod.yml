@@ -19,7 +19,21 @@ jobs:
       - name: Install git, node, and ssh client
         # actions/checkout is a Node-based action; this plain alpine image
         # has neither by default.
-        run: apk add --no-cache git nodejs openssh-client bash
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs openssh-client bash; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk
+          }
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Deploy
         env:

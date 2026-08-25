@@ -36,7 +36,21 @@ jobs:
       image: docker.io/library/alpine:3.22.0
     steps:
       - name: Install git, node, ssh client and python
-        run: apk add --no-cache git nodejs openssh-client bash python3
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs openssh-client bash python3; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk
+          }
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Run flent rrul on strongpod
         env:
