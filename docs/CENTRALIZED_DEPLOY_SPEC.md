@@ -9,8 +9,8 @@ Single planning/implementation reference for the **network service** path. **IDE
 - **One MCP core** (same tools, same Python package) for stdio and centralized use.
 - **Centralized:** long-lived service, **Linux amd64** only for now (no macOS/ARM in scope).
 - **Installer:** **`curl | bash`** loading the script from **raw on `main`** (treat merges as production).
-- **Source:** **GitLab** for clone URLs and CI image builds.
-- **Images:** **GitLab CI (Kaniko)** pushes **`hub.freeblizz.com/opnsense-mcp:<semver>`** on git tag **`vX.Y.Z`**, or **`X.Y.Z-dev.<short-sha>`** on `main` (version from `pyproject.toml`). Host install **pulls** a pinned tag (no `:latest`).
+- **Source:** **Forgejo** for clone URLs and CI image builds.
+- **Images:** **Forgejo Actions** pushes **`hub.freeblizz.com/opnsense-mcp:<semver>`** on git tag **`vX.Y.Z`**, or **`X.Y.Z-dev.<short-sha>`** on `main` (version from `pyproject.toml`). Host install **pulls** a pinned tag (no `:latest`).
 - **Podman** is the blessed server path (**rootful**, **UID 1000** convention for volume ownership where it matters).
 - **Docker:** supported as a first-class alternative; **do not** force Podman on Docker users.
 - **TLS:** **Caddy** in front; **TLS by default**; works with **real CA PEMs** or **self-signed** (paths to `fullchain` + `privkey` — client trust is the operator’s problem for self-signed).
@@ -53,7 +53,7 @@ Single planning/implementation reference for the **network service** path. **IDE
 - **Docker:** `deploy/install.sh --runtime docker` runs **`docker compose -p opnsense-mcp -f deploy/docker-compose.yml up -d --build`** from the checkout.
 - **One-liner (raw script on `main`):**
   ```bash
-  curl -fsSL 'https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/-/raw/main/deploy/install.sh' | sudo bash
+  curl -fsSL 'https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/raw/branch/main/deploy/install.sh' | sudo bash
   ```
   (Installer auto-selects `$(pyproject version)-dev.<short-sha>` when **`OPNSENSE_MCP_IMAGE_TAG`** is unset.)
 - **Uninstall:** `sudo bash deploy/uninstall.sh` (from checkout) or copy the script to the host. **Docker:** `--runtime docker`. Optional **`--purge-env`** removes **`$INSTALL_ROOT/environment`**.
@@ -86,7 +86,7 @@ Set via **environment** before running `install.sh`, add the same keys to **`$IN
 1. Bump **`version`** in **`pyproject.toml`** (e.g. `1.0.1`).
 2. Commit and push **`main`**.
 3. Tag and push: **`git tag v1.0.1 && git push origin v1.0.1`**
-4. GitLab **`build:image`** publishes **`hub.freeblizz.com/opnsense-mcp:1.0.1`**.
+4. Forgejo Actions **`build:image`** publishes **`hub.freeblizz.com/opnsense-mcp:1.0.1`**.
 5. Deploy: **`sudo OPNSENSE_MCP_IMAGE_TAG=1.0.1 bash deploy/install.sh`** or manual **`deploy:strongpod`**.
 | `OPNSENSE_MCP_CADDY_IMAGE` | Pinned Caddy image (default `docker.io/library/caddy:2.9.1-alpine`). |
 
@@ -100,7 +100,7 @@ sudo env OPNSENSE_MCP_IMAGE_TAG=1.0.0 \
   OPNSENSE_MCP_TLS_CERTS=/opt/certs/wild bash deploy/install.sh
 ```
 
-### GitLab CI (registry + deploy)
+### Forgejo Actions (registry + deploy)
 
 | CI/CD variable | Purpose |
 |----------------|---------|
@@ -113,7 +113,7 @@ sudo env OPNSENSE_MCP_IMAGE_TAG=1.0.0 \
 ### Install troubleshooting (strongpod / quadlet)
 
 - **Image update but old code still running:** `systemctl restart` alone may leave the previous container instance. After changing **`OPNSENSE_MCP_IMAGE_TAG`**, run **`podman rm -f opnsense-mcp-app opnsense-mcp-caddy`** (or your **`OPNSENSE_MCP_*_CONTAINER_NAME`** values), then **`systemctl restart opnsense-mcp-pod.service opnsense-mcp-app.service opnsense-mcp-caddy.service`**. Reconnect MCP clients in Cursor after redeploy.
-- **Diverged git clone:** the installer **`git reset --hard origin/<branch>`** so `/opt/containerdata/.../src` always matches GitLab (no lingering local commits).
+- **Diverged git clone:** the installer **`git reset --hard origin/<branch>`** so `/opt/containerdata/.../src` always matches Forgejo (no lingering local commits).
 - **`Failed to enable unit: ... transient or generated`:** quadlet-generated `.service` units sometimes cannot be enabled by name; the script enables the **`.container`** file path, then **`start`**, as a fallback.
 - **Unit not found after install:** (1) Quadlet files must live **directly in** **`/etc/containers/systemd/`** on Podman before **4.7** (subdirectories ignored — [containers/podman#20236](https://github.com/containers/podman/issues/20236)). (2) Quadlet names `.pod` units as **`<stem>-pod.service`** (appends `-pod`), **not** `pod-<stem>.service`: **`opnsense-mcp.pod`** → **`opnsense-mcp-pod.service`**. Container **`Requires=`** must match. (3) **`systemctl daemon-reload`**; ensure **`podman-quadlet`** is installed. (4) Dry-run: `sudo /usr/lib/systemd/system-generators/podman-system-generator --dryrun 2>&1 | grep opnsense-mcp`.
 

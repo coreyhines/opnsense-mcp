@@ -24,6 +24,7 @@ from opnsense_mcp.utils.dhcp_provider import (
     require_subnet_dns_provider,
 )
 from opnsense_mcp.utils.dhcp_subnet_dns import Family, merge_slot_update
+from opnsense_mcp.utils.mvc_merge import merge_for_set
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 logger = logging.getLogger(__name__)
@@ -86,6 +87,50 @@ ENDPOINTS = {
         "gateway_status": "/api/routes/gateway/status",
     },
 }
+
+
+_SET_SCALAR_FIELDS = (
+    "description",
+    "interface",
+    "direction",
+    "ipprotocol",
+    "protocol",
+    "gateway",
+    "action",
+    "enabled",
+    "sequence",
+    "log",
+    "quick",
+    "source_not",
+    "destination_not",
+    "interfacenot",
+)
+
+
+def _firewall_rule_overrides_for_set(rule_data: dict[str, Any]) -> dict[str, Any]:
+    """Map agent-facing rule fields onto flat ``setRule`` keys.
+
+    Only keys the caller actually supplied are returned. Everything else is
+    left to :func:`merge_for_set`, which preserves the fetched value.
+    """
+    overrides: dict[str, Any] = {}
+    for key in _SET_SCALAR_FIELDS:
+        if key in rule_data and rule_data[key] is not None:
+            overrides[key] = rule_data[key]
+
+    for side, prefix in (("source", "source"), ("destination", "destination")):
+        block = rule_data.get(side)
+        if isinstance(block, dict):
+            if block.get("net") is not None:
+                overrides[f"{prefix}_net"] = block["net"]
+            if block.get("port") is not None:
+                overrides[f"{prefix}_port"] = block["port"]
+        for suffix in ("net", "port"):
+            flat_key = f"{prefix}_{suffix}"
+            if rule_data.get(flat_key) is not None:
+                overrides[flat_key] = rule_data[flat_key]
+
+    return overrides
 
 
 def _firewall_rule_inner_for_add_api(rule_data: dict[str, Any]) -> dict[str, Any]:
@@ -521,16 +566,34 @@ class OPNsenseClient:
             logger.info(f"Successfully created firewall rule with UUID: {rule_uuid}")
             return {"uuid": rule_uuid, "result": "success"}
 
+    async def get_firewall_rule(self: "OPNsenseClient", uuid: str) -> dict[str, Any]:
+        """Fetch the full MVC node for one firewall rule."""
+        response = await self._make_request(
+            "GET",
+            f"{ENDPOINTS['firewall']['get_rules']}/{uuid}",
+        )
+        node = response.get("rule")
+        if not isinstance(node, dict):
+            raise ResponseError(f"getRule returned no rule node for {uuid}")
+        return node
+
     async def update_firewall_rule(
         self: "OPNsenseClient", uuid: str, rule_data: dict[str, Any]
     ) -> dict[str, Any]:
-        """Update an existing firewall rule."""
+        """Update an existing firewall rule, preserving unspecified fields.
+
+        A ``setRule`` POST replaces the whole node, so this fetches the current
+        rule and overlays only the caller's changes. Posting an add-shaped
+        payload here would reset every field the caller did not restate.
+        """
         try:
             logger.debug(f"Updating firewall rule {uuid} with data: {rule_data}")
+            node = await self.get_firewall_rule(uuid)
+            merged = merge_for_set(node, _firewall_rule_overrides_for_set(rule_data))
             response = await self._make_request(
                 "POST",
                 f"{ENDPOINTS['firewall']['set_rule']}/{uuid}",
-                json={"rule": _firewall_rule_inner_for_add_api(rule_data)},
+                json={"rule": merged},
             )
 
             if response.get("result") != "saved":

@@ -16,7 +16,7 @@ On the host (as root):
 sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh
 ```
 
-GitLab CI on `main` pushes `hub.freeblizz.com/opnsense-mcp:<version>-dev.<sha>` (version from `pyproject.toml`).
+Forgejo Actions on `main` pushes `hub.freeblizz.com/opnsense-mcp:<version>-dev.<sha>` (version from `pyproject.toml`).
 Git tag `v1.0.0` publishes `hub.freeblizz.com/opnsense-mcp:1.0.0`.
 
 After TLS and DNS are in place, clients connect to:

@@ -1,0 +1,357 @@
+name: Security
+
+# Ported from the GitLab `scanning` and `security` stages. Blocking gates run as
+# their own jobs so a failure names the scanner that failed. The informational
+# scanners share one job because cross-job artifact passing is unreliable on this
+# Forgejo instance (see the upload note in ci.yml), and collect_reports needs all
+# of their output in one workspace to build the bundle.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  gitleaks:
+    runs-on: ansible-net10
+    container:
+      image: ghcr.io/gitleaks/gitleaks:v8.30.1
+      options: --entrypoint ""
+    steps:
+      - name: Install git and node
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk
+          }
+      - uses: https://data.forgejo.org/actions/checkout@v6
+        with:
+          # gitleaks scans history; a shallow clone hides prior commits.
+          fetch-depth: 0
+      - name: Scan for committed secrets
+        run: gitleaks detect --config .gitleaks.toml --redact --log-opts main --verbose
+
+  gitguardian:
+    runs-on: ansible-net10
+    container:
+      image: docker.io/gitguardian/ggshield:latest
+    steps:
+      - name: Install git and node
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk || {
+              echo "not an apk image; using apt"
+              apt-get update && apt-get install -y git nodejs
+            }
+          }
+      - uses: https://data.forgejo.org/actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: ggshield secret scan
+        env:
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GITGUARDIAN_API_KEY:-}" ]; then
+            echo "ERROR: GITGUARDIAN_API_KEY is not set. Add it as a repository or"
+            echo "organisation secret in Forgejo (Settings -> Actions -> Secrets)."
+            exit 1
+          fi
+          ggshield -c .gitguardian.yaml secret scan ci
+
+  semgrep:
+    # Replaces GitLab's Security/SAST.gitlab-ci.yml template, which has no
+    # Forgejo equivalent. Rulesets are pinned explicitly rather than using
+    # --config auto, so runs stay reproducible and offline-registry friendly.
+    runs-on: ansible-net10
+    container:
+      image: docker.io/semgrep/semgrep:latest
+    steps:
+      - name: Install git and node
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk || {
+              echo "not an apk image; using apt"
+              apt-get update && apt-get install -y git nodejs
+            }
+          }
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Semgrep scan
+        run: |
+          semgrep scan \
+            --config p/python \
+            --config p/security-audit \
+            --error \
+            --metrics off \
+            --json --output semgrep-report.json \
+            --exclude tests
+      - name: Upload semgrep-report
+        if: always()
+        continue-on-error: true
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
+
+  pip_audit_prod:
+    # Blocking supply-chain gate: production closure only (requirements.txt).
+    runs-on: ansible-net10
+    container:
+      image: docker.io/library/python:3.12-alpine
+    steps:
+      - name: Install git and node
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk
+          }
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Audit production dependencies
+        run: |
+          set -euo pipefail
+          pip install --quiet --upgrade "pip>=26.0"
+          pip install --quiet pip-audit
+          python3 -m venv .ci-venv-prod-audit
+          . .ci-venv-prod-audit/bin/activate
+          pip install --quiet -r requirements.txt
+          pip-audit --progress-spinner off -f json -o pip-audit-prod.json
+      - name: Upload pip-audit-prod
+        if: always()
+        continue-on-error: true
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: pip-audit-prod
+          path: pip-audit-prod.json
+
+  sbom:
+    # CycloneDX SBOM for the production dependency closure.
+    runs-on: ansible-net10
+    container:
+      image: docker.io/library/python:3.12-alpine
+    steps:
+      - name: Install git and node
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk
+          }
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Generate CycloneDX SBOM
+        run: |
+          set -euo pipefail
+          pip install --quiet --upgrade "pip>=26.0"
+          pip install --quiet pip-audit
+          python3 -m venv .ci-venv-sbom
+          . .ci-venv-sbom/bin/activate
+          pip install --quiet -r requirements.txt
+          pip-audit --progress-spinner off -f cyclonedx-json -o sbom.cdx.json
+      - name: Upload SBOM
+        continue-on-error: true
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+
+  trivy_fs:
+    # Repo filesystem, HIGH/CRITICAL only.
+    #
+    # Non-blocking until the runners trust the intercepting CA. Registry TLS is
+    # intercepted inconsistently across this fleet: one run reached ghcr.io and
+    # got DENIED from its token endpoint, the next failed certificate
+    # verification against ghcr.io, public.ecr.aws and mirror.gcr.io alike. The
+    # scan cannot start without its vulnerability DB, so the job fails for
+    # reasons unrelated to the code under review.
+    #
+    # Restore blocking (drop continue-on-error) once `trivy image
+    # --download-db-only` succeeds from a runner container.
+    runs-on: ansible-net10
+    continue-on-error: true
+    container:
+      image: docker.io/aquasec/trivy:latest
+      options: --entrypoint ""
+    steps:
+      - name: Install git and node
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk
+          }
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Download trivy vulnerability DB
+        env:
+          TRIVY_SKIP_VERSION_CHECK: "true"
+        run: |
+          set -eu
+          # Anonymous pulls fail with "DENIED: denied" when a stale registry
+          # credential is picked up from a mounted docker config, so point
+          # DOCKER_CONFIG at an empty dir to force anonymous access.
+          DOCKER_CONFIG="$(mktemp -d)"; export DOCKER_CONFIG
+          # mirror.gcr.io (the image default) is intercepted on these runners
+          # with an untrusted certificate; try the alternatives in turn.
+          ok=0
+          for repo in \
+            ghcr.io/aquasecurity/trivy-db:2 \
+            public.ecr.aws/aquasecurity/trivy-db:2 \
+            mirror.gcr.io/aquasec/trivy-db:2
+          do
+            echo "Trying DB repository: ${repo}"
+            if trivy image --download-db-only --db-repository "${repo}"; then
+              ok=1; break
+            fi
+            echo "Failed: ${repo}"
+          done
+          [ "$ok" = "1" ] || { echo "No trivy DB source reachable"; exit 1; }
+      - name: Trivy filesystem scan
+        env:
+          TRIVY_SKIP_VERSION_CHECK: "true"
+        # DB is already local, so --exit-code 1 here means findings, not a
+        # download failure.
+        run: |
+          trivy fs --skip-db-update --exit-code 1 \
+            --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
+      - name: Upload trivy-fs-report
+        if: always()
+        continue-on-error: true
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-report.json
+
+  security_reports:
+    # Informational scanners plus the report bundle GitLab's collect_reports
+    # produced. Never blocks the pipeline; findings are read from the artifact
+    # or the job log.
+    runs-on: ansible-net10
+    continue-on-error: true
+    container:
+      image: docker.io/library/python:3.12-alpine
+    steps:
+      - name: Install git and node
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk
+          }
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install scanners
+        run: pip install --quiet --upgrade "pip>=26.0" bandit detect-secrets pip-audit
+      - name: Bandit
+        run: |
+          bandit -r "$(pwd)" -x "$(pwd)/.venv,$(pwd)/tests" \
+            -v -f html -o bandit-report.html --exit-zero
+      - name: detect-secrets
+        # Phase 0 diagnostics fixtures carry live firewall IDs that look like
+        # high-entropy secrets.
+        run: |
+          detect-secrets scan --all-files \
+            --exclude-files '\.git/config|tests/fixtures/phase0-diagnostics/.*' \
+            > .secrets.baseline || true
+      - name: pip-audit (full tree, informational)
+        run: |
+          pip install --quiet -e . || true
+          pip-audit --progress-spinner off --format json -o pip-audit-report.json || true
+      - name: Build report bundle
+        run: |
+          set -eu
+          mkdir -p public
+          for f in bandit-report.html pip-audit-report.json .secrets.baseline; do
+            [ -f "$f" ] && cp "$f" public/ || echo "$f not found"
+          done
+          if [ -f pip-audit-report.json ]; then
+            python3 opnsense_mcp/tools/convert_pip_audit_to_html.py \
+              pip-audit-report.json public/pip-audit-report.html || true
+          fi
+          python3 -c "
+          import os
+          files = sorted(f for f in os.listdir('public') if f != 'index.html')
+          with open('public/index.html', 'w') as fh:
+              fh.write('<html><head><title>Security Reports</title></head><body>')
+              fh.write('<h1>Security Reports</h1>')
+              for name in files:
+                  fh.write(f'<a href=\"{name}\">{name}</a><br>')
+              fh.write('</body></html>')
+          "
+          ls -la public
+      - name: Upload report bundle
+        continue-on-error: true
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: security-reports
+          path: public

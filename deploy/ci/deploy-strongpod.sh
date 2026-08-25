@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Roll out a pinned image tag on the deploy host (called from GitLab CI).
+# Roll out a pinned image tag on the deploy host (called from Forgejo Actions).
 set -euo pipefail
 
 IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-hub.freeblizz.com/opnsense-mcp}"

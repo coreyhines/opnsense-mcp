@@ -17,6 +17,11 @@ _EDITABLE_FIELDS = {
     "action",
     "enabled",
     "gateway",
+    "log",
+    "quick",
+    "source_not",
+    "destination_not",
+    "interfacenot",
 }
 
 
@@ -75,6 +80,31 @@ class SetFwRuleTool:
             "destination_port": {
                 "type": "string",
                 "description": "Destination port or 'any'",
+                "optional": True,
+            },
+            "log": {
+                "type": "boolean",
+                "description": "Log packets matched by this rule",
+                "optional": True,
+            },
+            "quick": {
+                "type": "boolean",
+                "description": "Stop evaluating further rules on a match",
+                "optional": True,
+            },
+            "source_not": {
+                "type": "boolean",
+                "description": "Invert the source match",
+                "optional": True,
+            },
+            "destination_not": {
+                "type": "boolean",
+                "description": "Invert the destination match",
+                "optional": True,
+            },
+            "interfacenot": {
+                "type": "boolean",
+                "description": "Invert the interface match",
                 "optional": True,
             },
             "action": {
@@ -138,17 +168,12 @@ class SetFwRuleTool:
             if field in params:
                 rule_data[field] = params[field]
 
-        # Handle source/destination as nested dicts
-        if "source_net" in params or "source_port" in params:
-            rule_data["source"] = {
-                "net": params.get("source_net", "any"),
-                "port": params.get("source_port", "any"),
-            }
-        if "destination_net" in params or "destination_port" in params:
-            rule_data["destination"] = {
-                "net": params.get("destination_net", "any"),
-                "port": params.get("destination_port", "any"),
-            }
+        # Pass source/destination through as flat keys. Filling the omitted half
+        # with "any" would silently widen the rule; the client preserves whatever
+        # the caller does not supply.
+        for key in ("source_net", "source_port", "destination_net", "destination_port"):
+            if key in params and params[key] is not None:
+                rule_data[key] = params[key]
 
         if not rule_data:
             return {"status": "error", "error": "No fields to update were provided"}

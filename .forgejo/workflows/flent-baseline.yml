@@ -1,0 +1,83 @@
+name: Flent baseline
+
+# Scheduled FQ-CoDel baseline: flent rrul from the net-10 sidecar on strongpod.
+# Replaces the GitLab pipeline schedule that set SCHEDULED_JOB=flent-baseline.
+# In GitLab this shared a pipeline with lint/test and was gated off by rules;
+# as its own workflow it simply never triggers on push, so those rules are gone.
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC (the cron the GitLab schedule used).
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      flent_length:
+        description: "Seconds per run"
+        required: false
+        default: "60"
+      flent_runs:
+        description: "Number of runs"
+        required: false
+        default: "3"
+      icmp_max_ms:
+        description: "Fail if ICMP latency exceeds this (ms)"
+        required: false
+        default: "145"
+      netperf_host:
+        description: "netperf server"
+        required: false
+        default: "netperf-eu.bufferbloat.net"
+
+jobs:
+  baseline:
+    runs-on: ansible-net10
+    timeout-minutes: 45
+    container:
+      image: docker.io/library/alpine:3.22.0
+    steps:
+      - name: Install git, node, ssh client and python
+        run: |
+          set -eu
+          # Some runners in this fleet cannot verify the Alpine CDN certificate
+          # (TLS: server certificate not trusted), which fails the job before
+          # checkout. apk verifies package signatures independently of the
+          # transport, so falling back to http is safe here.
+          _apk() { apk add --no-cache git nodejs openssh-client bash python3; }
+          _apk || {
+            echo "apk over https failed; retrying over http"
+            [ -f /etc/apk/repositories ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories || true
+            [ -d /etc/apk/repositories.d ] && \
+              sed -i 's#https://#http://#g' /etc/apk/repositories.d/* || true
+            _apk
+          }
+      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Run flent rrul on strongpod
+        env:
+          OPNSENSE_MCP_DEPLOY_SSH_KEY_B64: ${{ secrets.OPNSENSE_MCP_DEPLOY_SSH_KEY_B64 }}
+          OPNSENSE_MCP_DEPLOY_HOST: ${{ secrets.OPNSENSE_MCP_DEPLOY_HOST }}
+          FLENT_LABEL: ci-baseline-${{ github.run_id }}
+          NETPERF_HOST: ${{ inputs.netperf_host || 'netperf-eu.bufferbloat.net' }}
+          FLENT_LENGTH: ${{ inputs.flent_length || '60' }}
+          FLENT_RUNS: ${{ inputs.flent_runs || '3' }}
+          FLENT_ICMP_MAX_MS: ${{ inputs.icmp_max_ms || '145' }}
+        run: |
+          set -euo pipefail
+          bash deploy/ci/ssh-setup.sh
+          bash deploy/ci/run-flent-baseline-remote.sh
+      - name: Evaluate latency gate
+        run: |
+          set -a
+          # shellcheck disable=SC1091
+          source flent-artifacts/flent.env
+          set +a
+          python3 opnsense_mcp/utils/flent_summary.py \
+            "${SUMMARY_FILE}" \
+            --json-out flent-artifacts/flent-gate.json
+      - name: Upload flent artifacts
+        if: always()
+        continue-on-error: true
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: flent-artifacts
+          path: flent-artifacts/

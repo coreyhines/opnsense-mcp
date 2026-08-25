@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run flent rrul baseline on strongpod from GitLab CI (SSH + podman sidecar).
+# Run flent rrul baseline on strongpod from Forgejo Actions (SSH + podman sidecar).
 set -euo pipefail
 
 DEPLOY_USER="${OPNSENSE_MCP_DEPLOY_USER:-root}"
