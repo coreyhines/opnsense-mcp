@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Print the hub.freeblizz.com image tag for the current tree or Forgejo Actions context.
+# Print the image tag for the current tree or Forgejo Actions context.
 #
 # Release (git tag v1.2.3):     1.2.3
 # Main / branch (pyproject 1.2.3): 1.2.3-dev.<short-sha>

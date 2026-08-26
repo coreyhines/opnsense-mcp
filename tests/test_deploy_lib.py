@@ -47,14 +47,70 @@ def test_validate_pinned_image_tag_accepts_dev_build() -> None:
     assert result.returncode == 0
 
 
-def test_normalize_image_repo_defaults_to_hub() -> None:
+def test_normalize_image_repo_keeps_a_local_image_local() -> None:
+    """A local image is what --build-local produces, so it must survive.
+
+    This used to be rewritten to a private registry, which meant the local
+    build path quietly pointed at a host the user has no account on.
+    """
     result = _run_lib_snippet(
         'IMAGE_REPO="localhost/opnsense-mcp"\n'
         "normalize_image_repo\n"
         'printf "%s" "${IMAGE_REPO}"'
     )
     assert result.returncode == 0
-    assert result.stdout == "hub.freeblizz.com/opnsense-mcp"
+    assert result.stdout == "localhost/opnsense-mcp"
+
+
+def test_normalize_image_repo_defaults_to_a_local_image() -> None:
+    """No registry configured means no registry, not somebody else's."""
+    result = _run_lib_snippet(
+        'IMAGE_REPO=""\nnormalize_image_repo\nprintf "%s" "${IMAGE_REPO}"'
+    )
+    assert result.returncode == 0
+    assert result.stdout == "localhost/opnsense-mcp"
+
+
+def test_normalize_image_repo_qualifies_a_bare_name() -> None:
+    """A bare name is ambiguous to podman; qualify it as local."""
+    result = _run_lib_snippet(
+        'IMAGE_REPO="opnsense-mcp"\nnormalize_image_repo\nprintf "%s" "${IMAGE_REPO}"'
+    )
+    assert result.returncode == 0
+    assert result.stdout == "localhost/opnsense-mcp"
+
+
+def test_normalize_image_repo_keeps_an_explicit_registry() -> None:
+    """Someone who names a registry gets that registry, untouched."""
+    result = _run_lib_snippet(
+        'IMAGE_REPO="registry.example/opnsense-mcp"\n'
+        "normalize_image_repo\n"
+        'printf "%s" "${IMAGE_REPO}"'
+    )
+    assert result.returncode == 0
+    assert result.stdout == "registry.example/opnsense-mcp"
+
+
+def test_pull_refuses_a_local_only_image_with_advice() -> None:
+    """Pulling localhost/... fails deep in podman with an opaque registry error.
+
+    Anyone deploying this in their own environment has no registry by default,
+    so the failure has to name the two things that actually work.
+    """
+    result = _run_lib_snippet(
+        'IMAGE_REPO="localhost/opnsense-mcp"\nrequire_pullable_image_repo'
+    )
+    assert result.returncode != 0
+    assert "--build-local" in result.stderr
+    assert "OPNSENSE_MCP_IMAGE_REPO" in result.stderr
+
+
+def test_pull_accepts_any_real_registry() -> None:
+    """No opinion about which registry, only that there is one."""
+    result = _run_lib_snippet(
+        'IMAGE_REPO="registry.example/opnsense-mcp"\nrequire_pullable_image_repo'
+    )
+    assert result.returncode == 0
 
 
 def test_compute_image_tag_uses_pyproject_dev_suffix() -> None:

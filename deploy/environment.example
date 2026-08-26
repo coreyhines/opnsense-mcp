@@ -2,12 +2,13 @@
 # chmod 600. Quadlet sets OPNSENSE_MCP_INSTALL_ROOT and EnvironmentFile to this path; data dir is volume-mounted.
 #
 # With TLS (Caddy + /opt/certs/wild), MCP clients use (default hostname in caddyfile.example):
-#   https://opnsense-mcp.freeblizz.com/sse
+#   https://mcp.example.com/sse
 
 OPNSENSE_MCP_INSTALL_ROOT=/opt/containerdata/opnsense-mcp
 
 # Pinned container images (installer writes these; do not use :latest).
-OPNSENSE_MCP_IMAGE_REPO=hub.freeblizz.com/opnsense-mcp
+# A registry, or localhost/opnsense-mcp for an image built with --build-local.
+OPNSENSE_MCP_IMAGE_REPO=localhost/opnsense-mcp
 # Release: 1.0.0 (git tag v1.0.0). Main CI: 1.0.0-dev.<short-sha>
 OPNSENSE_MCP_IMAGE_TAG=1.0.0
 OPNSENSE_MCP_CADDY_IMAGE=docker.io/library/caddy:2.9.1-alpine

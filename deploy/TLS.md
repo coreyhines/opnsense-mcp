@@ -23,20 +23,20 @@ Create a **DNS A** (or **AAAA**) record so clients resolve the MCP host to the p
 
 | Name | Type | Value |
 |------|------|--------|
-| **`opnsense-mcp.freeblizz.com`** | A (or AAAA) | Pod / macvlan IP (e.g. `10.0.10.3`) |
+| **`mcp.example.com`** | A (or AAAA) | Pod / macvlan IP (e.g. `10.0.10.3`) |
 
-The default **`deploy/caddyfile.example`** uses that hostname in the site block. Your certificate must include **`opnsense-mcp.freeblizz.com`** or a **wildcard** `*.freeblizz.com` that covers it.
+The default **`deploy/caddyfile.example`** uses that hostname in the site block. Your certificate must include **`mcp.example.com`** or a **wildcard** `*.example.com` that covers it.
 
-MCP clients use **`https://opnsense-mcp.freeblizz.com/mcp`** (after TLS trust is satisfied).
+MCP clients use **`https://mcp.example.com/mcp`** (after TLS trust is satisfied).
 
 ## Recommended stack
 
 1. **`opnsense-mcp-app.container`** — FastMCP serving Streamable HTTP (`python3 main.py --transport streamable-http --host 0.0.0.0 --port 8765`), listens on **8765** inside the pod (reachable from Caddy on the pod network; no host **`PublishPort`** in the default pod quadlet). MCP endpoint is `/mcp`.
 2. **`opnsense-mcp-caddy.container`** — **Caddy** in the same pod as the app, TLS on **443**, reverse proxy to `http://127.0.0.1:8765`. Mount `/opt/certs/wild` read-only and keep **`$INSTALL_ROOT/Caddyfile`** (default **`/opt/containerdata/opnsense-mcp/Caddyfile`**) on the host, mounted into the container as `/etc/caddy/Caddyfile`.
 
-The default **`deploy/caddyfile.example`** (copied on first install) uses **manual TLS** only (`tls` with PEM paths) — **no automatic Let’s Encrypt**. The site name **`opnsense-mcp.freeblizz.com`** matches the intended DNS record; change it if you use another FQDN.
+The default **`deploy/caddyfile.example`** (copied on first install) uses **manual TLS** only (`tls` with PEM paths) — **no automatic Let’s Encrypt**. The site name **`mcp.example.com`** matches the intended DNS record; change it if you use another FQDN.
 
-Clients use **`https://opnsense-mcp.freeblizz.com/mcp`** (or your edited hostname), with trust depending on your cert (wildcard/SAN).
+Clients use **`https://mcp.example.com/mcp`** (or your edited hostname), with trust depending on your cert (wildcard/SAN).
 
 
 ## Operations
