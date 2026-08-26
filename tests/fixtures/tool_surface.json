@@ -168,6 +168,25 @@
       "type": "object"
     }
   },
+  "apply_ula": {
+    "description": "Load staged VIP, NPT, router advertisement and Unbound changes, in order",
+    "inputSchema": {
+      "properties": {
+        "domains": {
+          "description": "Subset of ['vip', 'npt', 'ra', 'unbound'], in that order",
+          "optional": true,
+          "type": "array"
+        },
+        "dry_run": {
+          "description": "Report what would run without doing it (default true)",
+          "optional": true,
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
   "arp": {
     "description": "Show ARP/NDP table",
     "inputSchema": {
@@ -686,6 +705,14 @@
   },
   "list_npt_rules": {
     "description": "List NPTv6 prefix translation rules",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_router_adverts": {
+    "description": "List radvd router advertisement entries, one per interface",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -1285,6 +1312,31 @@
       "type": "object"
     }
   },
+  "plan_dns_ula": {
+    "description": "Read-only: map AAAA host overrides from a delegated prefix onto a ULA prefix",
+    "inputSchema": {
+      "properties": {
+        "gua_prefix": {
+          "description": "Current delegated prefix, for example 2001:db8:1::/64",
+          "type": "string"
+        },
+        "public_names": {
+          "description": "Fully qualified names the outside world resolves; these keep their delegated address",
+          "optional": true,
+          "type": "array"
+        },
+        "ula_prefix": {
+          "description": "Target ULA prefix of the same length",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gua_prefix",
+        "ula_prefix"
+      ],
+      "type": "object"
+    }
+  },
   "restore_shaper_snapshot": {
     "description": "Restore traffic shaper config from a prior snapshot_id. Set remove_orphans=true to delete pipes/queues/rules not in the snapshot.",
     "inputSchema": {
@@ -1614,6 +1666,82 @@
       },
       "required": [
         "rule_uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_host_override": {
+    "description": "Edit an existing Unbound host override in place; use mkdns to create one",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure Unbound afterwards (default true)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "enabled": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "server": {
+          "description": "Replacement address",
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Override uuid, from the dns tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_router_advert": {
+    "description": "Update a radvd entry: enable it, change mode, or deprecate the old prefix",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure radvd afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "deprecate_prefix": {
+          "description": "Advertise the prefix as deprecated",
+          "optional": true,
+          "type": "boolean"
+        },
+        "enabled": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "mode": {
+          "description": "radvd mode, for example managed or unmanaged",
+          "optional": true,
+          "type": "string"
+        },
+        "preferred_lifetime": {
+          "description": "Advertised preferred lifetime; 0 deprecates the prefix",
+          "optional": true,
+          "type": "number"
+        },
+        "uuid": {
+          "description": "Entry uuid",
+          "type": "string"
+        },
+        "valid_lifetime": {
+          "optional": true,
+          "type": "number"
+        }
+      },
+      "required": [
+        "uuid"
       ],
       "type": "object"
     }
