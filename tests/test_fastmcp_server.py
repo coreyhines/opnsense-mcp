@@ -69,17 +69,27 @@ async def test_fastmcp_server_lists_tools():
 
 
 @pytest.mark.asyncio
-async def test_fastmcp_server_tool_count():
-    """Server must expose exactly 55 tools."""
+async def test_fastmcp_server_exposes_every_registered_tool():
+    """Counted against the registry, not a literal.
+
+    This asserted `== 55`, so every tool added since needed the number edited
+    here too, and the failure said nothing about which tool was missing.
+    """
     from fastmcp.client import Client
 
-    from opnsense_mcp.fastmcp_server import build_mcp_server
+    from opnsense_mcp.fastmcp_server import SHAPER_TOOL_CLASSES, build_mcp_server
+    from opnsense_mcp.utils.registry import TOOL_CLASSES
 
     mcp = build_mcp_server()
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    assert len(tools) == 55
+    exposed = {t.name for t in tools}
+    expected = {c.name for c in TOOL_CLASSES} | {c.name for c in SHAPER_TOOL_CLASSES}
+
+    assert exposed == expected, (
+        f"missing: {sorted(expected - exposed)}\nunexpected: {sorted(exposed - expected)}"
+    )
 
 
 def test_main_argparser_accepts_transport():

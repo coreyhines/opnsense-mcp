@@ -318,12 +318,56 @@
       "type": "object"
     }
   },
+  "diff_config_backups": {
+    "description": "Show the differences between two stored configuration revisions",
+    "inputSchema": {
+      "properties": {
+        "provider": {
+          "description": "Backup provider id (default 'this')",
+          "optional": true,
+          "type": "string"
+        },
+        "rev_a": {
+          "description": "Older revision id, from list_config_backups",
+          "type": "string"
+        },
+        "rev_b": {
+          "description": "Newer revision id, from list_config_backups",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rev_a",
+        "rev_b"
+      ],
+      "type": "object"
+    }
+  },
   "dns": {
     "description": "List Unbound DNS host overrides",
     "inputSchema": {
       "properties": {
         "search": {
           "description": "Filter by hostname, IP, or description",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "download_config": {
+    "description": "Download the firewall configuration to a file on the MCP host and return its path, size and checksum. The XML is never returned.",
+    "inputSchema": {
+      "properties": {
+        "provider": {
+          "description": "Backup provider id (default 'this')",
+          "optional": true,
+          "type": "string"
+        },
+        "revision": {
+          "description": "Revision id to fetch; omit for the running config",
           "optional": true,
           "type": "string"
         }
@@ -551,6 +595,33 @@
       "type": "object"
     }
   },
+  "list_backup_providers": {
+    "description": "List OPNsense configuration backup providers",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_config_backups": {
+    "description": "List stored OPNsense configuration revisions, newest first",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "description": "Maximum revisions to return (default 25)",
+          "optional": true,
+          "type": "number"
+        },
+        "provider": {
+          "description": "Backup provider id (default 'this')",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
   "list_dhcp_hosts": {
     "description": "List DHCP host reservations from the dnsmasq host table (Services \u2192 DHCPv4 \u2192 Hosts). Unlike the dhcp tool (leases), this returns configured static mappings including IPv4, optional ::N IPv6 suffix, MAC, client_id, and descr.",
     "inputSchema": {
@@ -687,6 +758,14 @@
       "type": "object"
     }
   },
+  "list_snapshots": {
+    "description": "List ZFS boot environment snapshots, where the platform supports them",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
   "lldp": {
     "description": "Show LLDP neighbor table",
     "inputSchema": {
@@ -750,6 +829,21 @@
       "required": [
         "hostname",
         "mac"
+      ],
+      "type": "object"
+    }
+  },
+  "mk_snapshot": {
+    "description": "Create a ZFS boot environment snapshot, where the platform supports it",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Label for the snapshot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description"
       ],
       "type": "object"
     }
