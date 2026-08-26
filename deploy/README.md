@@ -1,6 +1,6 @@
 # Deploying OPNsense MCP (Streamable HTTP Mode)
 
-Centralized Podman quadlet deployment with **Caddy** TLS and a pinned image from **`hub.freeblizz.com`**.
+Centralized Podman quadlet deployment with **Caddy** TLS and a pinned image from **your registry**.
 
 For local IDE usage (`STDIO`), use the root quickstart instead:
 [`../docs/GETTING_STARTED.md`](../docs/GETTING_STARTED.md).
@@ -16,13 +16,13 @@ On the host (as root):
 sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh
 ```
 
-Forgejo Actions on `main` pushes `hub.freeblizz.com/opnsense-mcp:<version>-dev.<sha>` (version from `pyproject.toml`).
-Git tag `v1.0.0` publishes `hub.freeblizz.com/opnsense-mcp:1.0.0`.
+Forgejo Actions on `main` pushes `localhost/opnsense-mcp:<version>-dev.<sha>` (version from `pyproject.toml`).
+Git tag `v1.0.0` publishes `localhost/opnsense-mcp:1.0.0`.
 
 After TLS and DNS are in place, clients connect to:
 
 ```text
-https://opnsense-mcp.freeblizz.com/mcp
+https://mcp.example.com/mcp
 ```
 
 ## Image modes
@@ -46,4 +46,4 @@ https://opnsense-mcp.freeblizz.com/mcp
 
 - Configure secrets in `environment` (see `environment.example`).
 - Configure certs and hostname in [`TLS.md`](TLS.md).
-- Set `OPNSENSE_MCP_IMAGE_TAG` to a tag that exists in `hub.freeblizz.com`.
+- Set `OPNSENSE_MCP_IMAGE_TAG` to a tag that exists in your registry.

@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
-# OPNsense MCP centralized install (Linux amd64). Pulls a pinned image from hub.freeblizz.com.
+# OPNsense MCP centralized install (Linux amd64). Pulls a pinned image from the
+# registry named by OPNSENSE_MCP_IMAGE_REPO, or builds one with --build-local.
 # Idempotent: safe to re-run (refresh quadlets, pull image, systemd reload).
 #
 #   sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh
 #
 # One-liner (auto tag from pyproject + git sha on main):
-#   curl -fsSL 'https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/raw/branch/main/deploy/install.sh' | sudo bash
+#   curl -fsSL 'https://raw.githubusercontent.com/coreyhines/opnsense-mcp/main/deploy/install.sh' | sudo bash
 #
 # Local dev build (does not push):
 #   sudo OPNSENSE_MCP_IMAGE_TAG=dev-$(git rev-parse --short HEAD) bash deploy/install.sh --build-local
 #
 set -euo pipefail
 
-readonly DEFAULT_REPO_URL="${OPNSENSE_MCP_REPO_URL:-https://forgejo.freeblizz.com/coreyhines/opnsense-mcp.git}"
+# The published copy, which is the one an arbitrary host can reach. Development
+# happens elsewhere and this copy can lag; set OPNSENSE_MCP_REPO_URL to clone
+# from the working remote instead.
+readonly DEFAULT_REPO_URL="${OPNSENSE_MCP_REPO_URL:-https://github.com/coreyhines/opnsense-mcp.git}"
 readonly GIT_REF="${OPNSENSE_MCP_GIT_REF:-main}"
 readonly INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
 readonly SRC_DIR="${INSTALL_ROOT}/src"
 readonly CADDYFILE_HOST="${INSTALL_ROOT}/Caddyfile"
 
-IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-hub.freeblizz.com/opnsense-mcp}"
+IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-localhost/opnsense-mcp}"
 EXPLICIT_IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-}"
 IMAGE_TAG="${EXPLICIT_IMAGE_TAG}"
 CADDY_IMAGE="${OPNSENSE_MCP_CADDY_IMAGE:-docker.io/library/caddy:2.9.1-alpine}"
@@ -29,8 +33,8 @@ BUILD_PUSH=0
 
 usage() {
   echo "Usage: $0 [--runtime podman|docker] [--skip-image] [--build-local] [--build-push]" >&2
-  echo "  Default: pull hub.freeblizz.com/opnsense-mcp:\$OPNSENSE_MCP_IMAGE_TAG (pinned tag required)." >&2
-  echo "  Env: OPNSENSE_MCP_IMAGE_REPO (default hub.freeblizz.com/opnsense-mcp)" >&2
+  echo "  Default: use a locally built image (see --build-local); a pinned tag is required." >&2
+  echo "  Env: OPNSENSE_MCP_IMAGE_REPO (a registry, e.g. registry.example/opnsense-mcp)" >&2
   echo "       OPNSENSE_MCP_IMAGE_TAG (required unless already in environment file)" >&2
   echo "       OPNSENSE_MCP_CADDY_IMAGE (default docker.io/library/caddy:2.9.1-alpine)" >&2
   echo "       OPNSENSE_MCP_REPO_URL, OPNSENSE_MCP_GIT_REF, OPNSENSE_MCP_INSTALL_ROOT" >&2
@@ -299,6 +303,7 @@ push_image() {
 }
 
 pull_image() {
+  require_pullable_image_repo
   local version_full="${IMAGE_REPO}:${IMAGE_TAG}"
   echo "Pulling ${version_full}..." >&2
   "${RUNTIME}" pull "${version_full}"

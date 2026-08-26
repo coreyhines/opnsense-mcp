@@ -2,10 +2,15 @@
 # Roll out a pinned image tag on the deploy host (called from Forgejo Actions).
 set -euo pipefail
 
-IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-hub.freeblizz.com/opnsense-mcp}"
+IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-}"
 IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-${CI_COMMIT_SHORT_SHA:-}}"
 QUADLET_APP="/etc/containers/systemd/opnsense-mcp-app.container"
 INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
+
+if [[ -z "${IMAGE_REPO}" ]]; then
+  echo "error: OPNSENSE_MCP_IMAGE_REPO is required (set the registry in CI)" >&2
+  exit 1
+fi
 
 if [[ -z "${IMAGE_TAG}" ]]; then
   echo "error: OPNSENSE_MCP_IMAGE_TAG or CI_COMMIT_SHORT_SHA is required" >&2
@@ -23,7 +28,7 @@ if [[ ! -f "${QUADLET_APP}" ]]; then
 fi
 
 sed -i "s|^Image=.*|Image=${IMAGE_REPO}:${IMAGE_TAG}|" "${QUADLET_APP}"
-sed -i "s|hub.freeblizz.com/opnsense-mcp:.*|${IMAGE_REPO}:${IMAGE_TAG}|" "${QUADLET_APP}"
+sed -i "s|^Image=.*/opnsense-mcp:.*|Image=${IMAGE_REPO}:${IMAGE_TAG}|" "${QUADLET_APP}"
 sed -i "s|localhost/opnsense-mcp:.*|${IMAGE_REPO}:${IMAGE_TAG}|" "${QUADLET_APP}"
 
 if [[ -f "${INSTALL_ROOT}/environment" ]]; then
