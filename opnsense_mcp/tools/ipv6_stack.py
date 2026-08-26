@@ -1,0 +1,615 @@
+"""NPTv6 rules, virtual IPs and loopback devices.
+
+The objects a ULA conversion needs on the firewall: a stable fd00::/8 address on
+each LAN interface (VIP), a 1:1 prefix translation to the delegated GUA on WAN
+(NPT), and optionally a loopback to hold the delegated prefix once the LAN stops
+carrying it.
+
+Field names are taken from the firmware's own model rather than documentation.
+`Filter.xml` defines `<npt>` with `source_net` (internal), `destination_net`
+(external) and `trackif`; `Interfaces/Vip.xml` defines `mode`, `subnet` and
+`subnet_bits`.
+
+Writes stage by default. Nothing here reloads the packet filter on its own,
+because a half-built v6 translation applied mid-change is worse than one that is
+not live yet.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import logging
+from typing import Any
+
+from opnsense_mcp.utils.shaper_write_helpers import (
+    issue_delete_confirm_token,
+    validate_delete_confirm_token,
+)
+
+logger = logging.getLogger(__name__)
+
+NPT = {
+    "search": "/api/firewall/npt/search_rule",
+    "get": "/api/firewall/npt/get_rule",
+    "add": "/api/firewall/npt/add_rule",
+    "set": "/api/firewall/npt/set_rule",
+    "delete": "/api/firewall/npt/del_rule",
+    "toggle": "/api/firewall/npt/toggle_rule",
+}
+VIP = {
+    "search": "/api/interfaces/vip_settings/search_item",
+    "get": "/api/interfaces/vip_settings/get_item",
+    "add": "/api/interfaces/vip_settings/add_item",
+    "delete": "/api/interfaces/vip_settings/del_item",
+}
+LOOPBACK = {
+    "search": "/api/interfaces/loopback_settings/search_item",
+    "add": "/api/interfaces/loopback_settings/add_item",
+    "delete": "/api/interfaces/loopback_settings/del_item",
+}
+
+VIP_MODES = ("ipalias", "carp", "proxyarp", "other")
+
+# Anything shorter than a /64 cannot express a per-VLAN mapping: SLAAC is one
+# /64 per L2 domain, and VLAN ids commonly place prefixes outside any single
+# shorter block.
+MIN_PREFIX_LEN = 64
+
+
+class _V6ToolBase:
+    """Shared client handling and lookups."""
+
+    def __init__(self, client: Any) -> None:
+        """Store the OPNsense client."""
+        self.client = client
+
+    def _no_client(self) -> dict[str, Any]:
+        return {"status": "error", "error": "No client available"}
+
+    async def _rows(self, endpoint: str) -> list[dict[str, Any]]:
+        data = await self.client._make_request(
+            "POST", endpoint, json={"current": 1, "rowCount": 5000}
+        )
+        return data.get("rows", []) if isinstance(data, dict) else []
+
+
+def _parse_v6_network(value: str, label: str) -> tuple[Any, str | None]:
+    """Return the parsed network, or an error message explaining the refusal."""
+    try:
+        network = ipaddress.ip_network(value, strict=False)
+    except ValueError as exc:
+        return None, f"{label} {value!r} is not a valid network: {exc}"
+    if network.version != 6:
+        return None, f"{label} must be an IPv6 prefix; {value!r} is IPv4"
+    return network, None
+
+
+class ListNptRulesTool(_V6ToolBase):
+    """List NPTv6 rules."""
+
+    name = "list_npt_rules"
+    description = "List NPTv6 prefix translation rules"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Return each rule's interface, prefixes and track interface."""
+        if not self.client:
+            return self._no_client()
+        try:
+            rows = await self._rows(NPT["search"])
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to list NPT rules")
+            return {"status": "error", "error": str(exc)}
+
+        rules = [
+            {
+                "uuid": row.get("uuid", ""),
+                "interface": row.get("interface", ""),
+                "source_net": row.get("source_net", ""),
+                "destination_net": row.get("destination_net", ""),
+                "trackif": row.get("trackif", ""),
+                "enabled": row.get("enabled", ""),
+                "description": row.get("description", ""),
+            }
+            for row in rows
+        ]
+        return {"status": "success", "count": len(rules), "rules": rules}
+
+
+class MkNptRuleTool(_V6ToolBase):
+    """Create an NPTv6 rule."""
+
+    name = "mk_npt_rule"
+    description = (
+        "Create an NPTv6 rule translating an internal IPv6 prefix to an external one"
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "interface": {
+                "type": "string",
+                "description": "Interface the translation applies on, usually wan",
+            },
+            "source_net": {
+                "type": "string",
+                "description": "Internal prefix, for example fd00:...:2::/64",
+            },
+            "destination_net": {
+                "type": "string",
+                "description": "External prefix; omit when using trackif",
+                "optional": True,
+            },
+            "trackif": {
+                "type": "string",
+                "description": "Interface whose delegated prefix supplies the external side",
+                "optional": True,
+            },
+            "description": {"type": "string", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "description": "Reload the filter afterwards (default false)",
+                "optional": True,
+            },
+        },
+        "required": ["interface", "source_net"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Create the rule after checking it can express a working mapping."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+
+        interface = (params.get("interface") or "").strip()
+        source_net = (params.get("source_net") or "").strip()
+        destination_net = (params.get("destination_net") or "").strip()
+        trackif = (params.get("trackif") or "").strip()
+
+        if not interface or not source_net:
+            return {"status": "error", "error": "interface and source_net are required"}
+
+        source, error = _parse_v6_network(source_net, "source_net")
+        if error:
+            return {"status": "error", "error": error}
+
+        if not destination_net and not trackif:
+            return {
+                "status": "error",
+                "error": (
+                    "Either destination_net or trackif is required. A rule with "
+                    "neither cannot learn the delegated prefix, and leaves WAN "
+                    "IPv6 listeners such as WireGuard broken."
+                ),
+            }
+
+        if source.prefixlen < MIN_PREFIX_LEN:
+            return {
+                "status": "error",
+                "error": (
+                    f"source_net is a /{source.prefixlen}; NPT rules here are one "
+                    f"per /64. SLAAC serves one /64 per L2 domain, and a shorter "
+                    f"prefix silently covers ranges that belong to other VLANs."
+                ),
+            }
+
+        if destination_net:
+            destination, error = _parse_v6_network(destination_net, "destination_net")
+            if error:
+                return {"status": "error", "error": error}
+            if destination.prefixlen != source.prefixlen:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"NPT is a 1:1 prefix swap, so both sides must be the same "
+                        f"length; got /{source.prefixlen} and /{destination.prefixlen}."
+                    ),
+                }
+
+        try:
+            existing_rows = await self._rows(NPT["search"])
+
+            for row in existing_rows:
+                if (
+                    row.get("interface") == interface
+                    and row.get("source_net") == source_net
+                ):
+                    return {
+                        "status": "success",
+                        "created": False,
+                        "uuid": row.get("uuid", ""),
+                        "note": "A rule for this interface and source prefix exists.",
+                    }
+
+            if destination_net:
+                clash = next(
+                    (
+                        row
+                        for row in existing_rows
+                        if row.get("destination_net") == destination_net
+                        and row.get("source_net") != source_net
+                    ),
+                    None,
+                )
+                if clash:
+                    return {
+                        "status": "error",
+                        "error": (
+                            f"{clash.get('source_net')} already maps onto "
+                            f"{destination_net}. Mapping several internal prefixes "
+                            f"onto one external prefix works outbound only and "
+                            f"breaks inbound; give each its own external /64."
+                        ),
+                    }
+
+            payload = {
+                "interface": interface,
+                "source_net": source_net,
+                "destination_net": destination_net,
+                "trackif": trackif,
+                "description": params.get("description", ""),
+                "enabled": "1",
+            }
+            result = await self.client._make_request(
+                "POST", NPT["add"], call_class="write", json={"rule": payload}
+            )
+            if params.get("apply", False):
+                await self.client._make_request(
+                    "POST", "/api/firewall/filter/apply", call_class="apply"
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to create NPT rule")
+            return {"status": "error", "error": str(exc)}
+
+        return {
+            "status": "success",
+            "created": True,
+            "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
+            "note": "Staged. Run the apply step to load it.",
+        }
+
+
+class ToggleNptRuleTool(_V6ToolBase):
+    """Enable or disable an NPTv6 rule."""
+
+    name = "toggle_npt_rule"
+    description = "Enable or disable an NPTv6 rule"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "uuid": {"type": "string", "description": "Rule uuid"},
+            "enabled": {"type": "boolean", "description": "Target state"},
+        },
+        "required": ["uuid", "enabled"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Set the rule to an explicit state rather than flipping it."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        uuid = (params.get("uuid") or "").strip()
+        if not uuid:
+            return {"status": "error", "error": "uuid is required"}
+        if params.get("enabled") is None:
+            return {"status": "error", "error": "enabled is required"}
+
+        state = "1" if params["enabled"] else "0"
+        try:
+            await self.client._make_request(
+                "POST", f"{NPT['toggle']}/{uuid}/{state}", call_class="write"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to toggle NPT rule")
+            return {"status": "error", "error": str(exc)}
+        return {"status": "success", "uuid": uuid, "enabled": bool(params["enabled"])}
+
+
+class RmNptRuleTool(_V6ToolBase):
+    """Delete an NPTv6 rule."""
+
+    name = "rm_npt_rule"
+    description = "Delete an NPTv6 rule; requires a confirm token from a prior call"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "uuid": {"type": "string", "description": "Rule uuid"},
+            "confirm": {"type": "string", "optional": True},
+        },
+        "required": ["uuid"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Delete once a matching confirm token is supplied."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        uuid = (params.get("uuid") or "").strip()
+        if not uuid:
+            return {"status": "error", "error": "uuid is required"}
+
+        if not validate_delete_confirm_token(
+            "npt_rule", uuid, str(params.get("confirm") or "")
+        ):
+            token = issue_delete_confirm_token("npt_rule", uuid)
+            return {
+                "status": "confirmation_required",
+                "uuid": uuid,
+                "confirm_token": token["token"],
+                "message": token["message"],
+            }
+
+        try:
+            await self.client._make_request(
+                "POST", f"{NPT['delete']}/{uuid}", call_class="write", json={}
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to delete NPT rule")
+            return {"status": "error", "error": str(exc)}
+        return {"status": "success", "uuid": uuid, "deleted": True}
+
+
+class ListVipTool(_V6ToolBase):
+    """List virtual IPs."""
+
+    name = "list_vip"
+    description = "List interface virtual IPs"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Return each VIP, without the CARP password the rows carry."""
+        if not self.client:
+            return self._no_client()
+        try:
+            rows = await self._rows(VIP["search"])
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to list VIPs")
+            return {"status": "error", "error": str(exc)}
+
+        vips = [
+            {
+                "uuid": row.get("uuid", ""),
+                "interface": row.get("interface", ""),
+                "mode": row.get("mode", ""),
+                "subnet": row.get("subnet", ""),
+                "subnet_bits": row.get("subnet_bits", ""),
+                "description": row.get("descr", ""),
+            }
+            for row in rows
+        ]
+        return {"status": "success", "count": len(vips), "vips": vips}
+
+
+class MkVipTool(_V6ToolBase):
+    """Create a virtual IP."""
+
+    name = "mk_vip"
+    description = "Create an interface virtual IP, an IP alias by default"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "interface": {"type": "string", "description": "Interface to add it to"},
+            "subnet": {
+                "type": "string",
+                "description": "Address, without the prefix length",
+            },
+            "subnet_bits": {"type": "number", "description": "Prefix length, e.g. 64"},
+            "mode": {
+                "type": "string",
+                "description": f"One of: {', '.join(VIP_MODES)} (default ipalias)",
+                "optional": True,
+            },
+            "vhid": {
+                "type": "number",
+                "description": "CARP virtual host id; required only for mode=carp",
+                "optional": True,
+            },
+            "description": {"type": "string", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "description": "Reconfigure interfaces afterwards (default false)",
+                "optional": True,
+            },
+        },
+        "required": ["interface", "subnet", "subnet_bits"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Create the VIP, defaulting to an IP alias."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+
+        interface = (params.get("interface") or "").strip()
+        subnet = (params.get("subnet") or "").strip()
+        bits = params.get("subnet_bits")
+        mode = (params.get("mode") or "ipalias").strip()
+
+        if not interface or not subnet or bits is None:
+            return {
+                "status": "error",
+                "error": "interface, subnet and subnet_bits are required",
+            }
+        if mode not in VIP_MODES:
+            return {
+                "status": "error",
+                "error": f"unknown mode {mode!r}; expected one of: {', '.join(VIP_MODES)}",
+            }
+        if mode == "carp" and not params.get("vhid"):
+            return {
+                "status": "error",
+                "error": (
+                    "mode=carp requires a vhid. Two nodes sharing a segment with "
+                    "the same vhid fight over the address."
+                ),
+            }
+
+        try:
+            for row in await self._rows(VIP["search"]):
+                if row.get("interface") == interface and row.get("subnet") == subnet:
+                    return {
+                        "status": "success",
+                        "created": False,
+                        "uuid": row.get("uuid", ""),
+                        "note": "A VIP with this address exists on that interface.",
+                    }
+
+            payload = {
+                "interface": interface,
+                "mode": mode,
+                "subnet": subnet,
+                "subnet_bits": str(bits),
+                "descr": params.get("description", ""),
+                "vhid": str(params["vhid"]) if params.get("vhid") else "",
+            }
+            result = await self.client._make_request(
+                "POST", VIP["add"], call_class="write", json={"vip": payload}
+            )
+            if params.get("apply", False):
+                await self.client._make_request(
+                    "POST",
+                    "/api/interfaces/vip_settings/reconfigure",
+                    call_class="apply",
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to create VIP")
+            return {"status": "error", "error": str(exc)}
+
+        return {
+            "status": "success",
+            "created": True,
+            "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
+            "note": "Staged. Reconfigure interfaces to bring it up.",
+        }
+
+
+class RmVipTool(_V6ToolBase):
+    """Delete a virtual IP."""
+
+    name = "rm_vip"
+    description = "Delete an interface virtual IP; requires a confirm token"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "uuid": {"type": "string", "description": "VIP uuid"},
+            "confirm": {"type": "string", "optional": True},
+        },
+        "required": ["uuid"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Delete once a matching confirm token is supplied."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        uuid = (params.get("uuid") or "").strip()
+        if not uuid:
+            return {"status": "error", "error": "uuid is required"}
+
+        if not validate_delete_confirm_token(
+            "vip", uuid, str(params.get("confirm") or "")
+        ):
+            token = issue_delete_confirm_token("vip", uuid)
+            return {
+                "status": "confirmation_required",
+                "uuid": uuid,
+                "confirm_token": token["token"],
+                "message": token["message"],
+            }
+
+        try:
+            await self.client._make_request(
+                "POST", f"{VIP['delete']}/{uuid}", call_class="write", json={}
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to delete VIP")
+            return {"status": "error", "error": str(exc)}
+        return {"status": "success", "uuid": uuid, "deleted": True}
+
+
+class ListLoopbackTool(_V6ToolBase):
+    """List loopback devices."""
+
+    name = "list_loopback"
+    description = "List loopback interface devices"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Return the configured loopback devices."""
+        if not self.client:
+            return self._no_client()
+        try:
+            rows = await self._rows(LOOPBACK["search"])
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to list loopbacks")
+            return {"status": "error", "error": str(exc)}
+        return {"status": "success", "count": len(rows), "loopbacks": rows}
+
+
+class MkLoopbackTool(_V6ToolBase):
+    """Create a loopback device."""
+
+    name = "mk_loopback"
+    description = "Create a loopback interface device"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "description": {"type": "string", "description": "Device description"},
+            "apply": {
+                "type": "boolean",
+                "description": "Reconfigure interfaces afterwards (default false)",
+                "optional": True,
+            },
+        },
+        "required": ["description"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Create the device only.
+
+        Assigning it to an interface slot and giving it an address stay manual:
+        per-interface addressing has no MVC API on this firmware.
+        """
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        description = (params.get("description") or "").strip()
+        if not description:
+            return {"status": "error", "error": "description is required"}
+
+        try:
+            result = await self.client._make_request(
+                "POST",
+                LOOPBACK["add"],
+                call_class="write",
+                json={"loopback": {"description": description}},
+            )
+            if params.get("apply", False):
+                await self.client._make_request(
+                    "POST",
+                    "/api/interfaces/loopback_settings/reconfigure",
+                    call_class="apply",
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to create loopback")
+            return {"status": "error", "error": str(exc)}
+
+        return {
+            "status": "success",
+            "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
+            "note": (
+                "Device created. You still need to assign it to an interface and "
+                "address it, which has no API on this firmware and stays a UI step."
+            ),
+        }

@@ -48,6 +48,17 @@ from opnsense_mcp.tools.gateway_status import GatewayStatusTool
 from opnsense_mcp.tools.get_logs import GetLogsTool
 from opnsense_mcp.tools.interface_health import InterfaceHealthTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
+from opnsense_mcp.tools.ipv6_stack import (
+    ListLoopbackTool,
+    ListNptRulesTool,
+    ListVipTool,
+    MkLoopbackTool,
+    MkNptRuleTool,
+    MkVipTool,
+    RmNptRuleTool,
+    RmVipTool,
+    ToggleNptRuleTool,
+)
 from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.mk_dhcp_host import MkDhcpHostTool
 from opnsense_mcp.tools.mkdns import MkdnsTool
@@ -94,12 +105,18 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListConfigBackupsTool,
     ListDhcpHostsTool,
     ListDhcpSubnetDnsTool,
+    ListLoopbackTool,
+    ListNptRulesTool,
     ListSnapshotsTool,
+    ListVipTool,
     LLDPTool,
     MkDhcpHostTool,
     MkdnsTool,
     MkAliasTool,
     MkfwRuleTool,
+    MkLoopbackTool,
+    MkNptRuleTool,
+    MkVipTool,
     MkSnapshotTool,
     MoveDhcpHostTool,
     PacketCaptureTool2,
@@ -107,6 +124,8 @@ TOOL_CLASSES: tuple[type, ...] = (
     PfStatisticsTool,
     RmAliasTool,
     RmDhcpHostTool,
+    RmNptRuleTool,
+    RmVipTool,
     RmdnsTool,
     RmfwRuleTool,
     SetAliasTool,
@@ -116,6 +135,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     SystemTool,
     ToggleAliasTool,
     ToggleDhcpRangeTool,
+    ToggleNptRuleTool,
     ToggleFwRuleTool,
 )
 
