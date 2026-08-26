@@ -148,6 +148,7 @@ from opnsense_mcp.utils.api import OPNsenseClient
 from opnsense_mcp.utils.env import load_opnsense_env
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 from opnsense_mcp.utils.registry import build_tools, dispatch, list_tools_payload
+from opnsense_mcp.utils.tool_groups import build_groups
 
 logger = logging.getLogger(__name__)
 
@@ -426,6 +427,15 @@ def main() -> None:
     ]
     shaper_tools: dict[str, Any] = {t.name: t for t in shaper_tool_instances}
 
+    # One operation per class, but a smaller surface: most are exposed grouped by
+    # resource with an `action`. See utils/tool_groups.
+    exposed = build_groups({**tools, **shaper_tools})
+    logger.info(
+        "Exposing %d tools from %d operations",
+        len(exposed),
+        len(tools) + len(shaper_tools),
+    )
+
     # Handle stdin/stdout communication
     async def process_messages() -> None:
         """Process incoming messages from the MCP client."""
@@ -467,9 +477,7 @@ def main() -> None:
                     continue
 
                 # Handle the message
-                response = await handle_message(
-                    message, tools, shaper_tools=shaper_tools
-                )
+                response = await handle_message(message, exposed)
                 if response is not None:
                     sys.stdout.write(json.dumps(response) + "\n")
                     sys.stdout.flush()

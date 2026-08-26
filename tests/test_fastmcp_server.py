@@ -13,7 +13,11 @@ async def test_fastmcp_server_imports():
 
 @pytest.mark.asyncio
 async def test_fastmcp_server_lists_tools():
-    """Server must expose all expected tools."""
+    """Every advertised name resolves to something callable.
+
+    The specific names live in utils/tool_groups; asserting them again here
+    would just be a second copy to keep in step.
+    """
     from fastmcp.client import Client
 
     from opnsense_mcp.fastmcp_server import build_mcp_server
@@ -22,50 +26,11 @@ async def test_fastmcp_server_lists_tools():
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    tool_names = {t.name for t in tools}
-    expected = {
-        "arp",
-        "dhcp",
-        "dhcp_lease_delete",
-        "list_dhcp_subnet_dns",
-        "set_dhcp_subnet_dns",
-        "move_dhcp_host",
-        "list_dhcp_hosts",
-        "rm_dhcp_host",
-        "mk_dhcp_host",
-        "toggle_dhcp_range",
-        "lldp",
-        "system",
-        "fw_rules",
-        "mkfw_rule",
-        "rmfw_rule",
-        "ssh_fw_rule",
-        "interface_list",
-        "interface_health",
-        "packet_capture",
-        "dns",
-        "mkdns",
-        "rmdns",
-        "flush_dns",
-        "toggle_fw_rule",
-        "set_fw_rule",
-        "aliases",
-        "gateway_status",
-        "get_logs",
-        "pf_states",
-        "pf_statistics",
-        "list_shaper_pipes",
-        "get_shaper_pipe",
-        "list_shaper_queues",
-        "get_shaper_queue",
-        "list_shaper_rules",
-        "get_shaper_rule",
-        "get_shaper_settings",
-        "shaper_statistics",
-        "audit_shaper_config",
-        "explain_shaper_config",
-    }
-    assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
+    assert len(tools) > 20
+    for tool in tools:
+        assert tool.name
+        assert tool.description
+        assert tool.inputSchema["type"] == "object"
 
 
 @pytest.mark.asyncio
@@ -77,18 +42,26 @@ async def test_fastmcp_server_exposes_every_registered_tool():
     """
     from fastmcp.client import Client
 
-    from opnsense_mcp.fastmcp_server import SHAPER_TOOL_CLASSES, build_mcp_server
-    from opnsense_mcp.utils.registry import TOOL_CLASSES
+    from opnsense_mcp.fastmcp_server import build_mcp_server
 
     mcp = build_mcp_server()
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    exposed = {t.name for t in tools}
-    expected = {c.name for c in TOOL_CLASSES} | {c.name for c in SHAPER_TOOL_CLASSES}
+    from opnsense_mcp.utils.tool_groups import GROUPS, UNGROUPED
 
-    assert exposed == expected, (
-        f"missing: {sorted(expected - exposed)}\nunexpected: {sorted(exposed - expected)}"
+    exposed = {t.name for t in tools}
+
+    # Operations are grouped by resource, so the exposed names are the group
+    # names plus the ones deliberately left on their own.
+    assert set(GROUPS) <= exposed, (
+        f"groups missing from the server: {sorted(set(GROUPS) - exposed)}"
+    )
+    assert exposed >= UNGROUPED, (
+        f"ungrouped tools missing: {sorted(UNGROUPED - exposed)}"
+    )
+    assert exposed == set(GROUPS) | UNGROUPED, (
+        f"unexpected names: {sorted(exposed - (set(GROUPS) | UNGROUPED))}"
     )
 
 

@@ -1,4 +1,9 @@
-"""Smoke tests for shaper read tool MCP registration (bucket 3b)."""
+"""Every shaper operation stays reachable after grouping.
+
+The shaper tools used to be 25 separate names. They are now actions on three
+grouped tools, so these assert the operations are still exposed rather than the
+names, which is what the tests were protecting all along.
+"""
 
 from __future__ import annotations
 
@@ -40,6 +45,17 @@ SHAPER_WRITE_TOOLS = frozenset(
 )
 
 
+def _shaper_actions() -> set[str]:
+    """Every underlying shaper tool reachable through the grouped tools."""
+    from opnsense_mcp.utils.tool_groups import GROUPS
+
+    reachable: set[str] = set()
+    for group_name, (_description, members) in GROUPS.items():
+        if group_name.startswith("shaper"):
+            reachable.update(members.values())
+    return reachable
+
+
 def test_build_mcp_server_imports() -> None:
     """build_mcp_server must import and construct without error."""
     from opnsense_mcp.fastmcp_server import build_mcp_server
@@ -59,8 +75,10 @@ async def test_shaper_read_tools_registered() -> None:
         tools = await client.list_tools()
 
     tool_names = {t.name for t in tools}
-    missing = SHAPER_READ_TOOLS - tool_names
-    assert not missing, f"Missing shaper read tools: {sorted(missing)}"
+    assert "shaper" in tool_names
+
+    missing = SHAPER_READ_TOOLS - _shaper_actions()
+    assert not missing, f"shaper read operations no longer reachable: {sorted(missing)}"
 
 
 @pytest.mark.asyncio
@@ -75,8 +93,12 @@ async def test_shaper_write_tools_registered() -> None:
         tools = await client.list_tools()
 
     tool_names = {t.name for t in tools}
-    missing = SHAPER_WRITE_TOOLS - tool_names
-    assert not missing, f"Missing shaper write tools: {sorted(missing)}"
+    assert {"shaper", "shaper_service"} <= tool_names
+
+    missing = SHAPER_WRITE_TOOLS - _shaper_actions()
+    assert not missing, (
+        f"shaper write operations no longer reachable: {sorted(missing)}"
+    )
 
 
 @pytest.mark.asyncio
@@ -90,7 +112,10 @@ async def test_restore_shaper_snapshot_mcp_remove_orphans_param() -> None:
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    restore = next(t for t in tools if t.name == "restore_shaper_snapshot")
-    props = (restore.inputSchema or {}).get("properties", {})
+    # restore_shaper_snapshot is now the restore_snapshot action on
+    # shaper_service, so the field appears in that group's merged schema.
+    service = next(t for t in tools if t.name == "shaper_service")
+    props = (service.inputSchema or {}).get("properties", {})
     assert "remove_orphans" in props
     assert props["remove_orphans"].get("default") is False
+    assert "restore_snapshot" in props["action"]["enum"]

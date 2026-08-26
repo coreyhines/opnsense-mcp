@@ -53,6 +53,7 @@ from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
 from opnsense_mcp.utils.env import load_opnsense_env
 from opnsense_mcp.utils.registry import build_tools
+from opnsense_mcp.utils.tool_groups import build_groups
 
 logger = logging.getLogger(__name__)
 
@@ -85,9 +86,11 @@ SHAPER_TOOL_CLASSES: tuple[type, ...] = (
 )
 
 INSTRUCTIONS = (
-    "OPNsense firewall management. Tools are grouped by subject: firewall rules, "
-    "DHCP, DNS, interfaces, diagnostics and traffic shaping. Write tools that "
-    "change firewall state generally take an `apply` flag; read tools do not."
+    "OPNsense firewall management. Most tools are grouped by resource and take "
+    "an `action`: pick the object, then the verb. Call action='help' on any of "
+    "them for that resource's per-action fields, defaults and rules, including "
+    "which actions need a confirmation token. Write actions that change firewall "
+    "state generally stage by default and take an `apply` flag; reads do not."
 )
 
 
@@ -135,8 +138,9 @@ def build_mcp_server() -> FastMCP:
     client = get_opnsense_client({})
 
     tools = build_tools(client, extra=build_shaper_tools(client))
+    exposed = build_groups(tools)
 
     mcp = FastMCP("opnsense-mcp", instructions=INSTRUCTIONS)
-    register_tools(mcp, tools)
-    logger.info("Registered %d tools", len(tools))
+    register_tools(mcp, exposed)
+    logger.info("Registered %d tools from %d operations", len(exposed), len(tools))
     return mcp
