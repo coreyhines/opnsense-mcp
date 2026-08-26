@@ -155,7 +155,7 @@ async def test_get_logs_tool_success_and_client_exception() -> None:
             "protoname": "tcp",
             "src": "1.1.1.1",
             "srcport": "12345",
-            "dst": "2.2.2.2",
+            "dst": "192.0.2.22",
             "dstport": "443",
             "rid": "1",
             "label": "test",

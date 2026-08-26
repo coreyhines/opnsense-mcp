@@ -14,7 +14,7 @@ _SAMPLE_ROW = {
     "ipproto": "inet",
     "src_addr": "172.20.0.5",
     "src_port": "54321",
-    "dst_addr": "1.2.3.4",
+    "dst_addr": "198.51.100.4",
     "dst_port": "443",
     "state": "ESTABLISHED:ESTABLISHED",
     "age": "10",
@@ -110,7 +110,7 @@ async def test_pf_states_maps_fields_correctly() -> None:
     state = result["states"][0]
     assert state["protocol"] == "tcp"
     assert state["src"] == "172.20.0.5"
-    assert state["dst"] == "1.2.3.4"
+    assert state["dst"] == "198.51.100.4"
     assert state["src_port"] == 54321
     assert state["dst_port"] == 443
     assert state["interface"] == "em0"
@@ -181,7 +181,7 @@ async def test_pf_states_filter_src_ip_no_match() -> None:
 async def test_pf_states_filter_dst_ip() -> None:
     """dst_ip filter matches destination address."""
     tool = PfStatesTool(FakeClient())
-    result = await tool.execute({"dst_ip": "1.2.3.4"})
+    result = await tool.execute({"dst_ip": "198.51.100.4"})
     assert len(result["states"]) == 1
 
 
@@ -190,7 +190,7 @@ async def test_pf_states_filter_ip_matches_src_or_dst() -> None:
     """ip filter matches either src or dst."""
     tool = PfStatesTool(FakeClient())
     result_src = await tool.execute({"ip": "172.20.0.5"})
-    result_dst = await tool.execute({"ip": "1.2.3.4"})
+    result_dst = await tool.execute({"ip": "198.51.100.4"})
     result_none = await tool.execute({"ip": "9.9.9.9"})
 
     assert len(result_src["states"]) == 1

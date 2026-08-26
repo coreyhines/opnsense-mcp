@@ -182,11 +182,11 @@ async def test_set_alias_replaces_content_when_asked() -> None:
     calls = _stub(client, {"getItem": GET_ITEM, "searchItem": SEARCH_ROWS})
 
     await SetAliasTool(client).execute(
-        {"uuid": ALIAS_UUID, "content": ["10.10.10.1", "10.10.10.2"]}
+        {"uuid": ALIAS_UUID, "content": ["172.20.10.1", "172.20.10.2"]}
     )
 
     payload = next(c for c in calls if "setItem" in c["endpoint"])["json"]["alias"]
-    assert payload["content"] == "10.10.10.1\n10.10.10.2"
+    assert payload["content"] == "172.20.10.1\n172.20.10.2"
 
 
 @pytest.mark.asyncio

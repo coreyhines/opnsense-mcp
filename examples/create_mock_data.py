@@ -86,7 +86,7 @@ interface_data = {
             "status": "up",
             "addresses": [
                 {"address": "192.168.1.1", "netmask": "24", "type": "ipv4"},
-                {"address": "fd00::1", "netmask": "64", "type": "ipv6"},
+                {"address": "fd0b:b022::1", "netmask": "64", "type": "ipv6"},
             ],
             "media": "Ethernet autoselect (1000baseT <full-duplex>)",
             "mtu": 1500,
