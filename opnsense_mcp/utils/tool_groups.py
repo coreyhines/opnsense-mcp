@@ -13,7 +13,7 @@ resource: `arp`, `lldp`, `system`, `interface_list`, `pf_states` and the other
 diagnostics have no shared shape, so an `action` enum would group things that
 have nothing to do with each other.
 
-Result: 89 names become 27.
+Result: 95 names become 30.
 """
 
 from __future__ import annotations
@@ -135,6 +135,16 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "status": "gateway_status",
         },
     ),
+    "nat_outbound": (
+        "Outbound source NAT rules and how they are generated",
+        {
+            "list": "list_nat_outbound",
+            "create": "mk_nat_outbound",
+            "toggle": "toggle_nat_outbound",
+            "delete": "rm_nat_outbound",
+            "mode": "nat_outbound_mode",
+        },
+    ),
     "route": (
         "Manage static routes",
         {
@@ -200,6 +210,7 @@ UNGROUPED: frozenset[str] = frozenset(
         "get_logs",
         "packet_capture",
         "ssh_fw_rule",
+        "fw_ping",
         "plan_dns_ula",
         "apply_ula",
     }
