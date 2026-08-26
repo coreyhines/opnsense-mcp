@@ -12,7 +12,7 @@ class FakeProvider:
 
     async def list_hosts(self, search=""):
         self.called = search
-        return [{"uuid": "u1", "host": "printer", "ip": "10.0.8.2,::2"}]
+        return [{"uuid": "u1", "host": "printer", "ip": "172.20.8.2,::2"}]
 
 
 @pytest.mark.asyncio

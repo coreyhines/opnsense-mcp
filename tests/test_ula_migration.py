@@ -205,7 +205,7 @@ async def test_set_host_override_requires_a_uuid() -> None:
     """This edits an existing record; creating is what mkdns is for."""
     client = _client()
 
-    result = await SetHostOverrideTool(client).execute({"server": "fd00::1"})
+    result = await SetHostOverrideTool(client).execute({"server": "fd0b:b022::1"})
 
     assert result["status"] == "error"
     assert "uuid" in result["error"]
@@ -233,7 +233,9 @@ async def test_set_host_override_preserves_description_and_flags() -> None:
     client = _client()
     calls = _stub(client, {"getHostOverride": GET_HOST})
 
-    await SetHostOverrideTool(client).execute({"uuid": HOST_UUID, "server": "fd00::19"})
+    await SetHostOverrideTool(client).execute(
+        {"uuid": HOST_UUID, "server": "fd0b:b022::19"}
+    )
 
     payload = next(c for c in calls if "setHostOverride" in c["endpoint"])["json"][
         "host"

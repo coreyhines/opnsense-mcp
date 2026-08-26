@@ -11,9 +11,9 @@ from opnsense_mcp.utils.api import OPNsenseClient, _record_type_for_server
 @pytest.mark.parametrize(
     ("server", "expected_rr"),
     [
-        ("10.0.2.2", "A"),
+        ("172.20.2.2", "A"),
         ("192.168.1.1", "A"),
-        ("2601:441:8483:b501::5", "AAAA"),
+        ("2001:db8:5eed:b501::5", "AAAA"),
         ("2001:db8::1", "AAAA"),
     ],
 )
@@ -56,14 +56,14 @@ async def test_add_host_override_posts_ipv6_as_aaaa() -> None:
         await client.add_host_override(
             hostname="pi5",
             domain="example.com",
-            server="2601:441:8483:b501::5",
+            server="2001:db8:5eed:b501::5",
         )
 
     assert captured["method"] == "POST"
     assert captured["endpoint"] == "/api/unbound/settings/addHostOverride"
     host = captured["json"]["host"]
     assert host["rr"] == "AAAA"
-    assert host["server"] == "2601:441:8483:b501::5"
+    assert host["server"] == "2001:db8:5eed:b501::5"
 
 
 @pytest.mark.asyncio
@@ -77,7 +77,7 @@ async def test_mkdns_returns_aaaa_for_ipv6_server() -> None:
         {
             "hostname": "pi5",
             "domain": "example.com",
-            "server": "2601:441:8483:b501::5",
+            "server": "2001:db8:5eed:b501::5",
         }
     )
 
@@ -86,7 +86,7 @@ async def test_mkdns_returns_aaaa_for_ipv6_server() -> None:
     client.add_host_override.assert_awaited_once_with(
         hostname="pi5",
         domain="example.com",
-        server="2601:441:8483:b501::5",
+        server="2001:db8:5eed:b501::5",
         description="",
         enabled=True,
     )

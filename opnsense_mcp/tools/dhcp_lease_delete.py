@@ -249,8 +249,8 @@ class DHCPLeaseDeleteTool:
             "status": "success",
             "deleted_leases": [
                 {
-                    "ip": "10.0.2.15",
-                    "mac": "08:00:27:12:34:56",
+                    "ip": "172.20.2.15",
+                    "mac": "52:54:00:49:68:4e",
                     "hostname": "test-device",
                     "type": "IPv4",
                     "status": "deleted",

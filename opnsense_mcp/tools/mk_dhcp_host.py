@@ -36,7 +36,7 @@ class MkDhcpHostTool:
             },
             "ipv4": {
                 "type": "string",
-                "description": "IPv4 address to assign (e.g. '10.0.8.50')",
+                "description": "IPv4 address to assign (e.g. '172.20.8.50')",
             },
             "ipv6": {
                 "type": ["integer", "string"],
@@ -46,7 +46,7 @@ class MkDhcpHostTool:
                 "type": "string",
                 "description": (
                     "Optional DHCP client identifier / DUID for IPv6 (e.g. "
-                    "'00:03:00:01:52:54:00:ab:cd:01'). Accepts optional 'id:' prefix."
+                    "'52:54:00:7e:9c:f4:00:ab:cd:01'). Accepts optional 'id:' prefix."
                 ),
             },
             "descr": {

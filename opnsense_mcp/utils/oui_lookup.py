@@ -47,4 +47,4 @@ class OUILookup:
 
 # Example usage:
 # lookup = OUILookup()
-# print(lookup.lookup("75:59:99:e9:a8:33"))
+# print(lookup.lookup("52:54:00:64:85:dc"))

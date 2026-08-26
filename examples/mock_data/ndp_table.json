@@ -2,7 +2,7 @@
     "entries": [
         {
             "ip": "fe80::1234:5678:90ab:cdef",
-            "mac": "00:11:22:33:44:55",
+            "mac": "52:54:00:66:fd:6e",
             "interface": "igb0",
             "hostname": "desktop-pc.local",
             "expiry": "1200",

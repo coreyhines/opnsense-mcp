@@ -173,7 +173,7 @@ fw_rules interface="wan"
 mkfw_rule description="Block host from web" action="block" source_net="192.168.1.100" destination_port="80,443"
 
 # Allow SSH from management network
-mkfw_rule description="Allow SSH from mgmt" source_net="10.0.1.0/24" destination_port="22"
+mkfw_rule description="Allow SSH from mgmt" source_net="172.20.1.0/24" destination_port="22"
 ```
 
 **What it returns**: Success/failure status and rule UUID if created.
@@ -271,7 +271,7 @@ get_logs dst_port="22" protocol="tcp"
 **Quick Example**:
 ```bash
 # Show active states for one host
-pf_states ip="10.0.8.10" limit=50
+pf_states ip="172.20.8.10" limit=50
 
 # Show current TCP/443 states
 pf_states protocol="tcp" dst_port=443 summary=true

@@ -32,11 +32,11 @@ class DummyClient(OPNsenseClient):
 async def test_get_pf_states_uses_query_states_endpoint() -> None:
     """PF row listing uses query_states, not metadata-only pf_states."""
     client = DummyClient()
-    client.responses.append({"rows": [{"src_addr": "10.0.0.2"}], "total": 1})
+    client.responses.append({"rows": [{"src_addr": "172.20.0.2"}], "total": 1})
 
     result = await client.get_pf_states(limit=10)
 
-    assert result["rows"][0]["src_addr"] == "10.0.0.2"
+    assert result["rows"][0]["src_addr"] == "172.20.0.2"
     assert client.calls == [
         (
             "POST",

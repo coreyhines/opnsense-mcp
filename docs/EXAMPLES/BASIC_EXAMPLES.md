@@ -16,14 +16,14 @@ This guide provides basic examples that demonstrate fundamental capabilities of 
 ```
 ARP Table Results:
 - 192.168.1.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0 - Permanent
-- 192.168.1.33 (11:22:33:44:55:66) - iBerg Networks, Inc. - Interface: ax0 - Expires: 1200s
+- 192.168.1.33 (52:54:00:f9:68:7f) - iBerg Networks, Inc. - Interface: ax0 - Expires: 1200s
 - 192.168.1.64 (aa:bb:cc:dd:ee:ff) - iBerg Networks, Inc. - Interface: ax0 - Expires: 875s
-- 192.168.1.69 (d5:5c:e3:36:87:0e) - iBerg Networks, Inc. - Interface: ax0 - Expires: 928s
+- 192.168.1.69 (52:54:00:bc:64:0a) - iBerg Networks, Inc. - Interface: ax0 - Expires: 928s
 
 VLAN 2 Devices:
-- 10.0.2.10 (aa:bb:cc:dd:ee:ff) - Raspberry Pi Trading Ltd - Interface: ax0_vlan2 - Expires: 1195s
-- 10.0.2.175 (ad:2e:b5:d9:75:c8) - Private - Hostname: coreymbp - Expires: 1152s
-- 10.0.2.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0_vlan2 - Permanent
+- 172.20.2.10 (aa:bb:cc:dd:ee:ff) - Raspberry Pi Trading Ltd - Interface: ax0_vlan2 - Expires: 1195s
+- 172.20.2.175 (52:54:00:29:4d:7c) - Private - Hostname: coreymbp - Expires: 1152s
+- 172.20.2.1 (aa:bb:cc:dd:ee:ff) - Deciso B.V. - Interface: ax0_vlan2 - Permanent
 ```
 
 ### **Find a Specific Device**
@@ -55,13 +55,13 @@ LLDP Neighbor Table:
 - Interface: igb3
   - Neighbor: iBerg Networks Switch
   - MAC: aa:bb:cc:dd:ee:ff
-  - IP: 10.0.9.246
+  - IP: 172.20.9.246
   - Port: Ethernet1/1
   - System: Arista-DCS-7050S-64
 
 - Interface: ax0
   - Neighbor: iBerg Networks AP
-  - MAC: 11:22:33:44:55:66
+  - MAC: 52:54:00:f9:68:7f
   - IP: 192.168.1.33
   - Port: eth0
   - System: Mojo-AP-1234
@@ -98,9 +98,9 @@ System Status:
 Available Interfaces:
 - ax0 (LAN) - Status: UP - IP: 192.168.1.1/24
 - ax1 (WAN) - Status: UP - IP: 203.0.113.91/24
-- ax0_vlan2 (VLAN2) - Status: UP - IP: 10.0.2.1/24
-- ax0_vlan3 (VLAN3) - Status: UP - IP: 10.0.3.1/24
-- ax0_vlan4 (VLAN4) - Status: UP - IP: 10.0.4.1/24
+- ax0_vlan2 (VLAN2) - Status: UP - IP: 172.20.2.1/24
+- ax0_vlan3 (VLAN3) - Status: UP - IP: 172.20.3.1/24
+- ax0_vlan4 (VLAN4) - Status: UP - IP: 172.20.4.1/24
 ```
 
 ## 🛡️ Firewall Management Examples
@@ -171,11 +171,11 @@ Firewall Rule Deleted:
 **Example Response**:
 ```
 Recent Firewall Logs (Last 5 entries):
-1. 2025-07-31T08:26:01-05:00 - BLOCK - UDP - 10.0.7.3:123 → 10.0.2.3:123 - Interface: ax0_vlan7 - Rule: Default deny / state violation rule
+1. 2025-07-31T08:26:01-05:00 - BLOCK - UDP - 172.20.7.3:123 → 172.20.2.3:123 - Interface: ax0_vlan7 - Rule: Default deny / state violation rule
 2. 2025-07-31T08:25:58-05:00 - BLOCK - TCP - 203.0.113.148:53497 → 203.0.113.91:56539 - Interface: ax1 - Rule: Default deny / state violation rule
 3. 2025-07-31T08:25:57-05:00 - BLOCK - TCP - 203.0.113.58:40462 → 203.0.113.91:795 - Interface: ax1 - Rule: Default deny / state violation rule
 4. 2025-07-31T08:25:53-05:00 - BLOCK - TCP - 203.0.113.148:53497 → 203.0.113.91:56506 - Interface: ax1 - Rule: Default deny / state violation rule
-5. 2025-07-31T08:25:52-05:00 - BLOCK - UDP - 10.0.7.4:123 → 10.0.2.3:123 - Interface: ax0_vlan7 - Rule: Default deny / state violation rule
+5. 2025-07-31T08:25:52-05:00 - BLOCK - UDP - 172.20.7.4:123 → 172.20.2.3:123 - Interface: ax0_vlan7 - Rule: Default deny / state violation rule
 ```
 
 ### **Check DHCP Leases**
@@ -189,7 +189,7 @@ Recent Firewall Logs (Last 5 entries):
 DHCP Leases:
 Active Leases:
 - 192.168.1.100 - aa:bb:cc:dd:ee:ff - coreymbp - Expires: 2024-12-15 14:30:00
-- 192.168.1.101 - 11:22:33:44:55:66 - morpheus - Expires: 2024-12-15 15:45:00
+- 192.168.1.101 - 52:54:00:f9:68:7f - morpheus - Expires: 2024-12-15 15:45:00
 - 192.168.1.102 - aa:bb:cc:dd:ee:ff - trogdor - Expires: 2024-12-15 16:20:00
 
 Expired Leases:

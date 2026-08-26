@@ -36,7 +36,7 @@ class FlushDnsTool:
             "hostname": {
                 "type": "string",
                 "description": (
-                    "FQDN to flush from cache (e.g. headroom.freeblizz.com). "
+                    "FQDN to flush from cache (e.g. headroom.frobozz.example). "
                     "Required when mode=name."
                 ),
                 "optional": True,

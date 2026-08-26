@@ -31,7 +31,7 @@
       "hwstats",
       "mextpg"
     ],
-    "macaddr": "f4:90:ea:00:67:c7",
+    "macaddr": "52:54:00:e8:56:6a",
     "supported_media": [
       "autoselect",
       "100M-SGMII",
@@ -49,7 +49,7 @@
     "is_physical": true,
     "device": "ax1",
     "mtu": "1500",
-    "macaddr_hw": "f4:90:ea:00:67:c7",
+    "macaddr_hw": "52:54:00:e8:56:6a",
     "media": "10GBase-SFI <full-duplex,rxpause,txpause>",
     "media_raw": "Ethernet autoselect (10GBase-SFI <full-duplex,rxpause,txpause>)",
     "status": "up",
@@ -105,11 +105,11 @@
     },
     "routes": [
       "default",
-      "68.47.6.0/23",
+      "203.0.113.0/23",
       "default",
-      "2001:558:1027:6b::/64",
-      "fd00:0:d:4::/64",
-      "fd00:0:101:41::/64",
+      "2001:db8:f00d:1027:6b::/64",
+      "fd0b:b022:d:4::/64",
+      "fd0b:b022:101:41::/64",
       "fe80::%ax1/64"
     ],
     "config": {
@@ -176,42 +176,42 @@
       "identifier": "wan"
     },
     "ifctl.nameserver": [
-      "75.75.75.75\n75.75.76.76",
-      "2001:558:feed::1\n2001:558:feed::2"
+      "192.0.2.53\n75.75.76.76",
+      "2001:db8:f00d:feed::1\n2001:558:feed::2"
     ],
     "ifctl.router": [
-      "68.47.6.1",
-      "fe80::21c:73ff:fe00:99"
+      "203.0.113.1",
+      "fe80::5054:00ff:fe02:20d3"
     ],
     "ifctl.searchdomain": [
-      "hsd1.mn.comcast.net."
+      "hsd1.mn.grue.example."
     ],
     "ifctl.prefix": [
-      "2601:441:8483:b500::/60"
+      "2001:db8:5eed:b500::/60"
     ],
     "identifier": "wan",
     "description": "WAN",
     "enabled": true,
     "link_type": "dhcp",
-    "addr4": "68.47.7.163/23",
-    "addr6": "2001:558:6014:19:4091:25d2:ca69:5582/128",
+    "addr4": "203.0.113.163/23",
+    "addr6": "2001:db8:f00d:6014:19:4091:25d2:ca69:5582/128",
     "ipv4": [
       {
-        "ipaddr": "68.47.7.163/23"
+        "ipaddr": "203.0.113.163/23"
       }
     ],
     "ipv6": [
       {
-        "ipaddr": "2001:558:6014:19:4091:25d2:ca69:5582/128"
+        "ipaddr": "2001:db8:f00d:6014:19:4091:25d2:ca69:5582/128"
       },
       {
-        "ipaddr": "fe80::f690:eaff:fe00:67c7/64"
+        "ipaddr": "fe80::5054:00ff:fee8:566a/64"
       }
     ],
     "vlan_tag": null,
     "gateways": [
-      "68.47.6.1",
-      "fe80::21c:73ff:fe00:99"
+      "203.0.113.1",
+      "fe80::5054:00ff:fe02:20d3"
     ]
   },
   "ax0_vlan81": {
@@ -235,14 +235,14 @@
     "options": [
       "mextpg"
     ],
-    "macaddr": "f4:90:ea:00:67:c6",
+    "macaddr": "52:54:00:99:5d:42",
     "supported_media": [
       "autoselect"
     ],
     "is_physical": false,
     "device": "ax0_vlan81",
     "mtu": "1500",
-    "macaddr_hw": "f4:90:ea:00:67:c6",
+    "macaddr_hw": "52:54:00:99:5d:42",
     "groups": [
       "vlan",
       "noguests",
@@ -296,8 +296,8 @@
       "uptime at attach or stat reset": "75"
     },
     "routes": [
-      "10.0.8.0/24",
-      "2601:441:8483:b508::/64",
+      "172.20.8.0/24",
+      "2001:db8:5eed:b508::/64",
       "fe80::%ax0_vlan81/64"
     ],
     "config": {
@@ -307,7 +307,7 @@
       "lock": "1",
       "spoofmac": "",
       "mtu": "1500",
-      "ipaddr": "10.0.8.1",
+      "ipaddr": "172.20.8.1",
       "subnet": "24",
       "ipaddrv6": "track6",
       "track6-interface": "wan",
@@ -320,19 +320,19 @@
     "description": "VLAN81wifi",
     "enabled": true,
     "link_type": "static",
-    "addr4": "10.0.8.1/24",
-    "addr6": "2601:441:8483:b508::1/64",
+    "addr4": "172.20.8.1/24",
+    "addr6": "2001:db8:5eed:b508::1/64",
     "ipv4": [
       {
-        "ipaddr": "10.0.8.1/24"
+        "ipaddr": "172.20.8.1/24"
       }
     ],
     "ipv6": [
       {
-        "ipaddr": "2601:441:8483:b508::1/64"
+        "ipaddr": "2001:db8:5eed:b508::1/64"
       },
       {
-        "ipaddr": "fe80::f690:eaff:fe00:67c6/64"
+        "ipaddr": "fe80::5054:00ff:fe99:5d42/64"
       }
     ],
     "vlan_tag": "81",
@@ -371,7 +371,7 @@
       "hwstats",
       "mextpg"
     ],
-    "macaddr": "f4:90:ea:00:67:c2",
+    "macaddr": "52:54:00:04:9a:a4",
     "ipv4": [],
     "ipv6": [],
     "supported_media": [
@@ -386,7 +386,7 @@
     "is_physical": true,
     "device": "igb0",
     "mtu": "1500",
-    "macaddr_hw": "f4:90:ea:00:67:c2",
+    "macaddr_hw": "52:54:00:04:9a:a4",
     "media": "Ethernet autoselect",
     "media_raw": "Ethernet autoselect",
     "status": "no carrier",
@@ -447,12 +447,12 @@
     "options": [
       "options="
     ],
-    "macaddr": "58:9c:fc:10:f1:2e",
+    "macaddr": "52:54:00:87:d5:97",
     "supported_media": [],
     "is_physical": false,
     "device": "bridge0",
     "mtu": "1500",
-    "macaddr_hw": "58:9c:fc:10:f1:2e",
+    "macaddr_hw": "52:54:00:87:d5:97",
     "priority": "32768",
     "hellotime": "2",
     "fwddelay": "15",
@@ -522,8 +522,8 @@
       "uptime at attach or stat reset": "78"
     },
     "routes": [
-      "10.0.5.0/24",
-      "2601:441:8483:b505::/64"
+      "172.20.5.0/24",
+      "2001:db8:5eed:b505::/64"
     ],
     "config": {
       "if": "bridge0",
@@ -531,7 +531,7 @@
       "enable": "1",
       "lock": "1",
       "spoofmac": "",
-      "ipaddr": "10.0.5.1",
+      "ipaddr": "172.20.5.1",
       "subnet": "24",
       "ipaddrv6": "track6",
       "track6-interface": "wan",
@@ -544,16 +544,16 @@
     "description": "VLAN5_ax0_igb3",
     "enabled": true,
     "link_type": "static",
-    "addr4": "10.0.5.1/24",
-    "addr6": "2601:441:8483:b505::1/64",
+    "addr4": "172.20.5.1/24",
+    "addr6": "2001:db8:5eed:b505::1/64",
     "ipv4": [
       {
-        "ipaddr": "10.0.5.1/24"
+        "ipaddr": "172.20.5.1/24"
       }
     ],
     "ipv6": [
       {
-        "ipaddr": "2601:441:8483:b505::1/64"
+        "ipaddr": "2001:db8:5eed:b505::1/64"
       }
     ],
     "vlan_tag": null,
@@ -581,14 +581,14 @@
     "options": [
       "mextpg"
     ],
-    "macaddr": "f4:90:ea:00:67:c6",
+    "macaddr": "52:54:00:99:5d:42",
     "supported_media": [
       "autoselect"
     ],
     "is_physical": false,
     "device": "ax0_vlan5",
     "mtu": "1500",
-    "macaddr_hw": "f4:90:ea:00:67:c6",
+    "macaddr_hw": "52:54:00:99:5d:42",
     "groups": [
       "vlan",
       "labNets",

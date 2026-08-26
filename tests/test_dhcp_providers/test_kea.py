@@ -25,9 +25,9 @@ def test_name(provider: KeaProvider) -> None:
 
 @pytest.mark.asyncio
 async def test_get_v4_rows(provider: KeaProvider, make_request: AsyncMock) -> None:
-    make_request.return_value = {"rows": [{"ip": "10.0.0.10"}]}
+    make_request.return_value = {"rows": [{"ip": "172.20.0.10"}]}
     result = await provider.get_v4_leases()
-    assert result == [{"ip": "10.0.0.10"}]
+    assert result == [{"ip": "172.20.0.10"}]
     make_request.assert_called_once_with("GET", "/api/kea/leases4/search")
 
 
@@ -42,6 +42,6 @@ async def test_get_v6_arguments_leases(
 
 @pytest.mark.asyncio
 async def test_delete_not_supported(provider: KeaProvider) -> None:
-    result = await provider.delete_v4_lease("10.0.0.1")
+    result = await provider.delete_v4_lease("172.20.0.1")
     assert result["status"] == "error"
     assert "not supported" in result["error"]

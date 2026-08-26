@@ -29,12 +29,12 @@ async def test_get_v4_filters_family(
 ) -> None:
     make_request.return_value = {
         "rows": [
-            {"ip": "10.0.0.1", "protocol": "ipv4"},
+            {"ip": "172.20.0.1", "protocol": "ipv4"},
             {"ip": "2001:db8::1", "protocol": "ipv6"},
         ]
     }
     result = await provider.get_v4_leases()
-    assert result == [{"ip": "10.0.0.1", "protocol": "ipv4"}]
+    assert result == [{"ip": "172.20.0.1", "protocol": "ipv4"}]
     make_request.assert_called_once_with("GET", "/api/dnsmasq/leases/search")
 
 

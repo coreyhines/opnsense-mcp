@@ -136,7 +136,7 @@ def apply_v6_suffix(target: int | str) -> str:
     """Return a normalized '::N' IPv6 suffix from an int or string form.
 
     Integer targets use **decimal** ``::N`` to match dnsmasq host reservations
-    (e.g. ``10.0.8.15,::15`` — last octet and suffix align).
+    (e.g. ``172.20.8.15,::15`` — last octet and suffix align).
     """
     if isinstance(target, int) or str(target).isdigit():
         return f"::{int(target)}"

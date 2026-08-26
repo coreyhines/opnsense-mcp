@@ -1,7 +1,7 @@
 {
     "entries": [
         {
-            "ip": "10.0.8.80",
+            "ip": "172.20.8.80",
             "mac": "aa:bb:cc:dd:ee:01",
             "intf": "ax0_vlan81",
             "hostname": "host1.example.com",

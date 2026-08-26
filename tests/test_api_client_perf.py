@@ -91,7 +91,7 @@ async def test_get_arp_table_uses_session_not_pyopnsense(client_config):
         mock_session.request.return_value = MagicMock(
             status_code=200,
             json=lambda: [
-                {"mac": "aa:bb:cc:dd:ee:ff", "ip": "10.0.0.1", "intf": "em0"}
+                {"mac": "aa:bb:cc:dd:ee:ff", "ip": "172.20.0.1", "intf": "em0"}
             ],
         )
         mock_session_cls.return_value = mock_session
@@ -113,7 +113,7 @@ async def test_search_dhcpv4_leases_posts_search_phrase(client_config):
             json=lambda: {
                 "rows": [
                     {
-                        "address": "10.0.0.5",
+                        "address": "172.20.0.5",
                         "mac": "aa:bb:cc:dd:ee:ff",
                         "hostname": "myhost",
                     }
@@ -136,7 +136,7 @@ async def test_dhcp_tool_uses_search_when_query_given(client_config):
     mock_client = MagicMock()
     mock_client.search_dhcpv4_leases = AsyncMock(
         return_value=[
-            {"address": "10.0.0.5", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "myhost"}
+            {"address": "172.20.0.5", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "myhost"}
         ]
     )
     mock_client.search_dhcpv6_leases = AsyncMock(return_value=[])

@@ -106,20 +106,20 @@ async def test_filter_by_src_port_no_match(fixture_rows: list[dict]) -> None:
 async def test_filter_by_src_ip(fixture_rows: list[dict]) -> None:
     """src_ip filter works on live-shaped rows using the 'src' key."""
     tool, _ = make_tool(fixture_rows)
-    logs = await tool.get_firewall_logs(src_ip="216.180.246.111")
+    logs = await tool.get_firewall_logs(src_ip="198.51.100.111")
 
     assert len(logs) == 1
-    assert logs[0]["src"] == "216.180.246.111"
+    assert logs[0]["src"] == "198.51.100.111"
 
 
 @pytest.mark.asyncio
 async def test_filter_by_dst_ip(fixture_rows: list[dict]) -> None:
     """dst_ip filter works on live-shaped rows using the 'dst' key."""
     tool, _ = make_tool(fixture_rows)
-    logs = await tool.get_firewall_logs(dst_ip="68.47.7.163")
+    logs = await tool.get_firewall_logs(dst_ip="203.0.113.163")
 
     assert len(logs) == 1
-    assert logs[0]["dst"] == "68.47.7.163"
+    assert logs[0]["dst"] == "203.0.113.163"
 
 
 @pytest.mark.asyncio

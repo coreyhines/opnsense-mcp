@@ -30,7 +30,7 @@
           "type": "ipv4"
         },
         {
-          "address": "fd00::1",
+          "address": "fd0b:b022::1",
           "netmask": "64",
           "type": "ipv6"
         }

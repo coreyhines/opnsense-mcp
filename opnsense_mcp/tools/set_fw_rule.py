@@ -74,7 +74,7 @@ class SetFwRuleTool:
             },
             "destination_net": {
                 "type": "string",
-                "description": "Destination network/IP (e.g. 'any', '10.0.0.1')",
+                "description": "Destination network/IP (e.g. 'any', '172.20.0.1')",
                 "optional": True,
             },
             "destination_port": {

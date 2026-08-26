@@ -53,7 +53,7 @@ async def test_top_sources_not_unknown(
 
     source_ips = [ip for ip, _ in analysis["top_sources"]]
     assert "unknown" not in source_ips, f"'unknown' source found: {source_ips}"
-    assert "216.180.246.111" in source_ips
+    assert "198.51.100.111" in source_ips
 
 
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ async def test_top_destinations_not_unknown(
 
     dest_ips = [ip for ip, _ in analysis["top_destinations"]]
     assert "unknown" not in dest_ips, f"'unknown' destination found: {dest_ips}"
-    assert "2601:441:8483:b508::1" in dest_ips
+    assert "2001:db8:5eed:b508::1" in dest_ips
 
 
 @pytest.mark.asyncio

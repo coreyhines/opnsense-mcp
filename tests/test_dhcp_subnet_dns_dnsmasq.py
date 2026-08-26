@@ -20,7 +20,7 @@ async def test_list_subnet_dns_reads_scoped_options(make_request: AsyncMock) -> 
             "opt2": {
                 "identifier": "opt2",
                 "description": "VLAN2wired",
-                "ipaddr": "10.0.2.1",
+                "ipaddr": "172.20.2.1",
                 "subnet": "24",
             }
         },
@@ -31,13 +31,13 @@ async def test_list_subnet_dns_reads_scoped_options(make_request: AsyncMock) -> 
                     "uuid": "opt-v4",
                     "interface": "opt2",
                     "option": "6",
-                    "value": "10.0.10.4,10.0.10.5",
+                    "value": "172.20.10.4,172.20.10.5",
                 },
                 {
                     "uuid": "opt-v6",
                     "interface": "opt2",
                     "option6": "23",
-                    "value": "[2601:441:8483:b501::44]",
+                    "value": "[2001:db8:5eed:b501::44]",
                 },
             ]
         },
@@ -47,13 +47,13 @@ async def test_list_subnet_dns_reads_scoped_options(make_request: AsyncMock) -> 
                     "uuid": "opt-v4",
                     "interface": "opt2",
                     "option": "6",
-                    "value": "10.0.10.4,10.0.10.5",
+                    "value": "172.20.10.4,172.20.10.5",
                 },
                 {
                     "uuid": "opt-v6",
                     "interface": "opt2",
                     "option6": "23",
-                    "value": "[2601:441:8483:b501::44]",
+                    "value": "[2001:db8:5eed:b501::44]",
                 },
             ]
         },
@@ -64,14 +64,14 @@ async def test_list_subnet_dns_reads_scoped_options(make_request: AsyncMock) -> 
 
     assert result["backend"] == "dnsmasq"
     assert result["scope"]["interface"] == "opt2"
-    assert result["ipv4"] == ["10.0.10.4", "10.0.10.5"]
-    assert result["ipv6"] == ["2601:441:8483:b501::44"]
+    assert result["ipv4"] == ["172.20.10.4", "172.20.10.5"]
+    assert result["ipv6"] == ["2001:db8:5eed:b501::44"]
 
 
 @pytest.mark.asyncio
 async def test_set_subnet_dns_updates_and_reconfigures(make_request: AsyncMock) -> None:
     make_request.side_effect = [
-        {"opt2": {"identifier": "opt2", "ipaddr": "10.0.2.1", "subnet": "24"}},
+        {"opt2": {"identifier": "opt2", "ipaddr": "172.20.2.1", "subnet": "24"}},
         {"rows": []},
         {
             "rows": [
@@ -79,7 +79,7 @@ async def test_set_subnet_dns_updates_and_reconfigures(make_request: AsyncMock) 
                     "uuid": "opt-v4",
                     "interface": "opt2",
                     "option": "6",
-                    "value": "10.0.10.5",
+                    "value": "172.20.10.5",
                 }
             ]
         },
@@ -92,19 +92,19 @@ async def test_set_subnet_dns_updates_and_reconfigures(make_request: AsyncMock) 
     result = await provider.set_subnet_dns(
         interface="opt2",
         family="ipv4",
-        servers=["10.0.10.4"],
+        servers=["172.20.10.4"],
     )
 
     assert result["status"] == "success"
-    assert result["before"] == ["10.0.10.5"]
-    assert result["after"] == ["10.0.10.4"]
+    assert result["before"] == ["172.20.10.5"]
+    assert result["after"] == ["172.20.10.4"]
     set_calls = [
         call
         for call in make_request.call_args_list
         if call.args[:2] == ("POST", "/api/dnsmasq/settings/set_option/opt-v4")
     ]
     assert set_calls
-    assert set_calls[0].kwargs["json"]["option"]["value"] == "10.0.10.4"
+    assert set_calls[0].kwargs["json"]["option"]["value"] == "172.20.10.4"
 
 
 @pytest.mark.asyncio
@@ -112,7 +112,7 @@ async def test_set_subnet_dns_rolls_back_on_reconfigure_failure(
     make_request: AsyncMock,
 ) -> None:
     make_request.side_effect = [
-        {"opt2": {"identifier": "opt2", "ipaddr": "10.0.2.1", "subnet": "24"}},
+        {"opt2": {"identifier": "opt2", "ipaddr": "172.20.2.1", "subnet": "24"}},
         {"rows": []},
         {
             "rows": [
@@ -120,7 +120,7 @@ async def test_set_subnet_dns_rolls_back_on_reconfigure_failure(
                     "uuid": "opt-v4",
                     "interface": "opt2",
                     "option": "6",
-                    "value": "10.0.10.5",
+                    "value": "172.20.10.5",
                 }
             ]
         },
@@ -134,12 +134,12 @@ async def test_set_subnet_dns_rolls_back_on_reconfigure_failure(
     result = await provider.set_subnet_dns(
         interface="opt2",
         family="ipv4",
-        servers=["10.0.10.4"],
+        servers=["172.20.10.4"],
     )
 
     assert result["status"] == "error"
     assert result["restored"] is True
-    assert result["before"] == ["10.0.10.5"]
+    assert result["before"] == ["172.20.10.5"]
 
 
 @pytest.mark.asyncio
@@ -150,7 +150,7 @@ async def test_list_subnet_dns_uses_dhcp_range_tag(make_request: AsyncMock) -> N
             "opt5": {
                 "identifier": "opt5",
                 "description": "VLAN81wifi",
-                "ipaddr": "10.0.8.1",
+                "ipaddr": "172.20.8.1",
                 "subnet": "24",
             }
         },
@@ -159,8 +159,8 @@ async def test_list_subnet_dns_uses_dhcp_range_tag(make_request: AsyncMock) -> N
                 {
                     "interface": "opt5",
                     "set_tag": internal_tag,
-                    "start_addr": "10.0.8.2",
-                    "end_addr": "10.0.8.240",
+                    "start_addr": "172.20.8.2",
+                    "end_addr": "172.20.8.240",
                 }
             ]
         },
@@ -171,7 +171,7 @@ async def test_list_subnet_dns_uses_dhcp_range_tag(make_request: AsyncMock) -> N
                     "interface": "",
                     "tag": internal_tag,
                     "option": "6",
-                    "value": "10.0.2.2,10.0.10.46",
+                    "value": "172.20.2.2,172.20.10.46",
                     "force": "1",
                 }
             ]
@@ -182,7 +182,7 @@ async def test_list_subnet_dns_uses_dhcp_range_tag(make_request: AsyncMock) -> N
     provider = DnsmasqProvider(make_request)
     result = await provider.list_subnet_dns(interface="opt5")
 
-    assert result["ipv4"] == ["10.0.2.2", "10.0.10.46"]
+    assert result["ipv4"] == ["172.20.2.2", "172.20.10.46"]
 
 
 @pytest.mark.asyncio
@@ -192,7 +192,7 @@ async def test_set_subnet_dns_creates_tagged_option(make_request: AsyncMock) -> 
         {
             "opt5": {
                 "identifier": "opt5",
-                "ipaddr": "10.0.8.1",
+                "ipaddr": "172.20.8.1",
                 "subnet": "24",
             }
         },
@@ -201,8 +201,8 @@ async def test_set_subnet_dns_creates_tagged_option(make_request: AsyncMock) -> 
                 {
                     "interface": "opt5",
                     "set_tag": internal_tag,
-                    "start_addr": "10.0.8.2",
-                    "end_addr": "10.0.8.240",
+                    "start_addr": "172.20.8.2",
+                    "end_addr": "172.20.8.240",
                 }
             ]
         },
@@ -215,7 +215,7 @@ async def test_set_subnet_dns_creates_tagged_option(make_request: AsyncMock) -> 
                     "interface": "",
                     "tag": internal_tag,
                     "option": "6",
-                    "value": "10.0.2.2,10.0.10.46",
+                    "value": "172.20.2.2,172.20.10.46",
                     "force": "1",
                 }
             ]
@@ -227,7 +227,7 @@ async def test_set_subnet_dns_creates_tagged_option(make_request: AsyncMock) -> 
     result = await provider.set_subnet_dns(
         interface="opt5",
         family="ipv4",
-        servers=["10.0.2.2", "10.0.10.46"],
+        servers=["172.20.2.2", "172.20.10.46"],
     )
 
     assert result["status"] == "success"
@@ -241,4 +241,4 @@ async def test_set_subnet_dns_creates_tagged_option(make_request: AsyncMock) -> 
     assert option["tag"] == internal_tag
     assert option["interface"] == ""
     assert option["force"] == "1"
-    assert option["value"] == "10.0.2.2,10.0.10.46"
+    assert option["value"] == "172.20.2.2,172.20.10.46"

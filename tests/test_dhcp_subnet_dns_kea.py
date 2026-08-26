@@ -19,24 +19,28 @@ async def test_list_subnet_dns_reads_subnet_option_data(
 ) -> None:
     subnet_payload = {
         "uuid": "subnet-v4",
-        "subnet": "10.0.2.0/24",
+        "subnet": "172.20.2.0/24",
         "interface": "opt2",
         "option_data_autocollect": "1",
         "option_data": {
-            "domain_name_servers": {"value": "10.0.10.4,10.0.10.5", "selected": 1}
+            "domain_name_servers": {"value": "172.20.10.4,172.20.10.5", "selected": 1}
         },
     }
     make_request.side_effect = [
-        {"rows": [{"uuid": "subnet-v4", "subnet": "10.0.2.0/24", "interface": "opt2"}]},
+        {
+            "rows": [
+                {"uuid": "subnet-v4", "subnet": "172.20.2.0/24", "interface": "opt2"}
+            ]
+        },
         {"subnet4": dict(subnet_payload)},
         {"rows": []},
     ]
 
     provider = KeaProvider(make_request)
-    result = await provider.list_subnet_dns(subnet="10.0.2.0/24")
+    result = await provider.list_subnet_dns(subnet="172.20.2.0/24")
 
     assert result["backend"] == "kea"
-    assert result["ipv4"] == ["10.0.10.4", "10.0.10.5"]
+    assert result["ipv4"] == ["172.20.10.4", "172.20.10.5"]
     assert result["ipv6"] == []
 
 
@@ -44,13 +48,17 @@ async def test_list_subnet_dns_reads_subnet_option_data(
 async def test_set_subnet_dns_disables_autocollect(make_request: AsyncMock) -> None:
     subnet_payload = {
         "uuid": "subnet-v4",
-        "subnet": "10.0.2.0/24",
+        "subnet": "172.20.2.0/24",
         "interface": "opt2",
         "option_data_autocollect": "1",
-        "option_data": {"domain_name_servers": {"value": "10.0.10.5", "selected": 1}},
+        "option_data": {"domain_name_servers": {"value": "172.20.10.5", "selected": 1}},
     }
     make_request.side_effect = [
-        {"rows": [{"uuid": "subnet-v4", "subnet": "10.0.2.0/24", "interface": "opt2"}]},
+        {
+            "rows": [
+                {"uuid": "subnet-v4", "subnet": "172.20.2.0/24", "interface": "opt2"}
+            ]
+        },
         {"subnet4": dict(subnet_payload)},
         {"result": "saved"},
         {"result": "done"},
@@ -58,9 +66,9 @@ async def test_set_subnet_dns_disables_autocollect(make_request: AsyncMock) -> N
 
     provider = KeaProvider(make_request)
     result = await provider.set_subnet_dns(
-        subnet="10.0.2.0/24",
+        subnet="172.20.2.0/24",
         family="ipv4",
-        servers=["10.0.10.4"],
+        servers=["172.20.10.4"],
     )
 
     assert result["status"] == "success"
@@ -72,4 +80,4 @@ async def test_set_subnet_dns_disables_autocollect(make_request: AsyncMock) -> N
     assert set_calls
     payload = set_calls[0].kwargs["json"]["subnet4"]
     assert payload["option_data_autocollect"] == "0"
-    assert payload["option_data"]["domain_name_servers"]["value"] == "10.0.10.4"
+    assert payload["option_data"]["domain_name_servers"]["value"] == "172.20.10.4"

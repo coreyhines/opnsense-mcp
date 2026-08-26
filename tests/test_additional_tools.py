@@ -66,7 +66,7 @@ async def test_mkdns_and_rmdns_success_and_error_paths() -> None:
     client.reconfigure_unbound.return_value = {"status": "ok"}
     mkdns = MkdnsTool(client)
     mkdns_result = await mkdns.execute(
-        {"hostname": "pi5", "domain": "freeblizz.com", "server": "10.0.2.2"}
+        {"hostname": "pi5", "domain": "frobozz.example", "server": "172.20.2.2"}
     )
     assert mkdns_result["status"] == "success"
     assert mkdns_result["uuid"] == "abc-123"
@@ -79,7 +79,7 @@ async def test_mkdns_and_rmdns_success_and_error_paths() -> None:
     assert rmdns_result["uuid"] == "abc-123"
 
     mkdns_error = await MkdnsTool(None).execute(
-        {"hostname": "pi5", "domain": "freeblizz.com", "server": "10.0.2.2"}
+        {"hostname": "pi5", "domain": "frobozz.example", "server": "172.20.2.2"}
     )
     assert mkdns_error["status"] == "error"
     rmdns_error = await RmdnsTool(None).execute({"uuid": "abc-123"})
@@ -99,10 +99,10 @@ async def test_flush_dns_success_and_error_paths(
         "execute_command",
         lambda _cmd: {"success": True, "stdout": "ok", "stderr": "", "exit_code": 0},
     )
-    name_result = await tool.execute({"hostname": "headroom.freeblizz.com"})
+    name_result = await tool.execute({"hostname": "headroom.frobozz.example"})
     assert name_result["status"] == "success"
     assert name_result["mode"] == "name"
-    assert name_result["hostname"] == "headroom.freeblizz.com"
+    assert name_result["hostname"] == "headroom.frobozz.example"
 
     restart_result = await tool.execute({"mode": "restart"})
     assert restart_result["status"] == "success"
@@ -155,7 +155,7 @@ async def test_get_logs_tool_success_and_client_exception() -> None:
             "protoname": "tcp",
             "src": "1.1.1.1",
             "srcport": "12345",
-            "dst": "2.2.2.2",
+            "dst": "192.0.2.22",
             "dstport": "443",
             "rid": "1",
             "label": "test",

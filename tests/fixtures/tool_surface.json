@@ -414,7 +414,7 @@
     "inputSchema": {
       "properties": {
         "hostname": {
-          "description": "FQDN to flush from cache (e.g. headroom.freeblizz.com). Required when mode=name.",
+          "description": "FQDN to flush from cache (e.g. headroom.frobozz.example). Required when mode=name.",
           "optional": true,
           "type": "string"
         },
@@ -722,7 +722,7 @@
           "type": "string"
         },
         "subnet": {
-          "description": "Subnet in CIDR notation (e.g. 10.0.2.0/24)",
+          "description": "Subnet in CIDR notation (e.g. 172.20.2.0/24)",
           "optional": true,
           "type": "string"
         }
@@ -947,7 +947,7 @@
           "type": "boolean"
         },
         "client_id": {
-          "description": "Optional DHCP client identifier / DUID for IPv6 (e.g. '00:03:00:01:52:54:00:ab:cd:01'). Accepts optional 'id:' prefix.",
+          "description": "Optional DHCP client identifier / DUID for IPv6 (e.g. '52:54:00:7e:9c:f4:00:ab:cd:01'). Accepts optional 'id:' prefix.",
           "type": "string"
         },
         "descr": {
@@ -963,7 +963,7 @@
           "type": "string"
         },
         "ipv4": {
-          "description": "IPv4 address to assign (e.g. '10.0.8.50')",
+          "description": "IPv4 address to assign (e.g. '172.20.8.50')",
           "type": "string"
         },
         "ipv6": {
@@ -1387,7 +1387,7 @@
           "type": "boolean"
         },
         "client_id": {
-          "description": "Set or replace DHCP client identifier / DUID for IPv6 (e.g. '00:03:00:01:52:54:00:ab:cd:01'). Accepts optional 'id:' prefix.",
+          "description": "Set or replace DHCP client identifier / DUID for IPv6 (e.g. '52:54:00:7e:9c:f4:00:ab:cd:01'). Accepts optional 'id:' prefix.",
           "type": "string"
         },
         "host": {
@@ -1857,7 +1857,7 @@
           "type": "integer"
         },
         "subnet": {
-          "description": "Subnet in CIDR notation (e.g. 10.0.2.0/24)",
+          "description": "Subnet in CIDR notation (e.g. 172.20.2.0/24)",
           "optional": true,
           "type": "string"
         }
@@ -1888,7 +1888,7 @@
           "type": "string"
         },
         "destination_net": {
-          "description": "Destination network/IP (e.g. 'any', '10.0.0.1')",
+          "description": "Destination network/IP (e.g. 'any', '172.20.0.1')",
           "optional": true,
           "type": "string"
         },
@@ -2274,7 +2274,7 @@
     }
   },
   "toggle_dhcp_range": {
-    "description": "Enable or disable a dnsmasq DHCP range on OPNsense. Identify the range by interface (e.g. opt10), subnet CIDR (e.g. 10.0.5.0/24), or range uuid. Defaults to dry run; pass apply=true to write and reconfigure dnsmasq.",
+    "description": "Enable or disable a dnsmasq DHCP range on OPNsense. Identify the range by interface (e.g. opt10), subnet CIDR (e.g. 172.20.5.0/24), or range uuid. Defaults to dry run; pass apply=true to write and reconfigure dnsmasq.",
     "inputSchema": {
       "properties": {
         "apply": {
@@ -2291,7 +2291,7 @@
           "type": "string"
         },
         "subnet": {
-          "description": "Subnet in CIDR notation (e.g. 10.0.5.0/24)",
+          "description": "Subnet in CIDR notation (e.g. 172.20.5.0/24)",
           "type": "string"
         },
         "uuid": {
