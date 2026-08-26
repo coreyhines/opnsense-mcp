@@ -15,12 +15,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastmcp import FastMCP
 
 from opnsense_mcp.server import handle_message
 from opnsense_mcp.tools.shaper_pipes import ListShaperPipesTool
 from opnsense_mcp.tools.shaper_service import ApplyShaperTool
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
-from opnsense_mcp.utils.registry import TOOL_CLASSES, build_tools
+from opnsense_mcp.utils.registry import build_tools
 
 
 def _mock_client() -> MockOPNsenseClient:
@@ -116,18 +117,40 @@ async def test_stdio_advertises_nothing_extra() -> None:
     )
 
 
-def test_fastmcp_covers_the_same_tools() -> None:
-    """FastMCP still defines a wrapper per tool.
+@pytest.mark.asyncio
+async def test_both_servers_expose_the_same_tools() -> None:
+    """The point of the registry: one surface, two transports.
 
-    Until those wrappers are generated too, this asserts the two surfaces have
-    not diverged: every registered tool needs a wrapper of the same name.
+    Previously each server built its own, and seven tools ended up described
+    differently depending on which one you asked.
     """
-    source = (
-        Path(__file__).parent.parent / "opnsense_mcp" / "fastmcp_server.py"
-    ).read_text()
+    from opnsense_mcp.fastmcp_server import SHAPER_TOOL_CLASSES, register_tools
 
-    missing = [
-        cls.name for cls in TOOL_CLASSES if f"async def {cls.name}(" not in source
+    client = _mock_client()
+    shaper = {cls.name: cls(client) for cls in SHAPER_TOOL_CLASSES}
+    registry_tools = build_tools(client, extra=shaper)
+
+    fastmcp = FastMCP("parity-check")
+    register_tools(fastmcp, registry_tools)
+    fastmcp_tools = {t.name: t for t in await fastmcp.list_tools()}
+
+    stdio = await handle_message(
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        tools=build_tools(client),
+        shaper_tools=shaper,
+    )
+    assert stdio is not None
+    stdio_tools = {t["name"]: t for t in stdio["result"]["tools"]}
+
+    assert set(stdio_tools) == set(fastmcp_tools), (
+        f"only stdio: {sorted(set(stdio_tools) - set(fastmcp_tools))}\n"
+        f"only fastmcp: {sorted(set(fastmcp_tools) - set(stdio_tools))}"
+    )
+
+    mismatched = [
+        name
+        for name in sorted(stdio_tools)
+        if stdio_tools[name]["description"] != fastmcp_tools[name].description
+        or stdio_tools[name]["inputSchema"] != fastmcp_tools[name].parameters
     ]
-
-    assert not missing, f"registered tools with no FastMCP wrapper: {missing}"
+    assert not mismatched, f"same name, different contract: {mismatched}"
