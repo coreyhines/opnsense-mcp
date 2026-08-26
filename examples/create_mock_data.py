@@ -36,7 +36,7 @@ arp_data = {
     "entries": [
         {
             "ip": "192.168.1.10",
-            "mac": "00:11:22:33:44:55",
+            "mac": "52:54:00:66:fd:6e",
             "interface": "igb0",
             "hostname": "desktop-pc.local",
             "expiry": "1200",
@@ -54,7 +54,7 @@ arp_data = {
         },
         {
             "ip": "192.168.1.1",
-            "mac": "00:aa:bb:cc:dd:ee",
+            "mac": "52:54:00:74:33:b7",
             "interface": "igb0",
             "hostname": "router.local",
             "expiry": "permanent",

@@ -25,18 +25,18 @@ The AI agent automatically:
 ```bash
 # Agent resolves identity first, then confirms in ARP:
 dhcp search="morpheus"
-arp search="10.0.2.150"
+arp search="172.20.2.150"
 ```
 
 **Sample Results**:
-- **DHCP**: `morpheus` → IP: `10.0.2.150`, MAC: `52:54:00:12:34:56`, Lease expires: 2024-12-15 14:30:00
-- **ARP**: IP: `10.0.2.150` → MAC: `52:54:00:12:34:56`, Interface: `ax0_vlan2` (Wired LAN)
+- **DHCP**: `morpheus` → IP: `172.20.2.150`, MAC: `52:54:00:12:34:56`, Lease expires: 2024-12-15 14:30:00
+- **ARP**: IP: `172.20.2.150` → MAC: `52:54:00:12:34:56`, Interface: `ax0_vlan2` (Wired LAN)
 
 #### Step 2: Historical Activity Analysis
 ```bash
 # Agent executes in parallel:
-get_logs src_ip="10.0.2.150" limit=100
-get_logs dst_ip="10.0.2.150" limit=100
+get_logs src_ip="172.20.2.150" limit=100
+get_logs dst_ip="172.20.2.150" limit=100
 fw_rules interface="lan"
 ```
 
@@ -48,11 +48,11 @@ fw_rules interface="lan"
 #### Step 3: Live Traffic Analysis
 ```bash
 # Agent executes targeted packet capture:
-packet_capture interface="ax0_vlan2" filter="host 10.0.2.150" duration=60 count=200
+packet_capture interface="ax0_vlan2" filter="host 172.20.2.150" duration=60 count=200
 ```
 
 **Sample Results**:
-- **Active Connections**: SSH session to `10.0.1.5:22`, HTTPS to `api.github.com:443`
+- **Active Connections**: SSH session to `172.20.1.5:22`, HTTPS to `api.github.com:443`
 - **Traffic Volume**: 2.3 MB/min outbound, 450 KB/min inbound
 - **Protocols**: 75% HTTPS, 20% SSH, 5% DNS
 
@@ -62,11 +62,11 @@ packet_capture interface="ax0_vlan2" filter="host 10.0.2.150" duration=60 count=
 >
 > **Device Details:**
 > - **Location**: Wired LAN (VLAN2) via interface ax0_vlan2
-> - **IP Address**: 10.0.2.150 (DHCP lease active until Dec 15, 2:30 PM)
+> - **IP Address**: 172.20.2.150 (DHCP lease active until Dec 15, 2:30 PM)
 > - **MAC Address**: 52:54:00:12:34:56
 >
 > **Current Activity:**
-> - **Active SSH session** to internal server 10.0.1.5 (likely development/admin work)
+> - **Active SSH session** to internal server 172.20.1.5 (likely development/admin work)
 > - **GitHub API interaction** via HTTPS (development activity)
 > - **Low-volume steady traffic** indicating interactive use
 >
@@ -249,7 +249,7 @@ interface_list
 ```
 
 **Sample Results**:
-- **Active Guests**: 8 devices on 10.0.4.0/24
+- **Active Guests**: 8 devices on 172.20.4.0/24
 - **Interface**: ax0_vlan4guest_wifi
 - **Devices**: Mix of phones, laptops, tablets
 
@@ -261,7 +261,7 @@ get_logs src_ip="10.0.4" limit=200
 ```
 
 **Sample Results**:
-- **High Volume Device**: 10.0.4.23 consuming 15 MB/min
+- **High Volume Device**: 172.20.4.23 consuming 15 MB/min
 - **Traffic Type**: Video streaming (YouTube, Netflix)
 - **Other Devices**: Normal web browsing (< 1 MB/min each)
 
@@ -282,12 +282,12 @@ fw_rules interface="guest"
 > **Guest Network Performance Analysis**
 >
 > **Current Status:**
-> - **8 active devices** on guest VLAN (10.0.4.0/24)
+> - **8 active devices** on guest VLAN (172.20.4.0/24)
 > - **Total guest traffic**: ~20 MB/min
 > - **Firewall performance**: Normal (8% CPU)
 >
 > **Performance Issue Identified:**
-> - **Device 10.0.4.23** consuming 75% of guest bandwidth
+> - **Device 172.20.4.23** consuming 75% of guest bandwidth
 > - **Activity**: Heavy video streaming (YouTube/Netflix)
 > - **Impact**: Other guests experiencing reduced speeds
 >

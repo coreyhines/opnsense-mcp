@@ -1,6 +1,6 @@
 """Tests for the DHCP host-move provider layer.
 
-Verified-live API contract (Phase 0 spike + Task 1.9, against fw.freeblizz.com):
+Verified-live API contract (Phase 0 spike + Task 1.9, against fw.frobozz.example):
 - ``GET get_host/{uuid}`` must carry NO JSON body — ``OPNsenseClient._make_request``
   omits the ``Content-Type`` header when no ``json=`` kwarg is passed (requests
   default), which the dnsmasq endpoint requires.
@@ -71,7 +71,7 @@ async def test_list_hosts_returns_rows():
                     {
                         "uuid": "u1",
                         "host": "printer",
-                        "ip": "10.0.8.2,::2",
+                        "ip": "172.20.8.2,::2",
                         "hwaddr": "AA",
                     }
                 ],
@@ -91,11 +91,11 @@ async def test_list_hosts_returns_rows():
 async def test_set_host_posts_to_uuid_with_host_envelope():
     fake = FakeRequest({"set_host": {"result": "saved"}})
     p = DnsmasqProvider(fake)
-    out = await p.set_host("u1", {"ip": "10.0.8.9,::9", "host": "printer"})
+    out = await p.set_host("u1", {"ip": "172.20.8.9,::9", "host": "printer"})
     assert out["result"] == "saved"
     method, endpoint, kwargs = fake.calls[0]
     assert method == "POST" and endpoint.endswith("set_host/u1")
-    assert kwargs["json"] == {"host": {"ip": "10.0.8.9,::9", "host": "printer"}}
+    assert kwargs["json"] == {"host": {"ip": "172.20.8.9,::9", "host": "printer"}}
 
 
 @pytest.mark.asyncio
@@ -129,7 +129,7 @@ async def test_move_host_dry_run_does_not_write():
                     {
                         "uuid": "u1",
                         "host": "printer",
-                        "ip": "10.0.8.55,::55",
+                        "ip": "172.20.8.55,::55",
                         "hwaddr": "AA",
                         "descr": "VLAN81wifi",
                         "domain": "",
@@ -153,7 +153,7 @@ async def test_move_host_dry_run_does_not_write():
         identifier="printer", ipv4_target=2, ipv6_target=2, dry_run=True
     )
     assert out["status"] == "dry_run"
-    assert out["planned"]["ipv4"] == {"from": "10.0.8.55", "to": "10.0.8.2"}
+    assert out["planned"]["ipv4"] == {"from": "172.20.8.55", "to": "172.20.8.2"}
     assert not any("set_host" in c[1] or "reconfigure" in c[1] for c in fake.calls)
 
 
@@ -166,7 +166,7 @@ async def test_move_host_conflict_blocks():
                     {
                         "uuid": "u1",
                         "host": "printer",
-                        "ip": "10.0.8.55,::55",
+                        "ip": "172.20.8.55,::55",
                         "hwaddr": "AA",
                         "descr": "",
                         "domain": "",
@@ -182,7 +182,7 @@ async def test_move_host_conflict_blocks():
                     {
                         "uuid": "u2",
                         "host": "bose",
-                        "ip": "10.0.8.2,::2",
+                        "ip": "172.20.8.2,::2",
                         "hwaddr": "BB",
                     },
                 ],
@@ -208,7 +208,7 @@ async def test_move_host_applies_and_reconfigures():
                     {
                         "uuid": "u1",
                         "host": "printer",
-                        "ip": "10.0.8.55,::55",
+                        "ip": "172.20.8.55,::55",
                         "hwaddr": "AA",
                         "descr": "",
                         "domain": "",
@@ -238,7 +238,7 @@ async def test_move_host_applies_and_reconfigures():
     assert any("set_host/u1" in e for e in endpoints)
     assert any("reconfigure" in e for e in endpoints)
     set_call = next(c for c in fake.calls if "set_host" in c[1])
-    assert set_call[2]["json"]["host"]["ip"] == "10.0.8.2,::2"
+    assert set_call[2]["json"]["host"]["ip"] == "172.20.8.2,::2"
     assert (
         len([c for c in fake.calls if "set_host" in c[1]]) == 1
     )  # no spurious rollback
@@ -264,7 +264,7 @@ async def test_move_host_rolls_back_on_reconfigure_failure():
                     {
                         "uuid": "u1",
                         "host": "printer",
-                        "ip": "10.0.8.55,::55",
+                        "ip": "172.20.8.55,::55",
                         "hwaddr": "AA",
                         "descr": "",
                         "domain": "",
@@ -290,7 +290,7 @@ async def test_move_host_rolls_back_on_reconfigure_failure():
     )
     assert out["status"] == "error"
     set_calls = [c for c in fake.calls if "set_host" in c[1]]
-    assert set_calls[-1][2]["json"]["host"]["ip"] == "10.0.8.55,::55"
+    assert set_calls[-1][2]["json"]["host"]["ip"] == "172.20.8.55,::55"
 
 
 @pytest.mark.asyncio
@@ -302,7 +302,7 @@ async def test_move_host_noop_when_no_change():
                     {
                         "uuid": "u1",
                         "host": "printer",
-                        "ip": "10.0.8.55,::55",
+                        "ip": "172.20.8.55,::55",
                         "hwaddr": "AA",
                         "descr": "",
                         "domain": "",
@@ -321,7 +321,7 @@ async def test_move_host_noop_when_no_change():
         }
     )
     p = DnsmasqProvider(fake)
-    # ipv4_target=55 -> "10.0.8.55" (same); ipv6_target=55 -> "::55" (same) -> no change
+    # ipv4_target=55 -> "172.20.8.55" (same); ipv6_target=55 -> "::55" (same) -> no change
     out = await p.move_host(
         identifier="printer", ipv4_target=55, ipv6_target=55, dry_run=False
     )
@@ -338,7 +338,7 @@ async def test_move_host_reorders_ip_field_when_v6_before_v4():
                     {
                         "uuid": "u1",
                         "host": "hermes",
-                        "ip": "::13,10.0.3.13",
+                        "ip": "::13,172.20.3.13",
                         "hwaddr": "52:54:00:ab:cd:01",
                         "descr": "",
                         "domain": "",
@@ -362,14 +362,14 @@ async def test_move_host_reorders_ip_field_when_v6_before_v4():
     p = DnsmasqProvider(fake)
     out = await p.move_host(
         identifier="hermes",
-        ipv4_target="10.0.3.13",
+        ipv4_target="172.20.3.13",
         ipv6_target=13,
         dry_run=False,
     )
     assert out["status"] == "success"
     set_calls = [c for c in fake.calls if "set_host" in c[1]]
     assert len(set_calls) == 1
-    assert set_calls[0][2]["json"]["host"]["ip"] == "10.0.3.13,::13"
+    assert set_calls[0][2]["json"]["host"]["ip"] == "172.20.3.13,::13"
 
 
 @pytest.mark.asyncio
@@ -381,7 +381,7 @@ async def test_move_host_can_set_client_id_only():
                     {
                         "uuid": "u1",
                         "host": "hermes",
-                        "ip": "10.0.3.13,::13",
+                        "ip": "172.20.3.13,::13",
                         "hwaddr": "52:54:00:ab:cd:01",
                         "client_id": "",
                         "descr": "",
@@ -407,12 +407,12 @@ async def test_move_host_can_set_client_id_only():
         identifier="hermes",
         ipv4_target=None,
         ipv6_target=None,
-        client_id="00:03:00:01:52:54:00:ab:cd:01",
+        client_id="52:54:00:7e:9c:f4:00:ab:cd:01",
         dry_run=False,
     )
     assert out["status"] == "success"
     set_call = next(c for c in fake.calls if "set_host" in c[1])
-    assert set_call[2]["json"]["host"]["client_id"] == "00:03:00:01:52:54:00:ab:cd:01"
+    assert set_call[2]["json"]["host"]["client_id"] == "52:54:00:7e:9c:f4:00:ab:cd:01"
 
 
 @pytest.mark.asyncio
@@ -447,7 +447,7 @@ async def test_find_host_falls_back_to_full_list_on_fuzzy_miss():
                             {
                                 "uuid": "x",
                                 "host": "other",
-                                "ip": "10.0.8.9,::9",
+                                "ip": "172.20.8.9,::9",
                                 "hwaddr": "ZZ",
                                 "descr": "printer rack",
                             }
@@ -458,7 +458,7 @@ async def test_find_host_falls_back_to_full_list_on_fuzzy_miss():
                         {
                             "uuid": "u1",
                             "host": "printer",
-                            "ip": "10.0.8.55,::55",
+                            "ip": "172.20.8.55,::55",
                             "hwaddr": "AA",
                             "descr": "",
                         }
@@ -493,8 +493,8 @@ async def test_delete_host_dry_run_does_not_write():
                     {
                         "uuid": "u1",
                         "host": "chines",
-                        "ip": "10.0.2.4,::4",
-                        "hwaddr": "98:fd:b4:9a:05:53",
+                        "ip": "172.20.2.4,::4",
+                        "hwaddr": "52:54:00:b3:02:20",
                         "descr": "VLAN2wired",
                     }
                 ],
@@ -518,8 +518,8 @@ async def test_delete_host_applies_and_reconfigures():
                     {
                         "uuid": "u1",
                         "host": "chines",
-                        "ip": "10.0.2.4,::4",
-                        "hwaddr": "98:fd:b4:9a:05:53",
+                        "ip": "172.20.2.4,::4",
+                        "hwaddr": "52:54:00:b3:02:20",
                         "descr": "VLAN2wired",
                     }
                 ],
@@ -547,8 +547,8 @@ async def test_delete_host_finds_by_uuid():
                     {
                         "uuid": "u1",
                         "host": "chines",
-                        "ip": "10.0.2.4,::4",
-                        "hwaddr": "98:fd:b4:9a:05:53",
+                        "ip": "172.20.2.4,::4",
+                        "hwaddr": "52:54:00:b3:02:20",
                     }
                 ],
                 "total": 1,

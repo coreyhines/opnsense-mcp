@@ -17,7 +17,7 @@ class ToggleDhcpRangeTool:
     name = "toggle_dhcp_range"
     description = (
         "Enable or disable a dnsmasq DHCP range on OPNsense. "
-        "Identify the range by interface (e.g. opt10), subnet CIDR (e.g. 10.0.5.0/24), "
+        "Identify the range by interface (e.g. opt10), subnet CIDR (e.g. 172.20.5.0/24), "
         "or range uuid. Defaults to dry run; pass apply=true to write and reconfigure dnsmasq."
     )
     input_schema = {
@@ -33,7 +33,7 @@ class ToggleDhcpRangeTool:
             },
             "subnet": {
                 "type": "string",
-                "description": "Subnet in CIDR notation (e.g. 10.0.5.0/24)",
+                "description": "Subnet in CIDR notation (e.g. 172.20.5.0/24)",
             },
             "uuid": {
                 "type": "string",

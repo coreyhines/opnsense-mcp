@@ -13,11 +13,11 @@ from opnsense_mcp.utils.dhcp_host import (
 
 
 def test_parse_ip_field_v4_and_v6():
-    assert parse_ip_field("10.0.8.2,::2") == ("10.0.8.2", "::2")
+    assert parse_ip_field("172.20.8.2,::2") == ("172.20.8.2", "::2")
 
 
 def test_parse_ip_field_v4_only():
-    assert parse_ip_field("10.0.8.2") == ("10.0.8.2", None)
+    assert parse_ip_field("172.20.8.2") == ("172.20.8.2", None)
 
 
 def test_parse_ip_field_v6_only():
@@ -29,8 +29,8 @@ def test_parse_ip_field_empty():
 
 
 def test_format_ip_field_roundtrip():
-    assert format_ip_field("10.0.8.2", "::2") == "10.0.8.2,::2"
-    assert format_ip_field("10.0.8.2", None) == "10.0.8.2"
+    assert format_ip_field("172.20.8.2", "::2") == "172.20.8.2,::2"
+    assert format_ip_field("172.20.8.2", None) == "172.20.8.2"
     assert format_ip_field(None, "::2") == "::2"
 
 
@@ -39,8 +39,8 @@ def test_record_from_search_row():
         "uuid": "u1",
         "host": "printer",
         "domain": "",
-        "ip": "10.0.8.2,::2",
-        "hwaddr": "c8:a3:e8:dc:1b:b9",
+        "ip": "172.20.8.2,::2",
+        "hwaddr": "52:54:00:6c:7b:7f",
         "client_id": "",
         "set_tag": "",
         "descr": "VLAN81wifi",
@@ -54,22 +54,22 @@ def test_record_from_search_row():
     rec = DhcpHostRecord.from_row(row)
     assert rec.uuid == "u1"
     assert rec.host == "printer"
-    assert rec.ipv4 == "10.0.8.2"
+    assert rec.ipv4 == "172.20.8.2"
     assert rec.ipv6_suffix == "::2"
-    assert rec.hwaddr == "c8:a3:e8:dc:1b:b9"
+    assert rec.hwaddr == "52:54:00:6c:7b:7f"
 
 
 def test_record_to_summary():
     row = {
         "uuid": "u1",
         "host": "printer",
-        "ip": "10.0.8.2,::2",
-        "hwaddr": "c8:a3:e8:dc:1b:b9",
+        "ip": "172.20.8.2,::2",
+        "hwaddr": "52:54:00:6c:7b:7f",
         "client_id": "duid-here",
         "descr": "VLAN81wifi",
     }
     summary = DhcpHostRecord.from_row(row).to_summary()
-    assert summary["ipv4"] == "10.0.8.2"
+    assert summary["ipv4"] == "172.20.8.2"
     assert summary["ipv6_suffix"] == "::2"
     assert summary["has_ipv6"] is True
     assert summary["descr"] == "VLAN81wifi"
@@ -77,18 +77,18 @@ def test_record_to_summary():
 
 
 def test_apply_v4_suffix_replaces_last_octet():
-    assert apply_v4_suffix("10.0.8.55", 2) == "10.0.8.2"
+    assert apply_v4_suffix("172.20.8.55", 2) == "172.20.8.2"
 
 
 def test_apply_v4_suffix_rejects_out_of_range():
     with pytest.raises(ValueError):
-        apply_v4_suffix("10.0.8.55", 256)
+        apply_v4_suffix("172.20.8.55", 256)
     with pytest.raises(ValueError):
-        apply_v4_suffix("10.0.8.55", 0)
+        apply_v4_suffix("172.20.8.55", 0)
 
 
 def test_apply_v4_full_address_validates():
-    assert apply_v4_suffix("10.0.8.55", "10.0.8.9") == "10.0.8.9"
+    assert apply_v4_suffix("172.20.8.55", "172.20.8.9") == "172.20.8.9"
 
 
 def test_apply_v6_suffix_normalizes():
@@ -107,7 +107,7 @@ def test_flatten_host_for_write_changes_ip_only():
         "host": "printer",
         "domain": "d",
         "local": "0",
-        "ip": "10.0.8.2,::2",
+        "ip": "172.20.8.2,::2",
         "cnames": "",
         "client_id": "",
         "hwaddr": "AA:BB",
@@ -119,8 +119,8 @@ def test_flatten_host_for_write_changes_ip_only():
         "aliases": "",
     }
     rec = DhcpHostRecord.from_row(row)
-    payload = flatten_host_for_write(rec, new_ipv4="10.0.8.9", new_ipv6="::9")
-    assert payload["ip"] == "10.0.8.9,::9"
+    payload = flatten_host_for_write(rec, new_ipv4="172.20.8.9", new_ipv6="::9")
+    assert payload["ip"] == "172.20.8.9,::9"
     assert "uuid" not in payload
     assert payload["host"] == "printer"
     assert payload["set_tag"] == "t1"
@@ -130,12 +130,12 @@ def test_flatten_host_for_write_changes_ip_only():
 
 def test_find_ipv4_conflicts_other_reservation():
     hosts = [
-        {"uuid": "u1", "host": "printer", "ip": "10.0.8.2,::2", "hwaddr": "AA"},
-        {"uuid": "u2", "host": "bose", "ip": "10.0.8.9,::9", "hwaddr": "BB"},
+        {"uuid": "u1", "host": "printer", "ip": "172.20.8.2,::2", "hwaddr": "AA"},
+        {"uuid": "u2", "host": "bose", "ip": "172.20.8.9,::9", "hwaddr": "BB"},
     ]
-    leases = [{"address": "10.0.8.50", "hwaddr": "CC", "hostname": "tv"}]
+    leases = [{"address": "172.20.8.50", "hwaddr": "CC", "hostname": "tv"}]
     conflicts = find_ipv4_conflicts(
-        target_ipv4="10.0.8.9",
+        target_ipv4="172.20.8.9",
         moving_uuid="u1",
         hosts=hosts,
         leases=leases,
@@ -144,28 +144,28 @@ def test_find_ipv4_conflicts_other_reservation():
 
 
 def test_find_ipv4_conflicts_active_lease():
-    hosts = [{"uuid": "u1", "host": "printer", "ip": "10.0.8.2,::2", "hwaddr": "AA"}]
-    leases = [{"address": "10.0.8.9", "hwaddr": "CC", "hostname": "tv"}]
+    hosts = [{"uuid": "u1", "host": "printer", "ip": "172.20.8.2,::2", "hwaddr": "AA"}]
+    leases = [{"address": "172.20.8.9", "hwaddr": "CC", "hostname": "tv"}]
     conflicts = find_ipv4_conflicts(
-        target_ipv4="10.0.8.9",
+        target_ipv4="172.20.8.9",
         moving_uuid="u1",
         hosts=hosts,
         leases=leases,
     )
-    assert any(c["kind"] == "lease" and c["address"] == "10.0.8.9" for c in conflicts)
+    assert any(c["kind"] == "lease" and c["address"] == "172.20.8.9" for c in conflicts)
 
 
 def test_find_ipv4_conflicts_allows_same_mac_promotion():
     hosts: list[dict] = []
     leases = [
         {
-            "address": "10.0.3.13",
+            "address": "172.20.3.13",
             "hwaddr": "52:54:00:ab:cd:01",
             "hostname": "hermes",
         }
     ]
     conflicts = find_ipv4_conflicts(
-        target_ipv4="10.0.3.13",
+        target_ipv4="172.20.3.13",
         moving_uuid="",
         hosts=hosts,
         leases=leases,
@@ -175,10 +175,10 @@ def test_find_ipv4_conflicts_allows_same_mac_promotion():
 
 
 def test_find_ipv4_conflicts_none_when_free():
-    hosts = [{"uuid": "u1", "host": "printer", "ip": "10.0.8.2,::2", "hwaddr": "AA"}]
+    hosts = [{"uuid": "u1", "host": "printer", "ip": "172.20.8.2,::2", "hwaddr": "AA"}]
     assert (
         find_ipv4_conflicts(
-            target_ipv4="10.0.8.9",
+            target_ipv4="172.20.8.9",
             moving_uuid="u1",
             hosts=hosts,
             leases=[],
@@ -189,14 +189,14 @@ def test_find_ipv4_conflicts_none_when_free():
 
 def test_normalize_client_id_accepts_duid():
     assert (
-        normalize_client_id("00:03:00:01:52:54:00:ab:cd:01")
-        == "00:03:00:01:52:54:00:ab:cd:01"
+        normalize_client_id("52:54:00:7e:9c:f4:00:ab:cd:01")
+        == "52:54:00:7e:9c:f4:00:ab:cd:01"
     )
 
 
 def test_normalize_client_id_strips_id_prefix():
-    assert normalize_client_id("id:00:03:00:01:aa:bb:cc:dd:ee:ff") == (
-        "00:03:00:01:aa:bb:cc:dd:ee:ff"
+    assert normalize_client_id("id:52:54:00:41:85:c8:cc:dd:ee:ff") == (
+        "52:54:00:41:85:c8:cc:dd:ee:ff"
     )
 
 
@@ -215,15 +215,15 @@ def test_flatten_host_for_write_can_replace_client_id():
         {
             "uuid": "u1",
             "host": "hermes",
-            "ip": "10.0.3.13,::13",
+            "ip": "172.20.3.13,::13",
             "hwaddr": "52:54:00:ab:cd:01",
             "client_id": "",
         }
     )
     payload = flatten_host_for_write(
         rec,
-        new_ipv4="10.0.3.13",
+        new_ipv4="172.20.3.13",
         new_ipv6="::13",
-        new_client_id="00:03:00:01:52:54:00:ab:cd:01",
+        new_client_id="52:54:00:7e:9c:f4:00:ab:cd:01",
     )
-    assert payload["client_id"] == "00:03:00:01:52:54:00:ab:cd:01"
+    assert payload["client_id"] == "52:54:00:7e:9c:f4:00:ab:cd:01"

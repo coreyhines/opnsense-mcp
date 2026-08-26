@@ -21,8 +21,8 @@ def _search_response(rows):
 _EXISTING_ROW = {
     "uuid": "uuid-existing",
     "host": "existing",
-    "hwaddr": "11:22:33:44:55:66",
-    "ip": "10.0.8.10",
+    "hwaddr": "52:54:00:f9:68:7f",
+    "ip": "172.20.8.10",
 }
 
 _LEASE_ENDPOINT = "/api/dnsmasq/leases/search"
@@ -47,13 +47,13 @@ async def test_dry_run_returns_planned():
     result = await provider.create_host(
         hostname="newhost",
         mac="aa:bb:cc:dd:ee:ff",
-        ipv4="10.0.8.50",
+        ipv4="172.20.8.50",
         dry_run=True,
     )
     assert result["status"] == "dry_run"
     assert result["planned"]["host"] == "newhost"
     assert result["planned"]["hwaddr"] == "aa:bb:cc:dd:ee:ff"
-    assert result["planned"]["ipv4"] == "10.0.8.50"
+    assert result["planned"]["ipv4"] == "172.20.8.50"
     assert _HOST_ADD_ENDPOINT not in calls
     assert _RECONFIGURE_ENDPOINT not in calls
 
@@ -76,7 +76,7 @@ async def test_apply_creates_and_reconfigures():
     result = await provider.create_host(
         hostname="newhost",
         mac="aa:bb:cc:dd:ee:ff",
-        ipv4="10.0.8.50",
+        ipv4="172.20.8.50",
         dry_run=False,
     )
     assert result["status"] == "success"
@@ -96,8 +96,8 @@ async def test_duplicate_mac_blocked():
     provider = DnsmasqProvider(fake_request)
     result = await provider.create_host(
         hostname="newhost",
-        mac="11:22:33:44:55:66",
-        ipv4="10.0.8.50",
+        mac="52:54:00:f9:68:7f",
+        ipv4="172.20.8.50",
         dry_run=False,
     )
     assert result["status"] == "error"
@@ -117,7 +117,7 @@ async def test_duplicate_ipv4_blocked():
     result = await provider.create_host(
         hostname="newhost",
         mac="aa:bb:cc:dd:ee:ff",
-        ipv4="10.0.8.10",
+        ipv4="172.20.8.10",
         dry_run=False,
     )
     assert result["status"] == "error"
@@ -130,7 +130,7 @@ async def test_invalid_mac_rejected():
     result = await provider.create_host(
         hostname="host",
         mac="not-a-mac",
-        ipv4="10.0.8.1",
+        ipv4="172.20.8.1",
         dry_run=True,
     )
     assert result["status"] == "error"
@@ -200,21 +200,21 @@ async def test_apply_includes_client_id():
     result = await provider.create_host(
         hostname="hermes",
         mac="52:54:00:ab:cd:01",
-        ipv4="10.0.3.13",
+        ipv4="172.20.3.13",
         ipv6=13,
-        client_id="00:03:00:01:52:54:00:ab:cd:01",
+        client_id="52:54:00:7e:9c:f4:00:ab:cd:01",
         dry_run=False,
     )
     assert result["status"] == "success"
-    assert captured["payload"]["ip"] == "10.0.3.13,::13"
-    assert captured["payload"]["client_id"] == "00:03:00:01:52:54:00:ab:cd:01"
+    assert captured["payload"]["ip"] == "172.20.3.13,::13"
+    assert captured["payload"]["client_id"] == "52:54:00:7e:9c:f4:00:ab:cd:01"
 
 
 @pytest.mark.asyncio
 async def test_duplicate_client_id_blocked():
     existing = {
         **_EXISTING_ROW,
-        "client_id": "00:03:00:01:52:54:00:ab:cd:01",
+        "client_id": "52:54:00:7e:9c:f4:00:ab:cd:01",
     }
 
     async def fake_request(method, endpoint, **kwargs):
@@ -228,8 +228,8 @@ async def test_duplicate_client_id_blocked():
     result = await provider.create_host(
         hostname="newhost",
         mac="aa:bb:cc:dd:ee:ff",
-        ipv4="10.0.8.50",
-        client_id="00:03:00:01:52:54:00:ab:cd:01",
+        ipv4="172.20.8.50",
+        client_id="52:54:00:7e:9c:f4:00:ab:cd:01",
         dry_run=False,
     )
     assert result["status"] == "error"
@@ -249,7 +249,7 @@ async def test_mac_normalized():
     result = await provider.create_host(
         hostname="host",
         mac="AA-BB-CC-DD-EE-FF",
-        ipv4="10.0.8.5",
+        ipv4="172.20.8.5",
         dry_run=True,
     )
     assert result["planned"]["hwaddr"] == "aa:bb:cc:dd:ee:ff"

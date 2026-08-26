@@ -555,7 +555,7 @@ class DnsmasqProvider:
                         "status": "error",
                         "error": (
                             f"{rec.host} has no IPv4 reservation; "
-                            "provide a full address (e.g. 10.0.3.13)"
+                            "provide a full address (e.g. 172.20.3.13)"
                         ),
                     }
         if ipv6_target is not None:

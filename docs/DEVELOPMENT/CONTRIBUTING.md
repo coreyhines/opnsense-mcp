@@ -17,7 +17,7 @@ Thank you for your interest in contributing to the OPNsense MCP Server! This gui
 
 1. **Fork and Clone**
    ```bash
-   git clone https://forgejo.freeblizz.com/coreyhines/opnsense-mcp.git
+   git clone https://forgejo.frobozz.example/coreyhines/opnsense-mcp.git
    cd opnsense-mcp
    ```
 

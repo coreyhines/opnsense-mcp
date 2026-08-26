@@ -19,8 +19,8 @@ async def test_toggle_range_dry_run() -> None:
                         "uuid": "r1",
                         "interface": "opt10",
                         "disabled": "0",
-                        "start_addr": "10.0.5.100",
-                        "end_addr": "10.0.5.200",
+                        "start_addr": "172.20.5.100",
+                        "end_addr": "172.20.5.200",
                     }
                 ]
             },
@@ -29,8 +29,8 @@ async def test_toggle_range_dry_run() -> None:
                     "uuid": "r1",
                     "interface": "opt10",
                     "disabled": "0",
-                    "start_addr": "10.0.5.100",
-                    "end_addr": "10.0.5.200",
+                    "start_addr": "172.20.5.100",
+                    "end_addr": "172.20.5.200",
                     "domain": "lan",
                 }
             },
@@ -67,8 +67,8 @@ async def test_toggle_range_apply_success() -> None:
                         "uuid": "r1",
                         "interface": "opt10",
                         "disabled": "0",
-                        "start_addr": "10.0.5.100",
-                        "end_addr": "10.0.5.200",
+                        "start_addr": "172.20.5.100",
+                        "end_addr": "172.20.5.200",
                     }
                 ]
             },
@@ -77,8 +77,8 @@ async def test_toggle_range_apply_success() -> None:
                     "uuid": "r1",
                     "interface": "opt10",
                     "disabled": "0",
-                    "start_addr": "10.0.5.100",
-                    "end_addr": "10.0.5.200",
+                    "start_addr": "172.20.5.100",
+                    "end_addr": "172.20.5.200",
                     "domain": "",
                 }
             },
@@ -118,8 +118,8 @@ async def test_toggle_range_interface_scope() -> None:
                         "uuid": "r1",
                         "interface": "opt10",
                         "disabled": "1",
-                        "start_addr": "10.0.5.100",
-                        "end_addr": "10.0.5.200",
+                        "start_addr": "172.20.5.100",
+                        "end_addr": "172.20.5.200",
                     }
                 ]
             },
@@ -128,8 +128,8 @@ async def test_toggle_range_interface_scope() -> None:
                     "uuid": "r1",
                     "interface": "opt10",
                     "disabled": "1",
-                    "start_addr": "10.0.5.100",
-                    "end_addr": "10.0.5.200",
+                    "start_addr": "172.20.5.100",
+                    "end_addr": "172.20.5.200",
                     "domain": "",
                 }
             },

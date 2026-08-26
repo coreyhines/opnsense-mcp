@@ -46,7 +46,7 @@ def test_normalize_alternate_keys_and_preserve_bad_raw_port() -> None:
     row = {
         "timestamp": "2026-06-28T12:00:00-05:00",
         "protocol": "TCP",
-        "src_ip": "10.0.0.2",
+        "src_ip": "172.20.0.2",
         "dst_ip": "1.1.1.1",
         "src_port": "abc",
         "dst_port": "443",
@@ -62,6 +62,6 @@ def test_normalize_alternate_keys_and_preserve_bad_raw_port() -> None:
 
 def test_normalize_logs_keeps_repeated_events() -> None:
     """Repeated firewall log rows are real events and are not deduplicated."""
-    row = {"protoname": "udp", "src": "10.0.0.2", "dst": "10.0.0.1"}
+    row = {"protoname": "udp", "src": "172.20.0.2", "dst": "172.20.0.1"}
 
     assert len(normalize_logs([row, row])) == 2

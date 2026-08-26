@@ -21,9 +21,9 @@ def provider(make_request: AsyncMock) -> ISCProvider:
 
 @pytest.mark.asyncio
 async def test_get_v4_rows(provider: ISCProvider, make_request: AsyncMock) -> None:
-    make_request.return_value = {"rows": [{"ip": "10.0.0.1"}]}
+    make_request.return_value = {"rows": [{"ip": "172.20.0.1"}]}
     result = await provider.get_v4_leases()
-    assert result == [{"ip": "10.0.0.1"}]
+    assert result == [{"ip": "172.20.0.1"}]
     make_request.assert_called_once_with("GET", "/api/dhcpv4/leases/search_lease")
 
 
@@ -42,6 +42,6 @@ async def test_search_v6(provider: ISCProvider, make_request: AsyncMock) -> None
 @pytest.mark.asyncio
 async def test_delete_v4_error(provider: ISCProvider, make_request: AsyncMock) -> None:
     make_request.side_effect = Exception("boom")
-    result = await provider.delete_v4_lease("10.0.0.2")
+    result = await provider.delete_v4_lease("172.20.0.2")
     assert result["status"] == "error"
     assert "boom" in result["error"]

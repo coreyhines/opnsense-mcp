@@ -35,7 +35,7 @@ python main.py --transport streamable-http --host 0.0.0.0 --port 8765
 
 Clients connect to:
 ```text
-https://opnsense-mcp.freeblizz.com/mcp
+https://opnsense-mcp.frobozz.example/mcp
 ```
 
 Deployment scripts already default to Streamable HTTP; no manual flag is needed when using `deploy/install.sh`.
@@ -51,7 +51,7 @@ Deployment scripts already default to Streamable HTTP; no manual flag is needed 
 
 `mk_dhcp_host` and `move_dhcp_host` now accept an optional `client_id` parameter. This is the DHCP Unique Identifier (DUID) used for stateful DHCPv6 matching. Some IPv6 clients are not reliably matched by MAC address alone; supplying the DUID ensures the reservation applies correctly.
 
-- Accepts hex strings like `00:03:00:01:52:54:00:ab:cd:01`
+- Accepts hex strings like `52:54:00:7e:9c:f4:00:ab:cd:01`
 - Optional `id:` prefix is normalized automatically
 - Duplicate DUID detection prevents conflicting reservations
 
@@ -62,8 +62,8 @@ Create a reservation with a DUID:
 {
   "hostname": "printer-lan",
   "mac": "aa:bb:cc:dd:ee:ff",
-  "ipv4": "10.0.8.50",
-  "client_id": "00:03:00:01:52:54:00:ab:cd:01",
+  "ipv4": "172.20.8.50",
+  "client_id": "52:54:00:7e:9c:f4:00:ab:cd:01",
   "apply": true
 }
 ```
@@ -72,8 +72,8 @@ Move a reservation and update its DUID:
 ```json
 {
   "host": "printer-lan",
-  "ipv4": "10.0.8.55",
-  "client_id": "00:03:00:01:52:54:00:ab:cd:02",
+  "ipv4": "172.20.8.55",
+  "client_id": "52:54:00:7e:9c:f4:00:ab:cd:02",
   "apply": true
 }
 ```
@@ -103,11 +103,11 @@ The helper script `deploy/ci/compute-image-tag.sh` reads `version` from `pyproje
 1. Bump `version` in `pyproject.toml`.
 2. Commit and push to `main`.
 3. Tag and push: `git tag v1.0.1 && git push origin v1.0.1`
-4. Forgejo Actions publishes `hub.freeblizz.com/opnsense-mcp:1.0.1`.
+4. Forgejo Actions publishes `hub.frobozz.example/opnsense-mcp:1.0.1`.
 
 ---
 
-## 4. hub.freeblizz.com Registry with Pinned Tags
+## 4. hub.frobozz.example Registry with Pinned Tags
 
 **Historical PR:** #23  
 **Commit:** `24f13d2`
@@ -116,7 +116,7 @@ The helper script `deploy/ci/compute-image-tag.sh` reads `version` from `pyproje
 
 The deployment moved from local host builds (`localhost:latest`) to a proper container registry:
 
-- **Registry:** `hub.freeblizz.com/opnsense-mcp`
+- **Registry:** `hub.frobozz.example/opnsense-mcp`
 - **Requirement:** `OPNSENSE_MCP_IMAGE_TAG` must be a pinned tag (semver or short SHA)
 - `:latest` is explicitly rejected
 
@@ -156,13 +156,13 @@ Impact: existing `curl | bash` one-liners and manual installs now complete witho
 | Streamable HTTP | #20 | `fastmcp_server.py`, `main.py`, deploy docs | Native `/mcp` endpoint; SSE still works |
 | DHCP client_id | #21 | `mk_dhcp_host.py`, `dhcp_host_move.py`, `utils/dhcp_host.py`, tests | IPv6 DUID support in reservations |
 | Semver tags | MR !21 | `deploy/ci/compute-image-tag.sh`, CI config, install scripts | Traceable `X.Y.Z-dev.<sha>` images |
-| Registry + pinned tags | #23 | `deploy/install.sh`, `deploy/lib.sh`, `deploy/README.md`, CI | `hub.freeblizz.com/opnsense-mcp:<tag>` |
+| Registry + pinned tags | #23 | `deploy/install.sh`, `deploy/lib.sh`, `deploy/README.md`, CI | `hub.frobozz.example/opnsense-mcp:<tag>` |
 | Readonly clash fix | #24 | `deploy/install.sh`, `deploy/README.md` | Install completes without Bash errors |
 
 ---
 
 ## Related docs
 
-- [`deploy/README.md`](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/src/branch/main/deploy/README.md) — deployment quickstart
-- [`docs/CENTRALIZED_DEPLOY_SPEC.md`](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/src/branch/main/docs/CENTRALIZED_DEPLOY_SPEC.md) — full architecture and spec
-- [`deploy/install.sh`](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/src/branch/main/deploy/install.sh) — installer script
+- [`deploy/README.md`](https://forgejo.frobozz.example/coreyhines/opnsense-mcp/src/branch/main/deploy/README.md) — deployment quickstart
+- [`docs/CENTRALIZED_DEPLOY_SPEC.md`](https://forgejo.frobozz.example/coreyhines/opnsense-mcp/src/branch/main/docs/CENTRALIZED_DEPLOY_SPEC.md) — full architecture and spec
+- [`deploy/install.sh`](https://forgejo.frobozz.example/coreyhines/opnsense-mcp/src/branch/main/deploy/install.sh) — installer script

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 _SCOPE_PROPERTIES = {
     "subnet": {
         "type": "string",
-        "description": "Subnet in CIDR notation (e.g. 10.0.2.0/24)",
+        "description": "Subnet in CIDR notation (e.g. 172.20.2.0/24)",
         "optional": True,
     },
     "interface": {

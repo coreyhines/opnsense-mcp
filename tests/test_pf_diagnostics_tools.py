@@ -12,7 +12,7 @@ _SAMPLE_ROW = {
     "iface": "em0",
     "proto": "tcp",
     "ipproto": "inet",
-    "src_addr": "10.0.0.5",
+    "src_addr": "172.20.0.5",
     "src_port": "54321",
     "dst_addr": "1.2.3.4",
     "dst_port": "443",
@@ -109,7 +109,7 @@ async def test_pf_states_maps_fields_correctly() -> None:
 
     state = result["states"][0]
     assert state["protocol"] == "tcp"
-    assert state["src"] == "10.0.0.5"
+    assert state["src"] == "172.20.0.5"
     assert state["dst"] == "1.2.3.4"
     assert state["src_port"] == 54321
     assert state["dst_port"] == 443
@@ -165,7 +165,7 @@ async def test_pf_states_not_truncated_when_total_fits() -> None:
 async def test_pf_states_filter_src_ip_match() -> None:
     """src_ip filter returns only matching rows."""
     tool = PfStatesTool(FakeClient())
-    result = await tool.execute({"src_ip": "10.0.0.5"})
+    result = await tool.execute({"src_ip": "172.20.0.5"})
     assert len(result["states"]) == 1
 
 
@@ -189,7 +189,7 @@ async def test_pf_states_filter_dst_ip() -> None:
 async def test_pf_states_filter_ip_matches_src_or_dst() -> None:
     """ip filter matches either src or dst."""
     tool = PfStatesTool(FakeClient())
-    result_src = await tool.execute({"ip": "10.0.0.5"})
+    result_src = await tool.execute({"ip": "172.20.0.5"})
     result_dst = await tool.execute({"ip": "1.2.3.4"})
     result_none = await tool.execute({"ip": "9.9.9.9"})
 
@@ -236,10 +236,12 @@ async def test_pf_states_filter_state_substring() -> None:
 async def test_pf_states_filters_recorded_in_envelope() -> None:
     """Applied filters are echoed in filters_applied."""
     tool = PfStatesTool(FakeClient())
-    result = await tool.execute({"src_ip": "10.0.0.5", "protocol": "tcp", "limit": 50})
+    result = await tool.execute(
+        {"src_ip": "172.20.0.5", "protocol": "tcp", "limit": 50}
+    )
 
     fa = result["filters_applied"]
-    assert fa["src_ip"] == "10.0.0.5"
+    assert fa["src_ip"] == "172.20.0.5"
     assert fa["protocol"] == "tcp"
     assert fa["limit"] == 50
 
