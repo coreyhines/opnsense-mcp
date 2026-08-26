@@ -73,6 +73,13 @@ from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.toggle_dhcp_range import ToggleDhcpRangeTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
+from opnsense_mcp.tools.ula_migration import (
+    ApplyUlaTool,
+    ListRouterAdvertsTool,
+    PlanDnsUlaTool,
+    SetHostOverrideTool,
+    SetRouterAdvertTool,
+)
 
 
 class Tool(Protocol):
@@ -89,6 +96,7 @@ class Tool(Protocol):
 # built separately and passed in (see `build_tools`).
 TOOL_CLASSES: tuple[type, ...] = (
     AliasesTool,
+    ApplyUlaTool,
     ARPTool,
     DHCPTool,
     DHCPLeaseDeleteTool,
@@ -107,6 +115,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListDhcpSubnetDnsTool,
     ListLoopbackTool,
     ListNptRulesTool,
+    ListRouterAdvertsTool,
     ListSnapshotsTool,
     ListVipTool,
     LLDPTool,
@@ -120,6 +129,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     MkSnapshotTool,
     MoveDhcpHostTool,
     PacketCaptureTool2,
+    PlanDnsUlaTool,
     PfStatesTool,
     PfStatisticsTool,
     RmAliasTool,
@@ -131,6 +141,8 @@ TOOL_CLASSES: tuple[type, ...] = (
     SetAliasTool,
     SetDhcpSubnetDnsTool,
     SetFwRuleTool,
+    SetHostOverrideTool,
+    SetRouterAdvertTool,
     SSHFirewallRuleTool,
     SystemTool,
     ToggleAliasTool,
