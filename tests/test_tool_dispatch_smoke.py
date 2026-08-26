@@ -39,6 +39,7 @@ from opnsense_mcp.tools.shaper_pipes import (
 from opnsense_mcp.tools.shaper_service import ApplyShaperTool, ShaperStatisticsTool
 from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
+from opnsense_mcp.utils.registry import build_tools
 
 TOOL_NOT_FOUND = -32601
 
@@ -73,35 +74,12 @@ def _shaper_tools(client: MockOPNsenseClient) -> dict[str, Any]:
 
 
 def _bind_tools(client: MockOPNsenseClient) -> dict[str, Any]:
-    """Build handle_message's tool arguments from its own signature.
+    """Build the registry's tools for handle_message.
 
-    Each parameter is annotated with its tool class, so the class can be read
-    off the annotation and instantiated. `PacketCaptureTool` takes no client.
+    The registry replaced 30 positional parameters, so this is now a single
+    keyword argument. The assertions below are unchanged.
     """
-    import opnsense_mcp.server as server_mod
-
-    # server.py uses `from __future__ import annotations`, so signature()
-    # yields strings. Resolve them against the module's own namespace.
-    hints = inspect.signature(handle_message, eval_str=True).parameters
-
-    bound: dict[str, Any] = {}
-    unresolved: list[str] = []
-    for pname, param in hints.items():
-        if pname in {"message", "shaper_tools"}:
-            continue
-        cls = param.annotation
-        if isinstance(cls, str):
-            cls = getattr(server_mod, cls, None)
-        if not inspect.isclass(cls):
-            unresolved.append(pname)
-            continue
-        bound[pname] = cls() if cls.__name__ == "PacketCaptureTool" else cls(client)
-
-    assert not unresolved, (
-        f"could not resolve tool classes for: {unresolved}. "
-        "The harness binds by annotation; update it if the signature changed."
-    )
-    return bound
+    return {"tools": build_tools(client)}
 
 
 async def _advertised_tools() -> list[dict[str, Any]]:
