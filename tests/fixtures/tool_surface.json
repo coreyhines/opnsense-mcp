@@ -774,6 +774,40 @@
       "type": "object"
     }
   },
+  "mk_alias": {
+    "description": "Create a firewall alias; returns the existing one if the name is taken",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure aliases afterwards (default true)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "content": {
+          "description": "Members: addresses, networks, ports or codes",
+          "type": "array"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "name": {
+          "description": "Alias name",
+          "type": "string"
+        },
+        "type": {
+          "description": "Alias type, one of: host, network, port, url, urltable, geoip, networkgroup, mac, asn, dynipv6host, authgroup, internal, external",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
   "mk_dhcp_host": {
     "description": "Create a DHCP host reservation in the dnsmasq host table (Services \u2192 DHCPv4 \u2192 Hosts). Requires hostname and MAC; at least one of ipv4 or ipv6 suffix must be provided. Optional client_id (DUID) improves stateful DHCPv6 matching when MAC alone is insufficient \u2014 copy from the dhcp tool v6 lease client_id. Defaults to a dry run; pass apply=true to write and reconfigure dnsmasq.",
     "inputSchema": {
@@ -1147,6 +1181,31 @@
       "type": "object"
     }
   },
+  "rm_alias": {
+    "description": "Delete a firewall alias; requires a confirm token from a prior call",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure aliases afterwards (default true)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "description": "Token returned by the first call",
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Alias uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
   "rm_dhcp_host": {
     "description": "Delete a DHCP host reservation from the dnsmasq host table (Services \u2192 DHCPv4 \u2192 Hosts). Accepts hostname, MAC, or reservation uuid. Defaults to a dry run; pass apply=true to delete and reconfigure dnsmasq.",
     "inputSchema": {
@@ -1197,6 +1256,39 @@
       },
       "required": [
         "rule_uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_alias": {
+    "description": "Update a firewall alias; unspecified fields keep their values",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure aliases afterwards (default true)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "content": {
+          "description": "Replacement members; omit to keep the current set",
+          "optional": true,
+          "type": "array"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "enabled": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "uuid": {
+          "description": "Alias uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
       ],
       "type": "object"
     }
@@ -1557,6 +1649,31 @@
     "inputSchema": {
       "properties": {},
       "required": [],
+      "type": "object"
+    }
+  },
+  "toggle_alias": {
+    "description": "Enable or disable a firewall alias",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure aliases afterwards (default true)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "Target state; this is not a blind flip",
+          "type": "boolean"
+        },
+        "uuid": {
+          "description": "Alias uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "enabled"
+      ],
       "type": "object"
     }
   },

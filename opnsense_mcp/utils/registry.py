@@ -17,6 +17,12 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from opnsense_mcp.tools.alias_write import (
+    MkAliasTool,
+    RmAliasTool,
+    SetAliasTool,
+    ToggleAliasTool,
+)
 from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.arp import ARPTool
 from opnsense_mcp.tools.config_backup import (
@@ -92,19 +98,23 @@ TOOL_CLASSES: tuple[type, ...] = (
     LLDPTool,
     MkDhcpHostTool,
     MkdnsTool,
+    MkAliasTool,
     MkfwRuleTool,
     MkSnapshotTool,
     MoveDhcpHostTool,
     PacketCaptureTool2,
     PfStatesTool,
     PfStatisticsTool,
+    RmAliasTool,
     RmDhcpHostTool,
     RmdnsTool,
     RmfwRuleTool,
+    SetAliasTool,
     SetDhcpSubnetDnsTool,
     SetFwRuleTool,
     SSHFirewallRuleTool,
     SystemTool,
+    ToggleAliasTool,
     ToggleDhcpRangeTool,
     ToggleFwRuleTool,
 )
