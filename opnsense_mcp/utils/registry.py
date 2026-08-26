@@ -19,6 +19,14 @@ from typing import Any, Protocol
 
 from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.arp import ARPTool
+from opnsense_mcp.tools.config_backup import (
+    DiffConfigBackupsTool,
+    DownloadConfigTool,
+    ListBackupProvidersTool,
+    ListConfigBackupsTool,
+    ListSnapshotsTool,
+    MkSnapshotTool,
+)
 from opnsense_mcp.tools.dhcp import DHCPTool
 from opnsense_mcp.tools.dhcp_host_move import MoveDhcpHostTool
 from opnsense_mcp.tools.dhcp_hosts import ListDhcpHostsTool
@@ -67,19 +75,25 @@ TOOL_CLASSES: tuple[type, ...] = (
     ARPTool,
     DHCPTool,
     DHCPLeaseDeleteTool,
+    DiffConfigBackupsTool,
     DNSTool,
+    DownloadConfigTool,
     FlushDnsTool,
     FwRulesTool,
     GatewayStatusTool,
     GetLogsTool,
     InterfaceHealthTool,
     InterfaceListTool,
+    ListBackupProvidersTool,
+    ListConfigBackupsTool,
     ListDhcpHostsTool,
     ListDhcpSubnetDnsTool,
+    ListSnapshotsTool,
     LLDPTool,
     MkDhcpHostTool,
     MkdnsTool,
     MkfwRuleTool,
+    MkSnapshotTool,
     MoveDhcpHostTool,
     PacketCaptureTool2,
     PfStatesTool,

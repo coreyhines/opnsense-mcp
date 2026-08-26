@@ -385,12 +385,17 @@ class OPNsenseClient:
         method: str,
         endpoint: str,
         call_class: str = DEFAULT_CALL_CLASS,
+        raw: bool = False,
         **kwargs: str | dict[str, str] | list[str] | int | bool | None,
-    ) -> dict[str, Any]:
+    ) -> Any:
         """Make a non-blocking request to the OPNsense API.
 
         ``call_class`` selects the timeout and which session carries the call.
         An explicit ``timeout`` in *kwargs* still wins.
+
+        ``raw`` returns the response body as bytes without parsing it. Needed
+        for ``core/backup/download``, which serves XML; parsing every 200 as
+        JSON is why that endpoint could not be fetched at all.
         """
         if not endpoint.startswith("/api") and not endpoint.startswith("/core"):
             endpoint = f"/api{endpoint}"
@@ -404,6 +409,9 @@ class OPNsenseClient:
             try:
                 with lock:
                     response = session.request(method, url, **kwargs)
+
+                if response.status_code == 200 and raw:
+                    return response.content
 
                 if response.status_code == 200:
                     try:
