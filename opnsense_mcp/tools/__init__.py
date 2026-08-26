@@ -16,40 +16,14 @@ from .pf_diagnostics import PfStatesTool, PfStatisticsTool
 from .rmfw_rule import RmfwRuleTool
 from .system import SystemTool
 
-# Tool registry mapping tool names to their classes
-TOOL_CLASSES = {
-    "arp": ARPTool,
-    "system": SystemTool,
-    "dhcp": DHCPTool,
-    "dhcp_lease_delete": DHCPLeaseDeleteTool,
-    "lldp": LLDPTool,
-    "interface": InterfaceTool,
-    "interface_list": InterfaceListTool,
-    "interface_health": InterfaceHealthTool,
-    "pf_states": PfStatesTool,
-    "pf_statistics": PfStatisticsTool,
-    "firewall": FirewallTool,
-    "fw_rules": FwRulesTool,
-    "get_logs": GetLogsTool,
-    "mkfw_rule": MkfwRuleTool,
-    "rmfw_rule": RmfwRuleTool,
-    "packet_capture": PacketCaptureTool2,
-}
-
-
-async def execute_tool(client, tool_name: str, args: dict) -> dict:
-    """Execute a tool with the given arguments."""
-    tool_class = TOOL_CLASSES.get(tool_name)
-    if not tool_class:
-        raise ValueError(f"Tool {tool_name} not found")
-
-    tool = tool_class(client)
-    return await tool.execute(args)
+# The tool registry lives in opnsense_mcp.utils.registry, which both servers
+# consume. The partial map and execute_tool that used to sit here covered 16 of
+# the tools, was wired to neither server, and shared a name with the real
+# registry, so it is gone rather than left as a second answer to the same
+# question.
 
 
 __all__ = [
-    "TOOL_CLASSES",
-    "execute_tool",
     "ARPTool",
     "DHCPTool",
     "DHCPLeaseDeleteTool",
@@ -67,4 +41,4 @@ __all__ = [
     "PacketCaptureTool2",
     "PfStatesTool",
     "PfStatisticsTool",
-] + list(TOOL_CLASSES.keys())
+]

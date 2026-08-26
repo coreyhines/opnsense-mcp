@@ -168,6 +168,30 @@
       "type": "object"
     }
   },
+  "arp": {
+    "description": "Show ARP/NDP table",
+    "inputSchema": {
+      "properties": {
+        "ip": {
+          "description": "Filter by IP address",
+          "optional": true,
+          "type": "string"
+        },
+        "mac": {
+          "description": "Filter by MAC address",
+          "optional": true,
+          "type": "string"
+        },
+        "search": {
+          "description": "Targeted search by IP/MAC/hostname",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
   "audit_shaper_config": {
     "description": "Audit traffic shaper configuration against best practices; optional ISP rates and WAN line rate for bandwidth checks",
     "inputSchema": {
@@ -341,10 +365,88 @@
       "type": "object"
     }
   },
+  "fw_rules": {
+    "description": "Get firewall rules exposed by the OPNsense Firewall Automation API (Firewall \u2192 Automation). Rules that exist only under the classic Firewall \u2192 Rules UI may not appear here; see OPNsense API docs. Returns the current rule set for context and reasoning.",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "Filter by action (pass, block, reject, etc.)",
+          "optional": true,
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Filter by enabled status",
+          "optional": true,
+          "type": "boolean"
+        },
+        "interface": {
+          "description": "Filter by interface name (supports partial matching and groups)",
+          "optional": true,
+          "type": "string"
+        },
+        "protocol": {
+          "description": "Filter by protocol (tcp, udp, icmp, etc.)",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
   "gateway_status": {
     "description": "Show WAN gateway health (latency, packet loss)",
     "inputSchema": {
       "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "get_logs": {
+    "description": "Get firewall logs with optional filtering",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "optional": true,
+          "type": "string"
+        },
+        "dst_ip": {
+          "optional": true,
+          "type": "string"
+        },
+        "dst_port": {
+          "optional": true,
+          "type": "number"
+        },
+        "include_rules": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "interface": {
+          "optional": true,
+          "type": "string"
+        },
+        "limit": {
+          "optional": true,
+          "type": "number"
+        },
+        "protocol": {
+          "optional": true,
+          "type": "string"
+        },
+        "src_ip": {
+          "optional": true,
+          "type": "string"
+        },
+        "src_port": {
+          "optional": true,
+          "type": "number"
+        },
+        "summary_only": {
+          "optional": true,
+          "type": "boolean"
+        }
+      },
       "required": [],
       "type": "object"
     }
@@ -402,6 +504,47 @@
   },
   "get_shaper_settings": {
     "description": "Get global traffic shaper settings and normalized pipe/queue/rule summary",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "interface_health": {
+    "description": "Summarize interface status, counters, relationships, and findings",
+    "inputSchema": {
+      "properties": {
+        "include_down": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "include_raw": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "interface": {
+          "optional": true,
+          "type": "string"
+        },
+        "max_results": {
+          "optional": true,
+          "type": "number"
+        },
+        "sort_by": {
+          "optional": true,
+          "type": "string"
+        },
+        "warnings_only": {
+          "optional": true,
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "interface_list": {
+    "description": "Get available interface names for firewall rules",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -768,6 +911,122 @@
       "required": [
         "host"
       ],
+      "type": "object"
+    }
+  },
+  "packet_capture": {
+    "description": "Start, stop, or fetch a packet capture file",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "start, stop, or fetch (default: start)",
+          "optional": true,
+          "type": "string"
+        },
+        "count": {
+          "description": "Packet count limit (optional)",
+          "optional": true,
+          "type": "number"
+        },
+        "duration": {
+          "description": "Duration in seconds (default: 30)",
+          "optional": true,
+          "type": "number"
+        },
+        "filter": {
+          "description": "BPF filter expression (optional)",
+          "optional": true,
+          "type": "string"
+        },
+        "interface": {
+          "description": "Interface to capture on (default: wan)",
+          "optional": true,
+          "type": "string"
+        },
+        "local_path": {
+          "description": "Local path to save PCAP (optional)",
+          "optional": true,
+          "type": "string"
+        },
+        "preview_bytes": {
+          "description": "Number of bytes to preview (default: 1000)",
+          "optional": true,
+          "type": "number"
+        },
+        "raw": {
+          "description": "Return raw PCAP file if true (default: false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "stream": {
+          "description": "If true, stream pcap data to chat (hex preview)",
+          "optional": true,
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "pf_states": {
+    "description": "List active PF state table entries with filters and summary",
+    "inputSchema": {
+      "properties": {
+        "dst_ip": {
+          "optional": true,
+          "type": "string"
+        },
+        "dst_port": {
+          "optional": true,
+          "type": "number"
+        },
+        "interface": {
+          "optional": true,
+          "type": "string"
+        },
+        "ip": {
+          "optional": true,
+          "type": "string"
+        },
+        "limit": {
+          "optional": true,
+          "type": "number"
+        },
+        "protocol": {
+          "optional": true,
+          "type": "string"
+        },
+        "src_ip": {
+          "optional": true,
+          "type": "string"
+        },
+        "src_port": {
+          "optional": true,
+          "type": "number"
+        },
+        "state": {
+          "optional": true,
+          "type": "string"
+        },
+        "summary": {
+          "optional": true,
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "pf_statistics": {
+    "description": "Show PF statistics and state table pressure",
+    "inputSchema": {
+      "properties": {
+        "include_raw": {
+          "optional": true,
+          "type": "boolean"
+        }
+      },
+      "required": [],
       "type": "object"
     }
   },
@@ -1196,6 +1455,14 @@
       "required": [
         "description"
       ],
+      "type": "object"
+    }
+  },
+  "system": {
+    "description": "Show system status information",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
       "type": "object"
     }
   },

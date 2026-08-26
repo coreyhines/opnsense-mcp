@@ -39,6 +39,7 @@ from opnsense_mcp.tools.shaper_pipes import (
 from opnsense_mcp.tools.shaper_service import ApplyShaperTool, ShaperStatisticsTool
 from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
+from opnsense_mcp.utils.registry import build_tools
 
 TOOL_NOT_FOUND = -32601
 
@@ -73,35 +74,12 @@ def _shaper_tools(client: MockOPNsenseClient) -> dict[str, Any]:
 
 
 def _bind_tools(client: MockOPNsenseClient) -> dict[str, Any]:
-    """Build handle_message's tool arguments from its own signature.
+    """Build the registry's tools for handle_message.
 
-    Each parameter is annotated with its tool class, so the class can be read
-    off the annotation and instantiated. `PacketCaptureTool` takes no client.
+    The registry replaced 30 positional parameters, so this is now a single
+    keyword argument. The assertions below are unchanged.
     """
-    import opnsense_mcp.server as server_mod
-
-    # server.py uses `from __future__ import annotations`, so signature()
-    # yields strings. Resolve them against the module's own namespace.
-    hints = inspect.signature(handle_message, eval_str=True).parameters
-
-    bound: dict[str, Any] = {}
-    unresolved: list[str] = []
-    for pname, param in hints.items():
-        if pname in {"message", "shaper_tools"}:
-            continue
-        cls = param.annotation
-        if isinstance(cls, str):
-            cls = getattr(server_mod, cls, None)
-        if not inspect.isclass(cls):
-            unresolved.append(pname)
-            continue
-        bound[pname] = cls() if cls.__name__ == "PacketCaptureTool" else cls(client)
-
-    assert not unresolved, (
-        f"could not resolve tool classes for: {unresolved}. "
-        "The harness binds by annotation; update it if the signature changed."
-    )
-    return bound
+    return {"tools": build_tools(client)}
 
 
 async def _advertised_tools() -> list[dict[str, Any]]:
@@ -225,23 +203,10 @@ async def test_unknown_tool_is_rejected() -> None:
     assert response["error"]["code"] == TOOL_NOT_FOUND
 
 
-# Advertised only as hand-written literals in server.py's tools/list, because
-# their classes carry no name, description or input_schema. A registry cannot
-# emit these until Wave 2b step 1 retrofits them, so the list shrinks as that
-# lands and must never grow.
-LITERAL_ONLY_TOOLS = frozenset(
-    {
-        "arp",
-        "fw_rules",
-        "get_logs",
-        "interface_health",
-        "interface_list",
-        "packet_capture",
-        "pf_states",
-        "pf_statistics",
-        "system",
-    }
-)
+# Every tool advertised by server.py now carries class metadata, so tools/list
+# and the class-derived snapshot agree. Kept as an explicit empty set so a
+# regression names itself instead of silently reopening the gap.
+LITERAL_ONLY_TOOLS: frozenset[str] = frozenset()
 
 
 @pytest.mark.asyncio

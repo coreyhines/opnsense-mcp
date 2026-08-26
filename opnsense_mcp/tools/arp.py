@@ -32,6 +32,30 @@ class ARPEntry(BaseModel):
 class ARPTool:
     """Tool for retrieving ARP/NDP table information."""
 
+    name = "arp"
+    description = "Show ARP/NDP table"
+    input_schema = {
+        "properties": {
+            "ip": {
+                "description": "Filter by IP address",
+                "optional": True,
+                "type": "string",
+            },
+            "mac": {
+                "description": "Filter by MAC address",
+                "optional": True,
+                "type": "string",
+            },
+            "search": {
+                "description": "Targeted search by IP/MAC/hostname",
+                "optional": True,
+                "type": "string",
+            },
+        },
+        "required": [],
+        "type": "object",
+    }
+
     def __init__(self, client: OPNsenseClient | None = None) -> None:
         """
         Initialize the ARP tool.
