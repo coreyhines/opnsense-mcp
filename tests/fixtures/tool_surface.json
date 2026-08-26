@@ -695,6 +695,14 @@
       "type": "object"
     }
   },
+  "list_gateways": {
+    "description": "List configured gateways, configuration fields only",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
   "list_loopback": {
     "description": "List loopback interface devices",
     "inputSchema": {
@@ -713,6 +721,14 @@
   },
   "list_router_adverts": {
     "description": "List radvd router advertisement entries, one per interface",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_routes": {
+    "description": "List configured static routes",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -811,6 +827,14 @@
   },
   "list_vip": {
     "description": "List interface virtual IPs",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_vlans": {
+    "description": "List 802.1Q VLAN devices",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -918,6 +942,55 @@
       "type": "object"
     }
   },
+  "mk_gateway": {
+    "description": "Create a gateway on an interface",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure routing afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "far_gateway": {
+          "description": "Next hop outside the interface subnet",
+          "optional": true,
+          "type": "boolean"
+        },
+        "gateway": {
+          "description": "Next hop address",
+          "type": "string"
+        },
+        "interface": {
+          "description": "Interface identifier",
+          "type": "string"
+        },
+        "ipprotocol": {
+          "description": "inet or inet6 (default inet)",
+          "optional": true,
+          "type": "string"
+        },
+        "monitor_disable": {
+          "description": "Turn off monitoring, usual for a point-to-point transit",
+          "optional": true,
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Gateway name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "interface",
+        "gateway"
+      ],
+      "type": "object"
+    }
+  },
   "mk_loopback": {
     "description": "Create a loopback interface device",
     "inputSchema": {
@@ -977,6 +1050,35 @@
       "type": "object"
     }
   },
+  "mk_route": {
+    "description": "Create a static route via a configured gateway",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure routes afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "gateway": {
+          "description": "Gateway name, from list_gateways",
+          "type": "string"
+        },
+        "network": {
+          "description": "Destination prefix, for example 172.20.2.0/24",
+          "type": "string"
+        }
+      },
+      "required": [
+        "network",
+        "gateway"
+      ],
+      "type": "object"
+    }
+  },
   "mk_snapshot": {
     "description": "Create a ZFS boot environment snapshot, where the platform supports it",
     "inputSchema": {
@@ -1032,6 +1134,40 @@
         "interface",
         "subnet",
         "subnet_bits"
+      ],
+      "type": "object"
+    }
+  },
+  "mk_vlan": {
+    "description": "Create an 802.1Q VLAN device on a parent interface",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure VLAN devices afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "parent": {
+          "description": "Parent device, for example ax0",
+          "type": "string"
+        },
+        "pcp": {
+          "description": "Priority code point",
+          "optional": true,
+          "type": "number"
+        },
+        "tag": {
+          "description": "VLAN id, 1 to 4094",
+          "type": "number"
+        }
+      },
+      "required": [
+        "parent",
+        "tag"
       ],
       "type": "object"
     }
@@ -1423,6 +1559,29 @@
       "type": "object"
     }
   },
+  "rm_route": {
+    "description": "Delete a static route; requires a confirm token from a prior call",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Route uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
   "rm_vip": {
     "description": "Delete an interface virtual IP; requires a confirm token",
     "inputSchema": {
@@ -1433,6 +1592,25 @@
         },
         "uuid": {
           "description": "VIP uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "rm_vlan": {
+    "description": "Delete a VLAN device; refuses while it is assigned to an interface",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "VLAN uuid",
           "type": "string"
         }
       },
@@ -2027,6 +2205,30 @@
       "type": "object"
     }
   },
+  "toggle_gateway": {
+    "description": "Enable or disable a gateway",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "Target state",
+          "type": "boolean"
+        },
+        "uuid": {
+          "description": "Gateway uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
   "toggle_npt_rule": {
     "description": "Enable or disable an NPTv6 rule",
     "inputSchema": {
@@ -2037,6 +2239,30 @@
         },
         "uuid": {
           "description": "Rule uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_route": {
+    "description": "Enable or disable a static route",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "Target state",
+          "type": "boolean"
+        },
+        "uuid": {
+          "description": "Route uuid",
           "type": "string"
         }
       },
