@@ -68,6 +68,18 @@ from opnsense_mcp.tools.pf_diagnostics import PfStatesTool, PfStatisticsTool
 from opnsense_mcp.tools.rm_dhcp_host import RmDhcpHostTool
 from opnsense_mcp.tools.rmdns import RmdnsTool
 from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+from opnsense_mcp.tools.routing_stack import (
+    ListGatewaysTool,
+    ListRoutesTool,
+    ListVlansTool,
+    MkGatewayTool,
+    MkRouteTool,
+    MkVlanTool,
+    RmRouteTool,
+    RmVlanTool,
+    ToggleGatewayTool,
+    ToggleRouteTool,
+)
 from opnsense_mcp.tools.set_fw_rule import SetFwRuleTool
 from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
@@ -115,14 +127,20 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListDhcpSubnetDnsTool,
     ListLoopbackTool,
     ListNptRulesTool,
+    ListGatewaysTool,
     ListRouterAdvertsTool,
+    ListRoutesTool,
     ListSnapshotsTool,
+    ListVlansTool,
     ListVipTool,
     LLDPTool,
     MkDhcpHostTool,
     MkdnsTool,
     MkAliasTool,
     MkfwRuleTool,
+    MkGatewayTool,
+    MkRouteTool,
+    MkVlanTool,
     MkLoopbackTool,
     MkNptRuleTool,
     MkVipTool,
@@ -135,7 +153,9 @@ TOOL_CLASSES: tuple[type, ...] = (
     RmAliasTool,
     RmDhcpHostTool,
     RmNptRuleTool,
+    RmRouteTool,
     RmVipTool,
+    RmVlanTool,
     RmdnsTool,
     RmfwRuleTool,
     SetAliasTool,
@@ -147,7 +167,9 @@ TOOL_CLASSES: tuple[type, ...] = (
     SystemTool,
     ToggleAliasTool,
     ToggleDhcpRangeTool,
+    ToggleGatewayTool,
     ToggleNptRuleTool,
+    ToggleRouteTool,
     ToggleFwRuleTool,
 )
 
