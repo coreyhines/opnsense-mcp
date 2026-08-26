@@ -283,7 +283,9 @@ async def test_ping_waits_for_the_requested_packets_then_stops() -> None:
 async def test_ping_polls_on_the_id_key() -> None:
     """searchJobs rows are keyed `id`; matching on `uuid` finds nothing."""
     client = _client()
-    _stub(client, {"ping/set": {"uuid": "job-1"}, "searchJobs": lambda: _ping_rows(3, 3)})
+    _stub(
+        client, {"ping/set": {"uuid": "job-1"}, "searchJobs": lambda: _ping_rows(3, 3)}
+    )
 
     result = await FwPingTool(client).execute({"target": "172.31.0.2", "count": 1})
 
