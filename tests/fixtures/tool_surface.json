@@ -676,6 +676,22 @@
       "type": "object"
     }
   },
+  "list_loopback": {
+    "description": "List loopback interface devices",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_npt_rules": {
+    "description": "List NPTv6 prefix translation rules",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
   "list_shaper_pipes": {
     "description": "List traffic shaper pipes with optional enabled/description filters",
     "inputSchema": {
@@ -760,6 +776,14 @@
   },
   "list_snapshots": {
     "description": "List ZFS boot environment snapshots, where the platform supports them",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_vip": {
+    "description": "List interface virtual IPs",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -867,6 +891,65 @@
       "type": "object"
     }
   },
+  "mk_loopback": {
+    "description": "Create a loopback interface device",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure interfaces afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "description": "Device description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "type": "object"
+    }
+  },
+  "mk_npt_rule": {
+    "description": "Create an NPTv6 rule translating an internal IPv6 prefix to an external one",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reload the filter afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "destination_net": {
+          "description": "External prefix; omit when using trackif",
+          "optional": true,
+          "type": "string"
+        },
+        "interface": {
+          "description": "Interface the translation applies on, usually wan",
+          "type": "string"
+        },
+        "source_net": {
+          "description": "Internal prefix, for example fd00:...:2::/64",
+          "type": "string"
+        },
+        "trackif": {
+          "description": "Interface whose delegated prefix supplies the external side",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "interface",
+        "source_net"
+      ],
+      "type": "object"
+    }
+  },
   "mk_snapshot": {
     "description": "Create a ZFS boot environment snapshot, where the platform supports it",
     "inputSchema": {
@@ -878,6 +961,50 @@
       },
       "required": [
         "description"
+      ],
+      "type": "object"
+    }
+  },
+  "mk_vip": {
+    "description": "Create an interface virtual IP, an IP alias by default",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure interfaces afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "interface": {
+          "description": "Interface to add it to",
+          "type": "string"
+        },
+        "mode": {
+          "description": "One of: ipalias, carp, proxyarp, other (default ipalias)",
+          "optional": true,
+          "type": "string"
+        },
+        "subnet": {
+          "description": "Address, without the prefix length",
+          "type": "string"
+        },
+        "subnet_bits": {
+          "description": "Prefix length, e.g. 64",
+          "type": "number"
+        },
+        "vhid": {
+          "description": "CARP virtual host id; required only for mode=carp",
+          "optional": true,
+          "type": "number"
+        }
+      },
+      "required": [
+        "interface",
+        "subnet",
+        "subnet_bits"
       ],
       "type": "object"
     }
@@ -1221,6 +1348,44 @@
       },
       "required": [
         "host"
+      ],
+      "type": "object"
+    }
+  },
+  "rm_npt_rule": {
+    "description": "Delete an NPTv6 rule; requires a confirm token from a prior call",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Rule uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "rm_vip": {
+    "description": "Delete an interface virtual IP; requires a confirm token",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "VIP uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
       ],
       "type": "object"
     }
@@ -1729,6 +1894,26 @@
       },
       "required": [
         "rule_uuid",
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_npt_rule": {
+    "description": "Enable or disable an NPTv6 rule",
+    "inputSchema": {
+      "properties": {
+        "enabled": {
+          "description": "Target state",
+          "type": "boolean"
+        },
+        "uuid": {
+          "description": "Rule uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
         "enabled"
       ],
       "type": "object"
