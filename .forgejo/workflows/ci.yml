@@ -54,9 +54,20 @@ jobs:
     runs-on: ansible-net10
     container:
       image: quay.io/buildah/stable:v1.38
-      # --device /dev/fuse requires the runner's container.privileged: true
-      # (set in config.yml on both strongpod and fedora1 runners).
-      options: --privileged --device /dev/fuse
+      options: --privileged
+    env:
+      # buildah defaults to the overlay driver, which needs fuse-overlayfs and
+      # therefore /dev/fuse inside the job container. Passing --device /dev/fuse
+      # only works if every runner in the pool sets container.privileged: true
+      # and the host has the module loaded, and at least one does not: builds
+      # failed with "fuse: device not found, try 'modprobe fuse' first".
+      #
+      # vfs needs no kernel support at all. It copies each layer instead of
+      # stacking them, so builds are slower and use more scratch disk, which is
+      # an acceptable price for not depending on how a given runner host is set
+      # up. Revisit if the pool is ever made uniform.
+      STORAGE_DRIVER: vfs
+      BUILDAH_ISOLATION: chroot
     outputs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
       image: ${{ steps.build.outputs.image }}
