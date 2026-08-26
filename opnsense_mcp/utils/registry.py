@@ -63,6 +63,14 @@ from opnsense_mcp.tools.lldp import LLDPTool
 from opnsense_mcp.tools.mk_dhcp_host import MkDhcpHostTool
 from opnsense_mcp.tools.mkdns import MkdnsTool
 from opnsense_mcp.tools.mkfw_rule import MkfwRuleTool
+from opnsense_mcp.tools.nat_outbound import (
+    FwPingTool,
+    ListNatOutboundTool,
+    MkNatOutboundTool,
+    NatOutboundModeTool,
+    RmNatOutboundTool,
+    ToggleNatOutboundTool,
+)
 from opnsense_mcp.tools.packet_capture import PacketCaptureTool2
 from opnsense_mcp.tools.pf_diagnostics import PfStatesTool, PfStatisticsTool
 from opnsense_mcp.tools.rm_dhcp_host import RmDhcpHostTool
@@ -116,6 +124,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     DNSTool,
     DownloadConfigTool,
     FlushDnsTool,
+    FwPingTool,
     FwRulesTool,
     GatewayStatusTool,
     GetLogsTool,
@@ -128,6 +137,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListLoopbackTool,
     ListNptRulesTool,
     ListGatewaysTool,
+    ListNatOutboundTool,
     ListRouterAdvertsTool,
     ListRoutesTool,
     ListSnapshotsTool,
@@ -143,15 +153,18 @@ TOOL_CLASSES: tuple[type, ...] = (
     MkVlanTool,
     MkLoopbackTool,
     MkNptRuleTool,
+    MkNatOutboundTool,
     MkVipTool,
     MkSnapshotTool,
     MoveDhcpHostTool,
+    NatOutboundModeTool,
     PacketCaptureTool2,
     PlanDnsUlaTool,
     PfStatesTool,
     PfStatisticsTool,
     RmAliasTool,
     RmDhcpHostTool,
+    RmNatOutboundTool,
     RmNptRuleTool,
     RmRouteTool,
     RmVipTool,
@@ -168,6 +181,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     ToggleAliasTool,
     ToggleDhcpRangeTool,
     ToggleGatewayTool,
+    ToggleNatOutboundTool,
     ToggleNptRuleTool,
     ToggleRouteTool,
     ToggleFwRuleTool,

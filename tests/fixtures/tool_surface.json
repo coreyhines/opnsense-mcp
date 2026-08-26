@@ -428,6 +428,41 @@
       "type": "object"
     }
   },
+  "fw_ping": {
+    "description": "Ping a target from the firewall itself, which is the path that matters when checking a gateway or transit",
+    "inputSchema": {
+      "properties": {
+        "count": {
+          "description": "Packets to wait for (default 3, max 20)",
+          "optional": true,
+          "type": "number"
+        },
+        "family": {
+          "description": "inet or inet6 (default inet)",
+          "optional": true,
+          "type": "string"
+        },
+        "packetsize": {
+          "description": "Payload bytes, for checking MTU on a transit",
+          "optional": true,
+          "type": "number"
+        },
+        "source_address": {
+          "description": "Source address, to test a specific path",
+          "optional": true,
+          "type": "string"
+        },
+        "target": {
+          "description": "Address or hostname to ping",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    }
+  },
   "fw_rules": {
     "description": "Get firewall rules exposed by the OPNsense Firewall Automation API (Firewall \u2192 Automation). Rules that exist only under the classic Firewall \u2192 Rules UI may not appear here; see OPNsense API docs. Returns the current rule set for context and reasoning.",
     "inputSchema": {
@@ -705,6 +740,14 @@
   },
   "list_loopback": {
     "description": "List loopback interface devices",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_nat_outbound": {
+    "description": "List outbound source NAT rules",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -1007,6 +1050,50 @@
       },
       "required": [
         "description"
+      ],
+      "type": "object"
+    }
+  },
+  "mk_nat_outbound": {
+    "description": "Create an outbound source NAT rule for a source network or alias",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reload the filter afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "destination_net": {
+          "description": "Destination to match (default any)",
+          "optional": true,
+          "type": "string"
+        },
+        "interface": {
+          "description": "Outgoing interface, usually wan",
+          "type": "string"
+        },
+        "source_net": {
+          "description": "Source network or alias name to translate",
+          "type": "string"
+        },
+        "static_port": {
+          "description": "Preserve the source port",
+          "optional": true,
+          "type": "boolean"
+        },
+        "target": {
+          "description": "Translation address; empty means the interface address",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "interface",
+        "source_net"
       ],
       "type": "object"
     }
@@ -1332,6 +1419,25 @@
       "type": "object"
     }
   },
+  "nat_outbound_mode": {
+    "description": "Read or set outbound source NAT generation mode",
+    "inputSchema": {
+      "properties": {
+        "action_mode": {
+          "description": "get or set (default get)",
+          "optional": true,
+          "type": "string"
+        },
+        "mode": {
+          "description": "When setting: one of automatic, hybrid",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
   "packet_capture": {
     "description": "Start, stop, or fetch a packet capture file",
     "inputSchema": {
@@ -1536,6 +1642,25 @@
       },
       "required": [
         "host"
+      ],
+      "type": "object"
+    }
+  },
+  "rm_nat_outbound": {
+    "description": "Delete an outbound source NAT rule; requires a confirm token",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Rule uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
       ],
       "type": "object"
     }
@@ -2219,6 +2344,26 @@
         },
         "uuid": {
           "description": "Gateway uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_nat_outbound": {
+    "description": "Enable or disable an outbound source NAT rule",
+    "inputSchema": {
+      "properties": {
+        "enabled": {
+          "description": "Target state",
+          "type": "boolean"
+        },
+        "uuid": {
+          "description": "Rule uuid",
           "type": "string"
         }
       },
