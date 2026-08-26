@@ -84,6 +84,7 @@ uv run ruff format .
    from typing import Any, Dict
    from opnsense_mcp.utils.api import OPNsenseClient
 
+
    async def your_tool_name(client: OPNsenseClient, **kwargs) -> Dict[str, Any]:
        """
        Brief description of what this tool does.
@@ -116,6 +117,7 @@ uv run ruff format .
    # tests/test_your_tool.py
    import pytest
    from opnsense_mcp.tools.your_tool import your_tool_name
+
 
    @pytest.mark.asyncio
    async def test_your_tool_name():
@@ -220,6 +222,7 @@ uv run python main.py
 **Logging Configuration**
 ```python
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 ```
 
