@@ -15,9 +15,14 @@ Reading the results rather than chaining onto the pipeline is deliberate.
 and `security.yml` on purpose, so a publish job appended to either one would see
 only half of them.
 
+This makes no network calls. The caller fetches the runs listing and passes the
+file, which keeps the decision pure and testable, and keeps a URL built from an
+argument away from urllib, which honours file:// and would happily read a local
+path.
+
 Usage:
-    python3 scripts/select_publishable_commit.py --published <sha> --candidates <file>
-    python3 scripts/select_publishable_commit.py --api-base <url> --repo owner/name ...
+    python3 scripts/select_publishable_commit.py \
+        --candidates <file> --runs <file> [--published <sha>]
 
 Prints the chosen SHA, or nothing and exits 3 when no commit qualifies.
 """
@@ -26,8 +31,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import sys
-import urllib.request
 
 # Both must have run and passed. Checking only "nothing failed" would publish a
 # commit whose CI never triggered at all, which fails open in exactly the way a
@@ -63,16 +68,8 @@ def select_publishable(
     return None
 
 
-def fetch_runs(api_base: str, repo: str, limit: int = 100) -> dict[str, list[dict]]:
-    """Group recent workflow runs by the commit they ran on.
-
-    Unauthenticated: the repository is public, and the publisher should need
-    only the one credential that writes to the published copy.
-    """
-    url = f"{api_base.rstrip('/')}/repos/{repo}/actions/runs?limit={limit}"
-    with urllib.request.urlopen(url, timeout=30) as response:  # noqa: S310
-        payload = json.load(response)
-
+def group_runs_by_commit(payload: dict) -> dict[str, list[dict]]:
+    """Group a Forgejo actions/runs response by the commit each run ran on."""
     grouped: dict[str, list[dict]] = {}
     for run in payload.get("workflow_runs", []):
         sha = run.get("commit_sha") or run.get("head_sha") or ""
@@ -89,8 +86,11 @@ def main() -> int:
         required=True,
         help="file of candidate SHAs, oldest first (git rev-list --reverse)",
     )
-    parser.add_argument("--api-base", required=True, help="Forgejo API base URL")
-    parser.add_argument("--repo", required=True, help="owner/name")
+    parser.add_argument(
+        "--runs",
+        required=True,
+        help="file holding a Forgejo actions/runs response, fetched by the caller",
+    )
     parser.add_argument(
         "--published",
         default="",
@@ -100,15 +100,17 @@ def main() -> int:
 
     candidates = [
         line.strip()
-        for line in open(args.candidates, encoding="utf-8")  # noqa: SIM115, PTH123
+        for line in pathlib.Path(args.candidates)
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.strip()
     ]
     if not candidates:
         print("Nothing new to consider; published copy is up to date.", file=sys.stderr)
         return NOTHING_PUBLISHABLE
 
-    runs = fetch_runs(args.api_base, args.repo)
-    chosen = select_publishable(candidates, runs)
+    payload = json.loads(pathlib.Path(args.runs).read_text(encoding="utf-8"))
+    chosen = select_publishable(candidates, group_runs_by_commit(payload))
 
     if chosen is None:
         # Loud on purpose. A publisher that quietly does nothing looks identical

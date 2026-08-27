@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from select_publishable_commit import (  # noqa: E402
     REQUIRED_WORKFLOWS,
+    group_runs_by_commit,
     select_publishable,
 )
 
@@ -91,3 +92,27 @@ def test_candidate_order_is_oldest_first() -> None:
 
     assert select_publishable([OLD, NEW], runs) == NEW
     assert select_publishable([NEW, OLD], runs) == OLD
+
+
+def test_runs_are_grouped_by_the_commit_they_ran_on() -> None:
+    """The API keys this `commit_sha`; grouping is the only parsing step left."""
+    payload = {
+        "workflow_runs": [
+            {"commit_sha": NEW, "workflow_id": "ci.yml", "status": "success"},
+            {"commit_sha": NEW, "workflow_id": "security.yml", "status": "success"},
+            {"commit_sha": OLD, "workflow_id": "ci.yml", "status": "failure"},
+        ]
+    }
+
+    grouped = group_runs_by_commit(payload)
+
+    assert set(grouped) == {NEW, OLD}
+    assert len(grouped[NEW]) == 2
+    assert select_publishable([OLD, NEW], grouped) == NEW
+
+
+def test_a_run_with_no_commit_is_dropped() -> None:
+    """A run that names no commit cannot vouch for one."""
+    grouped = group_runs_by_commit({"workflow_runs": [{"workflow_id": "ci.yml"}]})
+
+    assert grouped == {}
