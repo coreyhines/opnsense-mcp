@@ -7,8 +7,14 @@ meant to finish had already succeeded. Rule operations reported failure while
 working, which is the most misleading result available and a plausible reason
 someone once wrote an SSH fallback for firewall rules.
 
-`/api/firewall/filter/apply` works on its own. The savepoint is an optimisation
-for rollback, not a prerequisite, so its absence must not fail the apply.
+The savepoint is gone rather than made optional. `cancel_firewall_rollback`
+existed with no callers, so whichever way OPNsense's rollback protocol works,
+this implemented half of it: a savepoint was taken, an apply was made against
+its revision, and nothing ever confirmed or cancelled the result. Half a
+rollback protocol is wrong regardless of its semantics, and the path cannot be
+exercised on firmware where the endpoint does not exist.
+
+`/api/firewall/filter/apply` works on its own, which is what the tools use.
 """
 
 from __future__ import annotations
@@ -19,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from opnsense_mcp.utils.api import OPNsenseClient, RequestError
+from opnsense_mcp.utils.api import OPNsenseClient
 
 
 def _client() -> OPNsenseClient:
@@ -48,48 +54,73 @@ def _stub(client: OPNsenseClient, responses: dict[str, Any]) -> list[str]:
     return calls
 
 
-def test_apply_succeeds_when_savepoint_is_not_available() -> None:
-    """A 404 on savepoint is this firmware's normal state, not a failure."""
+def test_apply_goes_straight_to_apply() -> None:
+    """One call, no savepoint, no revision in the path."""
     client = _client()
-    calls = _stub(
-        client,
-        {
-            "savepoint": RequestError("HTTP 404: Endpoint not found"),
-            "apply": {"status": "OK\n\n"},
-        },
-    )
+    calls = _stub(client, {"apply": {"status": "OK\n\n"}})
 
     result = asyncio.run(client.apply_firewall_changes())
 
-    # The method's own contract is {"revision", "result"}, not the raw status.
     assert result["result"] == "success"
-    assert result["revision"] is None
-    assert any(c.endswith("/apply") for c in calls)
+    assert calls == ["/api/firewall/filter/apply"]
 
 
-def test_apply_still_uses_a_savepoint_when_one_is_offered() -> None:
-    """Where rollback exists, keep using it."""
+def test_no_savepoint_is_requested() -> None:
+    """Taking one and never confirming it is the half-protocol this removed."""
     client = _client()
-    calls = _stub(
-        client,
-        {"savepoint": {"revision": "12345"}, "apply": {"status": "ok"}},
-    )
+    calls = _stub(client, {"apply": {"status": "ok"}})
 
     asyncio.run(client.apply_firewall_changes())
 
-    assert any(c.endswith("/apply/12345") for c in calls)
+    assert not [c for c in calls if "savepoint" in c or "ollback" in c]
 
 
 def test_a_failing_apply_is_still_an_error() -> None:
-    """Tolerating a missing savepoint must not tolerate a failed apply."""
+    """Dropping the savepoint must not soften a genuine apply failure."""
     client = _client()
-    _stub(
-        client,
-        {
-            "savepoint": RequestError("HTTP 404: Endpoint not found"),
-            "apply": {"status": "failed", "message": "pf syntax error"},
-        },
-    )
+    _stub(client, {"apply": {"status": "failed", "message": "pf syntax error"}})
 
     with pytest.raises(Exception, match="pf syntax error"):
         asyncio.run(client.apply_firewall_changes())
+
+
+# --- toggle ---------------------------------------------------------------
+
+
+def test_toggle_accepts_the_response_the_api_actually_sends() -> None:
+    """toggleRule answers with the new state, not with "ok".
+
+    Observed live: {"result": "Disabled", "changed": true}. The client required
+    result == "ok" and raised otherwise, so every toggle reported failure while
+    having flipped the rule. Same shape as the savepoint bug: the operation
+    worked and the caller was told it had not.
+    """
+    for payload in (
+        {"result": "Disabled", "changed": True},
+        {"result": "Enabled", "changed": True},
+        {"result": "ok"},
+        {"result": "Disabled", "changed": False},
+    ):
+        client = _client()
+        _stub(client, {"toggleRule": payload})
+
+        result = asyncio.run(client.toggle_firewall_rule("uuid-1", enabled=False))
+
+        assert result["uuid"] == "uuid-1", payload
+
+
+def test_toggle_still_fails_when_the_api_says_it_failed() -> None:
+    """Widening what counts as success must not accept an actual failure."""
+    client = _client()
+    _stub(client, {"toggleRule": {"result": "failed", "message": "no such rule"}})
+
+    with pytest.raises(Exception, match="no such rule"):
+        asyncio.run(client.toggle_firewall_rule("uuid-1", enabled=False))
+
+
+def test_toggle_fails_on_a_response_that_is_not_a_mapping() -> None:
+    client = _client()
+    _stub(client, {"toggleRule": "not json"})
+
+    with pytest.raises(Exception):
+        asyncio.run(client.toggle_firewall_rule("uuid-1", enabled=True))

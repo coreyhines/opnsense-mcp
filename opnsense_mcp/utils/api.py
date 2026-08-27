@@ -381,14 +381,6 @@ class OPNsenseClient:
         """Raise error for failed firewall changes apply."""
         raise ResponseError(f"Failed to apply firewall changes: {error_msg}")
 
-    def _raise_cancel_rollback_failed(self: "OPNsenseClient", error_msg: str) -> None:
-        """Raise error for failed rollback cancellation."""
-        raise ResponseError(f"Failed to cancel rollback: {error_msg}")
-
-    def _raise_savepoint_failed(self: "OPNsenseClient") -> None:
-        """Raise error for failed savepoint creation."""
-        raise ResponseError("Failed to create firewall savepoint")
-
     def _timeout_for(self: "OPNsenseClient", call_class: str) -> int:
         """Return the timeout for *call_class*, rejecting unknown names.
 
@@ -747,8 +739,18 @@ class OPNsenseClient:
                 call_class="write",
             )
 
-            if not isinstance(response, dict) or response.get("result") != "ok":
-                error_msg = response.get("message", "Unknown error")
+            # toggleRule answers with the resulting state rather than "ok":
+            # {"result": "Disabled", "changed": true} is a success. Requiring
+            # "ok" made every toggle report failure while having flipped the
+            # rule, which is the same shape as the savepoint bug.
+            if not isinstance(response, dict):
+                self._raise_toggle_rule_failed(f"Toggle failed: {response!r}")
+            outcome = str(response.get("result", "")).strip().lower()
+            if (
+                outcome not in ("ok", "enabled", "disabled")
+                and "changed" not in response
+            ):
+                error_msg = response.get("message", f"unexpected result {outcome!r}")
                 self._raise_toggle_rule_failed(f"Toggle failed: {error_msg}")
 
         except APIError:
@@ -769,31 +771,16 @@ class OPNsenseClient:
     async def apply_firewall_changes(self: "OPNsenseClient") -> dict[str, Any]:
         """Apply firewall changes and create a rollback point."""
         try:
-            # A savepoint gives the apply something to roll back to, which is
-            # worth having where the endpoint exists. It does not exist in the
-            # 26.7 series, where /api/firewall/filter/savepoint is a 404, and
-            # treating that as fatal failed the apply after the rule change it
-            # was finishing had already been written. Rule operations then
-            # reported failure while having worked.
-            revision = None
-            try:
-                logger.debug("Creating firewall savepoint")
-                savepoint_resp = await self._make_request(
-                    "POST",
-                    "/api/firewall/filter/savepoint",
-                    call_class="apply",
-                )
-                revision = (savepoint_resp or {}).get("revision")
-            except (RequestError, ResponseError) as exc:
-                logger.debug("No savepoint available, applying without one: %s", exc)
-
-            endpoint = (
-                f"/api/firewall/filter/apply/{revision}"
-                if revision
-                else "/api/firewall/filter/apply"
+            # No savepoint. OPNsense pairs savepoint/apply-with-revision with a
+            # cancelRollback that confirms the result, and this client never
+            # called it: a rollback protocol was started and never finished.
+            # Half a protocol is wrong whichever way its semantics run, and the
+            # endpoints are absent from the 26.7 series anyway, so the path
+            # could not be exercised. A plain apply is what the firewall needs.
+            logger.debug("Applying firewall changes")
+            apply_resp = await self._make_request(
+                "POST", "/api/firewall/filter/apply", call_class="apply"
             )
-            logger.debug("Applying firewall changes via %s", endpoint)
-            apply_resp = await self._make_request("POST", endpoint, call_class="apply")
 
             # Handle different response formats for apply operation
             status = apply_resp.get("status", "").strip().lower()
@@ -809,37 +796,6 @@ class OPNsenseClient:
             raise RequestError(f"Failed to apply firewall changes: {e!s}") from e
         else:
             logger.info("Successfully applied firewall changes")
-            return {
-                "revision": revision,
-                "result": "success",
-            }
-
-    async def cancel_firewall_rollback(
-        self: "OPNsenseClient", revision: str
-    ) -> dict[str, Any]:
-        """Cancel a pending firewall rollback."""
-        try:
-            logger.debug(
-                f"Canceling firewall rollback for revision: {revision}",
-            )
-            response = await self._make_request(
-                "POST",
-                f"/api/firewall/filter/cancelRollback/{revision}",
-                call_class="apply",
-            )
-
-            if response.get("status") != "ok":
-                error_msg = response.get("message", "Unknown error")
-                self._raise_cancel_rollback_failed(error_msg)
-        except APIError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to cancel rollback")
-            raise RequestError(f"Failed to cancel rollback: {e!s}") from e
-        else:
-            logger.info(
-                f"Successfully canceled rollback for revision: {revision}",
-            )
             return {"result": "success"}
 
     async def search_arp_table(self: "OPNsenseClient", query: str) -> list[dict]:
