@@ -115,9 +115,9 @@ jobs:
             if [ -n "${REGISTRY_USER:-}" ] && [ -n "${REGISTRY_PASSWORD:-}" ]; then
               buildah login -u "${REGISTRY_USER}" -p "${REGISTRY_PASSWORD}" "${REGISTRY}"
             else
-              # Previously this fell through to an anonymous push, which fails
-              # against an authenticated registry with a less obvious error.
-              echo "note: REGISTRY_USER/REGISTRY_PASSWORD unset; pushing anonymously." >&2
+              # The normal path here: the registry accepts pushes from the
+              # local network, so credentials are only needed if that changes.
+              echo "Pushing without credentials (none configured)." >&2
             fi
             buildah push "${IMAGE}"
           else
