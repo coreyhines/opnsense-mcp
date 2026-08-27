@@ -13,7 +13,7 @@ resource: `arp`, `lldp`, `system`, `interface_list`, `pf_states` and the other
 diagnostics have no shared shape, so an `action` enum would group things that
 have nothing to do with each other.
 
-Result: 95 names become 30.
+Result: 103 names become 31.
 """
 
 from __future__ import annotations
@@ -48,6 +48,13 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "create_snapshot": "mk_snapshot",
         },
     ),
+    "fw_group": (
+        "Firewall interface groups, so one rule can cover several networks",
+        {
+            "list": "list_fw_groups",
+            "update": "set_fw_group",
+        },
+    ),
     "fw_rule": (
         "Manage firewall filter rules",
         {
@@ -68,11 +75,18 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
         },
     ),
     "dhcp_scope": (
-        "DHCP leases, ranges and per-subnet DNS",
+        "DHCP leases, ranges, options and per-subnet DNS",
         {
             "leases": "dhcp",
             "delete_lease": "dhcp_lease_delete",
+            "list_ranges": "list_dhcp_ranges",
+            "create_range": "mk_dhcp_range",
+            "update_range": "set_dhcp_range",
             "toggle_range": "toggle_dhcp_range",
+            "delete_range": "rm_dhcp_range",
+            "list_options": "list_dhcp_options",
+            "set_router": "set_dhcp_router_option",
+            "delete_option": "rm_dhcp_option",
             "list_dns": "list_dhcp_subnet_dns",
             "set_dns": "set_dhcp_subnet_dns",
         },

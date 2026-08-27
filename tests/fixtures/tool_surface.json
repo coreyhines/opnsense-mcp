@@ -700,6 +700,22 @@
       "type": "object"
     }
   },
+  "list_dhcp_options": {
+    "description": "List DHCP options, with their human-readable option names",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_dhcp_ranges": {
+    "description": "List DHCP ranges served by dnsmasq",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
   "list_dhcp_subnet_dns": {
     "description": "List DHCP-provided DNS servers for a subnet scope (dnsmasq or Kea backends)",
     "inputSchema": {
@@ -727,6 +743,14 @@
           "type": "string"
         }
       },
+      "type": "object"
+    }
+  },
+  "list_fw_groups": {
+    "description": "List firewall interface groups and their members",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
       "type": "object"
     }
   },
@@ -981,6 +1005,53 @@
       "required": [
         "hostname",
         "mac"
+      ],
+      "type": "object"
+    }
+  },
+  "mk_dhcp_range": {
+    "description": "Create a DHCP range on an interface",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure dnsmasq afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "domain": {
+          "optional": true,
+          "type": "string"
+        },
+        "end_addr": {
+          "description": "Last address",
+          "type": "string"
+        },
+        "interface": {
+          "description": "Interface key, e.g. opt3",
+          "type": "string"
+        },
+        "lease_time": {
+          "description": "Seconds, or a suffixed value like 2h",
+          "optional": true,
+          "type": "string"
+        },
+        "start_addr": {
+          "description": "First address",
+          "type": "string"
+        },
+        "subnet_mask": {
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "interface",
+        "start_addr",
+        "end_addr"
       ],
       "type": "object"
     }
@@ -1646,6 +1717,52 @@
       "type": "object"
     }
   },
+  "rm_dhcp_option": {
+    "description": "Delete a DHCP option; requires a confirm token",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Option uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "rm_dhcp_range": {
+    "description": "Delete a DHCP range; requires a confirm token",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Range uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
   "rm_nat_outbound": {
     "description": "Delete an outbound source NAT rule; requires a confirm token",
     "inputSchema": {
@@ -1813,6 +1930,83 @@
       "type": "object"
     }
   },
+  "set_dhcp_range": {
+    "description": "Update fields on an existing DHCP range",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "domain": {
+          "optional": true,
+          "type": "string"
+        },
+        "end_addr": {
+          "optional": true,
+          "type": "string"
+        },
+        "lease_time": {
+          "optional": true,
+          "type": "string"
+        },
+        "start_addr": {
+          "optional": true,
+          "type": "string"
+        },
+        "subnet_mask": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Range uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_dhcp_router_option": {
+    "description": "Set the default gateway (DHCP option 3) for an interface or tag, which is what a subnet behind a router needs",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "force": {
+          "description": "Send the option even when the client did not ask",
+          "optional": true,
+          "type": "boolean"
+        },
+        "interface": {
+          "description": "Interface key to scope the option to, e.g. opt3",
+          "optional": true,
+          "type": "string"
+        },
+        "router": {
+          "description": "Gateway address to advertise",
+          "type": "string"
+        },
+        "tag": {
+          "description": "Tag uuid to scope to instead of an interface",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "router"
+      ],
+      "type": "object"
+    }
+  },
   "set_dhcp_subnet_dns": {
     "description": "Update DHCP-provided DNS servers for one address family on a subnet scope (dnsmasq or Kea backends). Single address updates slot 1 unless slot=2.",
     "inputSchema": {
@@ -1864,6 +2058,38 @@
       },
       "required": [
         "family"
+      ],
+      "type": "object"
+    }
+  },
+  "set_fw_group": {
+    "description": "Replace the interface membership of a firewall group",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reload the group configuration (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "descr": {
+          "optional": true,
+          "type": "string"
+        },
+        "members": {
+          "description": "Interface keys the group should contain, e.g. ['opt3', 'opt4']. This replaces the membership rather than adding to it.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "uuid": {
+          "description": "Group uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "members"
       ],
       "type": "object"
     }
