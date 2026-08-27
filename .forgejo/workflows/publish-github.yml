@@ -29,10 +29,11 @@ jobs:
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
-      - name: Install git and node
+      - name: Install git, node and curl
         # actions/checkout is a Node-based action; these plain Python images
-        # have neither by default.
-        run: apk add --no-cache git nodejs
+        # have neither by default. curl fetches the runs listing, so the
+        # selector stays a pure function with no network access of its own.
+        run: apk add --no-cache git nodejs curl
 
       - uses: https://data.forgejo.org/actions/checkout@v6
         with:
@@ -77,11 +78,16 @@ jobs:
           git rev-list --reverse "${PUBLISHED}..HEAD" >candidates.txt
           echo "$(wc -l <candidates.txt) commits newer than the published one" >&2
 
+          # The repository is public, so this read needs no credential. Fetching
+          # here rather than in Python keeps a URL built from a variable away
+          # from urllib, which honours file:// and would read a local path.
+          curl -sSf "${FORGEJO_API}/repos/${GITHUB_REPO}/actions/runs?limit=100" \
+            -o runs.json
+
           set +e
           SHA="$(python3 scripts/select_publishable_commit.py \
             --candidates candidates.txt \
-            --api-base "${FORGEJO_API}" \
-            --repo "${GITHUB_REPO}" \
+            --runs runs.json \
             --published "${PUBLISHED}")"
           STATUS=$?
           set -e
