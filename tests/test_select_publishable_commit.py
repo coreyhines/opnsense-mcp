@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from select_publishable_commit import (  # noqa: E402
+    PUBLISHER_WORKFLOW,
     REQUIRED_WORKFLOWS,
     group_runs_by_commit,
     select_publishable,
@@ -116,3 +117,34 @@ def test_a_run_with_no_commit_is_dropped() -> None:
     grouped = group_runs_by_commit({"workflow_runs": [{"workflow_id": "ci.yml"}]})
 
     assert grouped == {}
+
+
+def test_the_publisher_does_not_gate_on_its_own_run() -> None:
+    """The publisher's run is recorded against the commit it is publishing.
+
+    Counting it meant the tip could never be published on the first attempt,
+    because that run is still in flight while the decision is being made. The
+    first real publish selected a commit three merges behind for exactly this
+    reason.
+    """
+    runs = {
+        NEW: _all_green() + [{"workflow_id": PUBLISHER_WORKFLOW, "status": "running"}]
+    }
+
+    assert select_publishable([NEW], runs) == NEW
+
+
+def test_a_failed_publish_does_not_poison_its_own_commit() -> None:
+    """Otherwise one network blip makes a commit permanently unpublishable."""
+    runs = {
+        NEW: _all_green() + [{"workflow_id": PUBLISHER_WORKFLOW, "status": "failure"}]
+    }
+
+    assert select_publishable([NEW], runs) == NEW
+
+
+def test_the_publisher_alone_is_still_not_enough() -> None:
+    """Ignoring it must not become ignoring whether the gates ran at all."""
+    runs = {NEW: [{"workflow_id": PUBLISHER_WORKFLOW, "status": "success"}]}
+
+    assert select_publishable([NEW], runs) is None

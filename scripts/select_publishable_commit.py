@@ -39,6 +39,13 @@ import sys
 # stale allowlist does.
 REQUIRED_WORKFLOWS = ("ci.yml", "security.yml")
 
+# This workflow's own run is recorded against the commit it is publishing, and
+# it is still in flight while this decision is being made. Counting it meant the
+# tip could never be published on the first attempt, and a publish that failed
+# for its own reasons, a network blip say, would make that commit permanently
+# unpublishable. A publish is not a gate.
+PUBLISHER_WORKFLOW = "publish-github.yml"
+
 SUCCESS = "success"
 
 NOTHING_PUBLISHABLE = 3
@@ -53,10 +60,15 @@ def select_publishable(
 
     `candidates` is in history order, oldest first. A SHA qualifies when every
     required workflow ran on it and every run recorded for it succeeded, so a
-    scanner added later counts from the moment it exists.
+    scanner added later counts from the moment it exists. The publisher's own
+    runs are ignored, for the reasons above.
     """
     for sha in reversed(candidates):
-        runs = runs_by_sha.get(sha) or []
+        runs = [
+            run
+            for run in (runs_by_sha.get(sha) or [])
+            if run.get("workflow_id") != PUBLISHER_WORKFLOW
+        ]
         if not runs:
             continue
         if any(run.get("status") != SUCCESS for run in runs):
