@@ -16,10 +16,10 @@ The mapping is deterministic and structure-preserving: two different real values
 never collapse onto one fictional value, subnet relationships survive, and
 address shapes stay valid, so tests that assert on the values keep working.
 
-`deploy/` and the top-level `README.md` are deliberately out of scope. The
-hostnames there are functional defaults rather than captured data: rewriting the
-registry host in `deploy/install.sh` would leave an installer pointing nowhere.
-Whether those should be parameterised instead is a separate decision.
+`deploy/` is in scope for addresses. Its hostnames were the functional part and
+have since been parameterised, so nothing there depends on a real value any
+more; the addresses that remained were prompt examples, overridable defaults
+and commented-out samples.
 
 Usage:
     python3 scripts/sanitize_site_identifiers.py --check   # report, change nothing
@@ -39,17 +39,27 @@ import sys
 # Directories holding captured data, prose, test values, or the example
 # addresses tool schemas show the model. `opnsense_mcp` is included because
 # those schema examples end up in the published tool surface.
-INCLUDE_ROOTS = ("tests", "docs", "examples", "opnsense_mcp", "scripts")
+INCLUDE_ROOTS = ("tests", "docs", "examples", "opnsense_mcp", "scripts", "deploy")
 
 SKIP_PARTS = frozenset(
     {".git", ".venv", "node_modules", "__pycache__", ".ruff_cache", ".pytest_cache"}
 )
 SKIP_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".pdf", ".ico", ".woff2"})
 
-# Tests that assert on values in the excluded `deploy/` tree. Rewriting them
-# leaves the test disagreeing with the code it covers, which is how this list
-# came to exist.
-SKIP_FILES = frozenset({"tests/test_deploy_lib.py"})
+# Files that must keep real-looking values to do their job. Rewriting one of
+# these does not just churn text, it inverts what the file asserts: the gate's
+# self-test ended up claiming documentation addresses were offenders. This is
+# the same trap as the script sanitising itself, one file further out.
+SKIP_FILES = frozenset(
+    {
+        # Asserts on values in deploy/lib.sh; rewriting it leaves the test
+        # disagreeing with the code it covers.
+        "tests/test_deploy_lib.py",
+        # Proves the site-identifier gate can tell a real address from a
+        # documentation one, so it has to contain both.
+        "tests/test_no_site_identifiers.py",
+    }
+)
 
 DEFAULT_RULES_PATH = ".site-identifiers.json"
 RULES_ENV_VAR = "SITE_IDENTIFIER_RULES"

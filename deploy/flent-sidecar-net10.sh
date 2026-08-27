@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run flent rrul from a disposable sidecar on net-10 (wired podman segment).
-# Traffic: sidecar -> gw 10.0.10.1 -> OPNsense WAN (fq_codel) -> internet netperf peer.
+# Traffic: sidecar -> gw 172.20.10.1 -> OPNsense WAN (fq_codel) -> internet netperf peer.
 #
 # Usage (on strongpod host):
 #   NETPERF_HOST=netperf-west.bufferbloat.net ./deploy/flent-sidecar-net10.sh baseline
@@ -11,8 +11,8 @@
 set -euo pipefail
 
 NET="${FLENT_NET:-net-10}"
-GW="${FLENT_GW:-10.0.10.1}"
-DNS="${FLENT_DNS:-10.0.2.2}"
+GW="${FLENT_GW:-172.20.10.1}"
+DNS="${FLENT_DNS:-172.20.2.2}"
 NETPERF_HOST="${NETPERF_HOST:-netperf-eu.bufferbloat.net}"
 LENGTH="${FLENT_LENGTH:-60}"
 RUNS="${FLENT_RUNS:-3}"

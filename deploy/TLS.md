@@ -23,7 +23,7 @@ Create a **DNS A** (or **AAAA**) record so clients resolve the MCP host to the p
 
 | Name | Type | Value |
 |------|------|--------|
-| **`mcp.example.com`** | A (or AAAA) | Pod / macvlan IP (e.g. `10.0.10.3`) |
+| **`mcp.example.com`** | A (or AAAA) | Pod / macvlan IP (e.g. `172.20.10.3`) |
 
 The default **`deploy/caddyfile.example`** uses that hostname in the site block. Your certificate must include **`mcp.example.com`** or a **wildcard** `*.example.com` that covers it.
 

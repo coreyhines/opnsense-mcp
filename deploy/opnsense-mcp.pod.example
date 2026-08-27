@@ -12,10 +12,10 @@ After=network-online.target
 PodName=opnsense-mcp-pod
 # Optional custom network / static addresses (strongpod-style):
 # Network=net-10
-# IP=10.0.10.50
-# IP6=2601:441:8400:b7e1::50
-# DNS=10.0.2.2
-# DNS=10.0.10.4
+# IP=172.20.10.50
+# IP6=2001:db8:5eed:b7e1::50
+# DNS=172.20.2.2
+# DNS=172.20.10.4
 # No PublishPort: with macvlan (or similar) the pod has its own IP; Caddy :443 and FastMCP :8765 bind on the pod network.
 
 [Service]

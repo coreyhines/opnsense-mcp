@@ -173,7 +173,7 @@ collect_quadlet_settings() {
       read -r -p "Pod static IP6= (empty to omit): " OPNSENSE_MCP_IP6 <"${tty_device}" || true
     fi
     if [[ -z "${OPNSENSE_MCP_DNS:-}" ]]; then
-      read -r -p "Pod DNS= (space-separated, empty to omit; e.g. 10.0.2.2 10.0.10.4): " OPNSENSE_MCP_DNS <"${tty_device}" || true
+      read -r -p "Pod DNS= (space-separated, empty to omit; e.g. 172.20.2.2 172.20.10.4): " OPNSENSE_MCP_DNS <"${tty_device}" || true
     fi
     if [[ -z "${OPNSENSE_MCP_TLS_CERTS:-}" ]]; then
       read -r -p "Host path to TLS PEMs (Caddy + optional MCP mount) [/opt/certs/wild]: " OPNSENSE_MCP_TLS_CERTS <"${tty_device}" || true

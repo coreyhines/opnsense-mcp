@@ -28,9 +28,11 @@ import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Captured data, prose, test values, and the example addresses tool schemas
-# show the model. Mirrors INCLUDE_ROOTS in the sanitiser.
-SCANNED_ROOTS = ("tests", "docs", "examples", "opnsense_mcp")
+# Mirrors INCLUDE_ROOTS in the sanitiser, and must keep mirroring it: `deploy`
+# was missing here, and that is where a sibling IPv6 prefix survived every pass
+# and reached the published copy. The sanitiser only removes what its rules
+# name; this check is what notices the rest.
+SCANNED_ROOTS = ("tests", "docs", "examples", "opnsense_mcp", "scripts", "deploy")
 
 SKIP_PARTS = frozenset({".git", ".venv", "__pycache__", ".ruff_cache", ".pytest_cache"})
 SKIP_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".pdf", ".ico", ".woff2"})
