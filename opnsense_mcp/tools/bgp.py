@@ -577,20 +577,45 @@ class SetBgpGlobalTool(_BgpToolBase):
             if router_id:
                 bgp_changes["routerid"] = router_id
 
+            # Both payloads are built before either is sent. These are two
+            # endpoints and cannot be one transaction, but a payload the model
+            # rejects should not first leave FRR enabled with the wrong AS,
+            # which is what happened when the BGP write 500'd on its own.
+            writes = []
             if general_changes:
-                await self.client._make_request(
-                    "POST",
-                    QUAGGA["set_general"],
-                    call_class="write",
-                    json={"general": merge_for_set(general, general_changes)},
+                writes.append(
+                    (
+                        QUAGGA["set_general"],
+                        {"general": merge_for_set(general, general_changes)},
+                    )
                 )
             if bgp_changes:
-                await self.client._make_request(
-                    "POST",
-                    QUAGGA["set_bgp"],
-                    call_class="write",
-                    json={"bgp": merge_for_set(bgp, bgp_changes)},
+                writes.append(
+                    (QUAGGA["set_bgp"], {"bgp": merge_for_set(bgp, bgp_changes)})
                 )
+
+            done: list[str] = []
+            for endpoint, payload in writes:
+                try:
+                    await self.client._make_request(
+                        "POST", endpoint, call_class="write", json=payload
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("BGP global write failed at %s", endpoint)
+                    return {
+                        "status": "error",
+                        "error": (
+                            f"write to {endpoint} failed: {exc}. "
+                            + (
+                                f"Already written: {', '.join(done)}. The "
+                                f"configuration is now inconsistent; re-run once "
+                                f"the cause is fixed."
+                                if done
+                                else "Nothing was changed."
+                            )
+                        ),
+                    }
+                done.append(endpoint)
             if params.get("apply", False):
                 await self._reconfigure()
         except Exception as exc:  # noqa: BLE001

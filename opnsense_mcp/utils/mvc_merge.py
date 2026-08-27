@@ -30,10 +30,26 @@ DISPLAY_PREFIX = "%"
 
 
 def is_enum_field(value: Any) -> bool:
-    """Return True when *value* is an MVC enum object, not a plain scalar."""
-    return isinstance(value, dict) and all(
-        isinstance(meta, dict) for meta in value.values()
-    )
+    """Return True when *value* is an MVC enum object.
+
+    Every option of a real enum carries a ``selected`` flag. Testing only for a
+    dict of dicts also matched a parent node's embedded child collections, such
+    as quagga/bgp's ``neighbors`` and ``routemaps``, which are separate
+    resources with their own endpoints. Posting one back rejects the whole
+    write with a 500.
+    """
+    if not isinstance(value, dict) or not value:
+        return False
+    return all(isinstance(meta, dict) and "selected" in meta for meta in value.values())
+
+
+def is_child_collection(value: Any) -> bool:
+    """Return True when *value* is an embedded child resource, not a field.
+
+    Anything dict-shaped that is not an enum: the node's own sub-resources,
+    which must be left out of a ``set*`` payload entirely.
+    """
+    return isinstance(value, dict) and not is_enum_field(value)
 
 
 def selected_keys(field: dict[str, Any]) -> str:
@@ -52,12 +68,16 @@ def selected_keys(field: dict[str, Any]) -> str:
 def flatten_mvc_node(node: dict[str, Any]) -> dict[str, str]:
     """Collapse a ``get*`` node into the flat form a ``set*`` POST expects.
 
-    Drops ``%``-prefixed display fields, collapses enum objects to their
-    selected key(s), and stringifies scalars.
+    Drops ``%``-prefixed display fields and embedded child collections,
+    collapses enum objects to their selected key(s), and stringifies scalars.
     """
     flat: dict[str, str] = {}
     for key, value in node.items():
         if key.startswith(DISPLAY_PREFIX):
+            continue
+        if is_child_collection(value):
+            # A sub-resource with its own endpoints. Sending it back rejects
+            # the write, so it is dropped rather than stringified.
             continue
         if is_enum_field(value):
             flat[key] = selected_keys(value)
