@@ -1861,6 +1861,48 @@
       "type": "object"
     }
   },
+  "rm_gateway": {
+    "description": "Delete a gateway; requires a confirm token",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Gateway uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "rm_loopback": {
+    "description": "Delete a loopback interface device; requires a confirm token",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Loopback device uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
   "rm_nat_outbound": {
     "description": "Delete an outbound source NAT rule; requires a confirm token",
     "inputSchema": {
@@ -2025,6 +2067,35 @@
       "required": [
         "uuid"
       ],
+      "type": "object"
+    }
+  },
+  "set_bgp_global": {
+    "description": "Enable or disable BGP and set the AS number and router id. Handles all three switches that gate a session, not one of them",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "description": "Reconfigure FRR, which restarts it and drops every established session (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "as_number": {
+          "description": "Local AS number. Required the first time BGP is enabled",
+          "optional": true,
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Turn BGP on or off: FRR itself, the bgp daemon, and the BGP section together",
+          "optional": true,
+          "type": "boolean"
+        },
+        "router_id": {
+          "description": "Router id, conventionally a loopback address",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
       "type": "object"
     }
   },

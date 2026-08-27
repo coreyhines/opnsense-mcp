@@ -613,3 +613,62 @@ class MkLoopbackTool(_V6ToolBase):
                 "address it, which has no API on this firmware and stays a UI step."
             ),
         }
+
+
+class RmLoopbackTool(_V6ToolBase):
+    """Delete a loopback device."""
+
+    name = "rm_loopback"
+    description = "Delete a loopback interface device; requires a confirm token"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "uuid": {"type": "string", "description": "Loopback device uuid"},
+            "confirm": {"type": "string", "optional": True},
+        },
+        "required": ["uuid"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Delete once confirmed.
+
+        Exists because mk_loopback did not have one, which left deleting a
+        device as a hand-written request against a uuid read some time earlier.
+        A device that is still assigned to an interface cannot be removed, and
+        the API says so rather than cascading.
+        """
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        uuid = (params.get("uuid") or "").strip()
+        if not uuid:
+            return {"status": "error", "error": "uuid is required"}
+
+        if not validate_delete_confirm_token(
+            "loopback", uuid, str(params.get("confirm") or "")
+        ):
+            token = issue_delete_confirm_token("loopback", uuid)
+            return {
+                "status": "confirmation_required",
+                "uuid": uuid,
+                "confirm_token": token["token"],
+                "message": token["message"],
+            }
+
+        try:
+            result = await self.client._make_request(
+                "POST", f"{LOOPBACK['delete']}/{uuid}", call_class="write", json={}
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to delete loopback device")
+            return {"status": "error", "error": str(exc)}
+
+        if isinstance(result, dict) and result.get("result") == "not found":
+            return {
+                "status": "error",
+                "error": (
+                    f"no loopback device with uuid {uuid}. It may already be gone, "
+                    f"or the uuid came from an older listing."
+                ),
+            }
+        return {"status": "success", "uuid": uuid, "deleted": True}

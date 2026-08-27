@@ -682,3 +682,62 @@ class RmRouteTool(_RoutingToolBase):
             return {"status": "error", "error": str(exc)}
 
         return {"status": "success", "uuid": uuid, "deleted": True}
+
+
+class RmGatewayTool(_RoutingToolBase):
+    """Delete a gateway."""
+
+    name = "rm_gateway"
+    description = "Delete a gateway; requires a confirm token"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "uuid": {"type": "string", "description": "Gateway uuid"},
+            "confirm": {"type": "string", "optional": True},
+            "apply": {"type": "boolean", "optional": True},
+        },
+        "required": ["uuid"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Delete once confirmed.
+
+        A gateway can be the default route, and every static route pointing at
+        it goes with it, so the blast radius is larger than the object.
+        """
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        uuid = (params.get("uuid") or "").strip()
+        if not uuid:
+            return {"status": "error", "error": "uuid is required"}
+
+        if not validate_delete_confirm_token(
+            "gateway", uuid, str(params.get("confirm") or "")
+        ):
+            token = issue_delete_confirm_token("gateway", uuid)
+            return {
+                "status": "confirmation_required",
+                "uuid": uuid,
+                "confirm_token": token["token"],
+                "message": token["message"],
+            }
+
+        try:
+            result = await self.client._make_request(
+                "POST", f"{GATEWAY['delete']}/{uuid}", call_class="write", json={}
+            )
+            if params.get("apply", False):
+                await self.client._make_request(
+                    "POST", GATEWAY["reconfigure"], call_class="apply"
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to delete gateway")
+            return {"status": "error", "error": str(exc)}
+
+        if isinstance(result, dict) and result.get("result") == "not found":
+            return {
+                "status": "error",
+                "error": f"no gateway with uuid {uuid}; it may already be gone.",
+            }
+        return {"status": "success", "uuid": uuid, "deleted": True}

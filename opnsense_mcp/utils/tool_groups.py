@@ -54,6 +54,7 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
         "empty result usually means it has not been turned on yet",
         {
             "status": "bgp_status",
+            "configure": "set_bgp_global",
             "list_neighbors": "list_bgp_neighbors",
             "create_neighbor": "mk_bgp_neighbor",
             "toggle_neighbor": "toggle_bgp_neighbor",
@@ -141,6 +142,7 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "delete_vlan": "rm_vlan",
             "list_loopback": "list_loopback",
             "create_loopback": "mk_loopback",
+            "delete_loopback": "rm_loopback",
         },
     ),
     "nat_outbound": (
@@ -164,6 +166,7 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "list_gateways": "list_gateways",
             "create_gateway": "mk_gateway",
             "toggle_gateway": "toggle_gateway",
+            "delete_gateway": "rm_gateway",
             "gateway_status": "gateway_status",
         },
     ),

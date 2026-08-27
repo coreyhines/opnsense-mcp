@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.mvc_merge import merge_for_set
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
     validate_delete_confirm_token,
@@ -32,7 +33,9 @@ logger = logging.getLogger(__name__)
 
 QUAGGA = {
     "general": "/api/quagga/general/get",
+    "set_general": "/api/quagga/general/set",
     "bgp": "/api/quagga/bgp/get",
+    "set_bgp": "/api/quagga/bgp/set",
     "search_neighbor": "/api/quagga/bgp/searchNeighbor",
     "get_neighbor": "/api/quagga/bgp/getNeighbor",
     "add_neighbor": "/api/quagga/bgp/addNeighbor",
@@ -45,6 +48,10 @@ QUAGGA = {
 }
 
 AS_MODES = ("internal", "external")
+
+# What OPNsense ships in the BGP section. It is above the 2-byte private range
+# (64512-65534), so inheriting it is a sign nobody chose an AS number.
+DEFAULT_AS = "65551"
 
 # Everything except the password, which the model stores in clear.
 _NEIGHBOR_FIELDS = (
@@ -443,3 +450,162 @@ class RmBgpNeighborTool(_BgpToolBase):
             logger.exception("Failed to delete BGP neighbour")
             return {"status": "error", "error": str(exc)}
         return {"status": "success", "uuid": uuid, "deleted": True}
+
+
+class SetBgpGlobalTool(_BgpToolBase):
+    """Enable BGP, and set the AS number and router id."""
+
+    name = "set_bgp_global"
+    description = (
+        "Enable or disable BGP and set the AS number and router id. Handles all "
+        "three switches that gate a session, not one of them"
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "enabled": {
+                "type": "boolean",
+                "description": (
+                    "Turn BGP on or off: FRR itself, the bgp daemon, and the BGP "
+                    "section together"
+                ),
+                "optional": True,
+            },
+            "as_number": {
+                "type": "string",
+                "description": "Local AS number. Required the first time BGP is enabled",
+                "optional": True,
+            },
+            "router_id": {
+                "type": "string",
+                "description": "Router id, conventionally a loopback address",
+                "optional": True,
+            },
+            "apply": {
+                "type": "boolean",
+                "description": (
+                    "Reconfigure FRR, which restarts it and drops every "
+                    "established session (default false)"
+                ),
+                "optional": True,
+            },
+        },
+        "required": [],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Write the global switches, reading and merging both nodes first.
+
+        BGP needs three separate things on: FRR, the `bgp` daemon in the daemon
+        list, and the BGP section. Setting one of them is the most common way to
+        end up with a configuration that looks enabled and peers with nobody, so
+        `enabled` moves all three together.
+
+        `daemons` is a multi-select, and writing it replaces the whole list, so
+        the other daemons are read and carried through rather than dropped.
+        """
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+
+        enabled = params.get("enabled")
+        as_number = str(params.get("as_number") or "").strip()
+        router_id = str(params.get("router_id") or "").strip()
+
+        if enabled is None and not as_number and not router_id:
+            return {
+                "status": "error",
+                "error": "nothing to change; pass enabled, as_number or router_id",
+            }
+
+        try:
+            general_doc = await self.client._make_request("GET", QUAGGA["general"])
+            bgp_doc = await self.client._make_request("GET", QUAGGA["bgp"])
+            general = (
+                general_doc.get("general", {}) if isinstance(general_doc, dict) else {}
+            )
+            bgp = bgp_doc.get("bgp", {}) if isinstance(bgp_doc, dict) else {}
+
+            # The AS number appears in every OPEN message, so changing it makes
+            # each peer renegotiate from scratch.
+            if as_number and as_number != str(bgp.get("asnumber", "")):
+                try:
+                    summary = await self.client._make_request("GET", QUAGGA["summary"])
+                except Exception:  # noqa: BLE001
+                    summary = {}
+                sessions = (
+                    summary.get("response", []) if isinstance(summary, dict) else []
+                )
+                if any("establish" in str(s).lower() for s in sessions):
+                    return {
+                        "status": "error",
+                        "error": (
+                            "refusing to change the AS number while sessions are "
+                            "Established: it is carried in every OPEN message, so "
+                            "every peer would reset. Disable BGP first if that is "
+                            "intended."
+                        ),
+                    }
+
+            effective_as = as_number or str(bgp.get("asnumber", ""))
+            if enabled and not effective_as:
+                return {
+                    "status": "error",
+                    "error": "as_number is required to enable BGP",
+                }
+            if enabled and not as_number and effective_as == DEFAULT_AS:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"as_number is required: the configured value {DEFAULT_AS} is "
+                        f"the shipped default and sits outside the 2-byte private "
+                        f"range, so it is almost certainly not intended."
+                    ),
+                }
+
+            daemons = set(_selected(general.get("daemons")))
+            general_changes: dict[str, Any] = {}
+            bgp_changes: dict[str, Any] = {}
+
+            if enabled is not None:
+                daemons = daemons | {"bgp"} if enabled else daemons - {"bgp"}
+                general_changes["enabled"] = "1" if enabled else "0"
+                general_changes["daemons"] = ",".join(sorted(daemons))
+                bgp_changes["enabled"] = "1" if enabled else "0"
+            if as_number:
+                bgp_changes["asnumber"] = as_number
+            if router_id:
+                bgp_changes["routerid"] = router_id
+
+            if general_changes:
+                await self.client._make_request(
+                    "POST",
+                    QUAGGA["set_general"],
+                    call_class="write",
+                    json={"general": merge_for_set(general, general_changes)},
+                )
+            if bgp_changes:
+                await self.client._make_request(
+                    "POST",
+                    QUAGGA["set_bgp"],
+                    call_class="write",
+                    json={"bgp": merge_for_set(bgp, bgp_changes)},
+                )
+            if params.get("apply", False):
+                await self._reconfigure()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to set BGP globals")
+            return {"status": "error", "error": str(exc)}
+
+        return {
+            "status": "success",
+            "enabled": enabled,
+            "as_number": effective_as,
+            "router_id": router_id or bgp.get("routerid", ""),
+            "daemons": sorted(daemons),
+            "note": (
+                "Staged. Reconfigure FRR to act on it."
+                if not params.get("apply")
+                else "Applied; FRR was restarted."
+            ),
+        }
