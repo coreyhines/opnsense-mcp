@@ -109,7 +109,6 @@ from opnsense_mcp.tools.routing_stack import (
     ToggleRouteTool,
 )
 from opnsense_mcp.tools.set_fw_rule import SetFwRuleTool
-from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.toggle_dhcp_range import ToggleDhcpRangeTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
@@ -212,7 +211,6 @@ TOOL_CLASSES: tuple[type, ...] = (
     SetFwGroupTool,
     SetHostOverrideTool,
     SetRouterAdvertTool,
-    SSHFirewallRuleTool,
     SystemTool,
     ToggleAliasTool,
     ToggleBgpNeighborTool,

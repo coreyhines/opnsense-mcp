@@ -199,25 +199,6 @@ rmfw_rule rule_uuid="12345678-1234-1234-1234-123456789abc"
 
 ---
 
-### `ssh_fw_rule` - SSH-Based Firewall Rule Creation
-**Purpose**: Creates firewall rules via SSH, bypassing API limitations.
-
-**Use Case**: When the standard API fails, emergency rule creation, advanced configurations.
-
-**Parameters**: Same as `mkfw_rule` but executed via SSH
-
-**Quick Example**:
-```bash
-# Create rule via SSH when API fails
-ssh_fw_rule description="Emergency block" action="block" source_net="192.168.1.100"
-```
-
-**What it returns**: Success/failure status of SSH-based rule creation.
-
----
-
-## Network Analysis
-
 ### `get_logs` - Firewall Log Analysis
 **Purpose**: Retrieves and filters firewall logs to analyze network traffic and security events.
 

@@ -769,28 +769,31 @@ class OPNsenseClient:
     async def apply_firewall_changes(self: "OPNsenseClient") -> dict[str, Any]:
         """Apply firewall changes and create a rollback point."""
         try:
-            # Create a savepoint first
-            logger.debug("Creating firewall savepoint")
-            savepoint_resp = await self._make_request(
-                "POST",
-                "/api/firewall/filter/savepoint",
-                call_class="apply",
-            )
+            # A savepoint gives the apply something to roll back to, which is
+            # worth having where the endpoint exists. It does not exist in the
+            # 26.7 series, where /api/firewall/filter/savepoint is a 404, and
+            # treating that as fatal failed the apply after the rule change it
+            # was finishing had already been written. Rule operations then
+            # reported failure while having worked.
+            revision = None
+            try:
+                logger.debug("Creating firewall savepoint")
+                savepoint_resp = await self._make_request(
+                    "POST",
+                    "/api/firewall/filter/savepoint",
+                    call_class="apply",
+                )
+                revision = (savepoint_resp or {}).get("revision")
+            except (RequestError, ResponseError) as exc:
+                logger.debug("No savepoint available, applying without one: %s", exc)
 
-            if "revision" not in savepoint_resp:
-                self._raise_savepoint_failed()
-
-            revision = savepoint_resp["revision"]
-
-            # Apply the changes
-            logger.debug(
-                f"Applying firewall changes with revision: {revision}",
+            endpoint = (
+                f"/api/firewall/filter/apply/{revision}"
+                if revision
+                else "/api/firewall/filter/apply"
             )
-            apply_resp = await self._make_request(
-                "POST",
-                f"/api/firewall/filter/apply/{revision}",
-                call_class="apply",
-            )
+            logger.debug("Applying firewall changes via %s", endpoint)
+            apply_resp = await self._make_request("POST", endpoint, call_class="apply")
 
             # Handle different response formats for apply operation
             status = apply_resp.get("status", "").strip().lower()

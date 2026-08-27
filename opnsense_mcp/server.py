@@ -140,7 +140,6 @@ from opnsense_mcp.tools.shaper_rules import (
 from opnsense_mcp.tools.shaper_service import ApplyShaperTool, ShaperStatisticsTool
 from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
-from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.toggle_dhcp_range import ToggleDhcpRangeTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool

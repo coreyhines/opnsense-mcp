@@ -83,7 +83,6 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "delete": "rmfw_rule",
             "list_groups": "list_fw_groups",
             "set_group": "set_fw_group",
-            "ssh_fallback": "ssh_fw_rule",
         },
     ),
     "dhcp": (

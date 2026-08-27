@@ -2596,64 +2596,6 @@
       "type": "object"
     }
   },
-  "ssh_fw_rule": {
-    "description": "Create firewall rules via SSH (bypasses API issues)",
-    "inputSchema": {
-      "properties": {
-        "action": {
-          "default": "block",
-          "type": "string"
-        },
-        "apply": {
-          "default": true,
-          "type": "boolean"
-        },
-        "description": {
-          "type": "string"
-        },
-        "destination_net": {
-          "default": "any",
-          "type": "string"
-        },
-        "destination_port": {
-          "default": "any",
-          "type": "string"
-        },
-        "direction": {
-          "default": "in",
-          "type": "string"
-        },
-        "enabled": {
-          "default": true,
-          "type": "boolean"
-        },
-        "interface": {
-          "default": "lan",
-          "type": "string"
-        },
-        "ipprotocol": {
-          "default": "inet",
-          "type": "string"
-        },
-        "protocol": {
-          "default": "any",
-          "type": "string"
-        },
-        "source_net": {
-          "default": "any",
-          "type": "string"
-        },
-        "source_port": {
-          "default": "any",
-          "type": "string"
-        }
-      },
-      "required": [
-        "description"
-      ],
-      "type": "object"
-    }
-  },
   "system": {
     "description": "Show system status information",
     "inputSchema": {

@@ -13,7 +13,6 @@ from opnsense_mcp.tools.get_logs import GetLogsTool
 from opnsense_mcp.tools.mkdns import MkdnsTool
 from opnsense_mcp.tools.rmdns import RmdnsTool
 from opnsense_mcp.tools.set_fw_rule import SetFwRuleTool
-from opnsense_mcp.tools.ssh_fw_rule import SSHFirewallRuleTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
 
 
@@ -174,13 +173,3 @@ async def test_get_logs_tool_success_and_client_exception() -> None:
     assert error_result["status"] == "error"
     assert error_result["logs"] == []
     assert "boom" in error_result["error"]
-
-
-@pytest.mark.asyncio
-async def test_ssh_fw_rule_execute_returns_result() -> None:
-    tool = SSHFirewallRuleTool(None)
-    tool._create_rule_via_ssh = AsyncMock(  # type: ignore[method-assign]
-        return_value={"status": "success", "message": "ok"}
-    )
-    result = await tool.execute({"description": "test rule"})
-    assert result["status"] == "success"
