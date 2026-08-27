@@ -1,0 +1,117 @@
+name: Publish to GitHub
+
+# Publishes main to the public GitHub copy, but only as far as the newest commit
+# that passed every gate. GitHub therefore lags whenever main is red, which is
+# the point: a push mirror would replicate a failing commit without knowing it
+# had failed.
+#
+# Dispatch-only for now. Enable the schedule below once a manual run has done
+# the right thing, because a publisher that pushes the wrong ref on a timer is
+# worse than no publisher.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Resolve the commit and stop without pushing"
+        required: false
+        default: "true"
+  # schedule:
+  #   - cron: "0 7 * * *"
+
+env:
+  GITHUB_REPO: coreyhines/opnsense-mcp
+  FORGEJO_API: https://forgejo.freeblizz.com/api/v1
+
+jobs:
+  publish:
+    runs-on: ansible-net10
+    container:
+      image: docker.io/library/python:3.12-alpine
+    steps:
+      - name: Install git and node
+        # actions/checkout is a Node-based action; these plain Python images
+        # have neither by default.
+        run: apk add --no-cache git nodejs
+
+      - uses: https://data.forgejo.org/actions/checkout@v6
+        with:
+          # The publisher compares against a commit that may be far back, so a
+          # shallow clone would make every candidate look unreachable.
+          fetch-depth: 0
+
+      - name: Resolve what is already published
+        id: published
+        env:
+          TOKEN: ${{ secrets.OPNSENSE_MCP_MIRROR }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
+            echo "error: OPNSENSE_MCP_MIRROR is not set." >&2
+            echo "  Add a fine-grained GitHub PAT scoped to ${GITHUB_REPO}" >&2
+            echo "  with contents:write, under Settings -> Actions -> Secrets." >&2
+            exit 1
+          fi
+          # Kept in a variable rather than a remote so the token is never
+          # written into .git/config in the workspace.
+          REMOTE="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPO}.git"
+          HEAD_SHA="$(git ls-remote "${REMOTE}" refs/heads/main | cut -f1)"
+          if [ -z "${HEAD_SHA}" ]; then
+            echo "error: could not read refs/heads/main on GitHub." >&2
+            exit 1
+          fi
+          echo "published=${HEAD_SHA}" >>"$GITHUB_OUTPUT"
+          echo "GitHub main is at ${HEAD_SHA}" >&2
+
+      - name: Choose the newest commit that passed every gate
+        id: choose
+        run: |
+          set -euo pipefail
+          PUBLISHED="${{ steps.published.outputs.published }}"
+          if ! git cat-file -e "${PUBLISHED}^{commit}" 2>/dev/null; then
+            echo "error: ${PUBLISHED} is not in this history." >&2
+            echo "  The two repositories have diverged; resolve by hand rather" >&2
+            echo "  than letting this job force anything." >&2
+            exit 1
+          fi
+          git rev-list --reverse "${PUBLISHED}..HEAD" >candidates.txt
+          echo "$(wc -l <candidates.txt) commits newer than the published one" >&2
+
+          set +e
+          SHA="$(python3 scripts/select_publishable_commit.py \
+            --candidates candidates.txt \
+            --api-base "${FORGEJO_API}" \
+            --repo "${GITHUB_REPO}" \
+            --published "${PUBLISHED}")"
+          STATUS=$?
+          set -e
+          # 3 means nothing qualified, which is a normal outcome rather than a
+          # broken job: main is red, or still running, or already published.
+          if [ "${STATUS}" -eq 3 ]; then
+            echo "Nothing to publish." >&2
+            echo "sha=" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "${STATUS}" -eq 0 ] || exit "${STATUS}"
+          echo "sha=${SHA}" >>"$GITHUB_OUTPUT"
+          echo "Selected ${SHA}" >&2
+          git --no-pager log -1 --format='  %h %s' "${SHA}" >&2
+
+      - name: Push
+        if: steps.choose.outputs.sha != ''
+        env:
+          TOKEN: ${{ secrets.OPNSENSE_MCP_MIRROR }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          SHA="${{ steps.choose.outputs.sha }}"
+          REMOTE="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPO}.git"
+          # No --force, ever. A rejected push means the histories diverged, and
+          # that is a thing to look at rather than overwrite.
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "Dry run. Would push ${SHA} to ${GITHUB_REPO} main:" >&2
+            git push --dry-run "${REMOTE}" "${SHA}:refs/heads/main"
+          else
+            git push "${REMOTE}" "${SHA}:refs/heads/main"
+            echo "Published ${SHA} to ${GITHUB_REPO}." >&2
+          fi
