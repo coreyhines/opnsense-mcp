@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.api import OPNsenseClient, ResponseError
 
 
 def _client() -> OPNsenseClient:
@@ -119,8 +119,9 @@ def test_toggle_still_fails_when_the_api_says_it_failed() -> None:
 
 
 def test_toggle_fails_on_a_response_that_is_not_a_mapping() -> None:
+    """A string reply is not a widened success case."""
     client = _client()
     _stub(client, {"toggleRule": "not json"})
 
-    with pytest.raises(Exception):
+    with pytest.raises(ResponseError, match="Toggle failed"):
         asyncio.run(client.toggle_firewall_rule("uuid-1", enabled=True))
