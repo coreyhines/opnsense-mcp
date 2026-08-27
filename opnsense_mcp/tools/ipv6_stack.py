@@ -605,12 +605,22 @@ class MkLoopbackTool(_V6ToolBase):
             logger.exception("Failed to create loopback")
             return {"status": "error", "error": str(exc)}
 
+        applied = bool(params.get("apply", False))
         return {
             "status": "success",
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
+            "applied": applied,
             "note": (
-                "Device created. You still need to assign it to an interface and "
-                "address it, which has no API on this firmware and stays a UI step."
+                "Device created and instantiated. Assigning it is possible with "
+                "the page-interfaces-assignnetworkports privilege; addressing it "
+                "is not, since the assignment model has no address field and "
+                "accepts one silently. Use a virtual IP on an assigned interface "
+                "instead."
+                if applied
+                else "Device created but not instantiated: it does not exist on "
+                "the system and will not appear as assignable until the loopback "
+                "configuration is reconfigured. Re-run with apply=true, or expect "
+                'an assignment to fail with "Option [] not in list".'
             ),
         }
 
@@ -624,7 +634,16 @@ class RmLoopbackTool(_V6ToolBase):
         "type": "object",
         "properties": {
             "uuid": {"type": "string", "description": "Loopback device uuid"},
+            "device": {
+                "type": "string",
+                "description": (
+                    "Device name, e.g. lo1. Given, the tool refuses to delete a "
+                    "device an interface is still assigned to"
+                ),
+                "optional": True,
+            },
             "confirm": {"type": "string", "optional": True},
+            "apply": {"type": "boolean", "optional": True},
         },
         "required": ["uuid"],
     }
@@ -655,10 +674,39 @@ class RmLoopbackTool(_V6ToolBase):
                 "message": token["message"],
             }
 
+        device = (params.get("device") or "").strip()
         try:
+            if device:
+                # Deleting the device out from under an assignment leaves the
+                # assignment pointing at nothing, and the assignment can then
+                # only be removed by unlocking it first. Refuse instead.
+                assigned = await self.client._make_request(
+                    "POST",
+                    "/api/interfaces/assignment/search_item",
+                    json={"current": 1, "rowCount": 500},
+                )
+                rows = assigned.get("rows", []) if isinstance(assigned, dict) else []
+                holders = [r.get("uuid", "") for r in rows if r.get("if") == device]
+                if holders:
+                    return {
+                        "status": "error",
+                        "error": (
+                            f"{device} is still assigned to {', '.join(holders)}. "
+                            f"Deleting it would leave that assignment pointing at "
+                            f"nothing. Unassign first: the interface is locked, so "
+                            f"clear its lock before removing it."
+                        ),
+                    }
+
             result = await self.client._make_request(
                 "POST", f"{LOOPBACK['delete']}/{uuid}", call_class="write", json={}
             )
+            if params.get("apply", False):
+                await self.client._make_request(
+                    "POST",
+                    "/api/interfaces/loopback_settings/reconfigure",
+                    call_class="apply",
+                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete loopback device")
             return {"status": "error", "error": str(exc)}

@@ -1888,7 +1888,16 @@
     "description": "Delete a loopback interface device; requires a confirm token",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
         "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "device": {
+          "description": "Device name, e.g. lo1. Given, the tool refuses to delete a device an interface is still assigned to",
           "optional": true,
           "type": "string"
         },

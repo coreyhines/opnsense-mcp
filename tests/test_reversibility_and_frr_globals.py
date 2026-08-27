@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from opnsense_mcp.tools.bgp import SetBgpGlobalTool
-from opnsense_mcp.tools.ipv6_stack import RmLoopbackTool
+from opnsense_mcp.tools.ipv6_stack import MkLoopbackTool, RmLoopbackTool
 from opnsense_mcp.tools.routing_stack import RmGatewayTool
 from opnsense_mcp.utils.api import OPNsenseClient
 
@@ -253,3 +253,78 @@ async def test_globals_do_not_apply_by_default() -> None:
     await SetBgpGlobalTool(client).execute({"enabled": True, "as_number": "65001"})
 
     assert not [c for c in calls if "reconfigure" in c["endpoint"]]
+
+
+# --- loopback lifecycle ----------------------------------------------------
+
+
+ASSIGNED_ROWS = {
+    "rows": [
+        {"uuid": "opt12", "descr": "probe_lo", "if": "lo1", "lock": "1"},
+        {"uuid": "wan", "descr": "WAN", "if": "ax1", "lock": "1"},
+    ]
+}
+
+
+@pytest.mark.asyncio
+async def test_creating_a_loopback_says_it_is_inert_until_reconfigured() -> None:
+    """A created device does not exist on the system, or in the assignable list.
+
+    Until loopback_settings/reconfigure runs, assigning it fails with
+    "Option [] not in list", which reads as though the device were never made.
+    """
+    client = _client()
+    _stub(client, {})
+
+    result = await MkLoopbackTool(client).execute({"description": "test"})
+
+    assert result["status"] == "success"
+    assert "reconfigure" in result["note"].lower() or "apply" in result["note"].lower()
+
+
+@pytest.mark.asyncio
+async def test_creating_with_apply_instantiates_it() -> None:
+    client = _client()
+    calls = _stub(client, {})
+
+    await MkLoopbackTool(client).execute({"description": "test", "apply": True})
+
+    assert [c for c in calls if "loopback_settings/reconfigure" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_deleting_an_assigned_loopback_is_refused_with_the_reason() -> None:
+    """The API's own error is "Interface locked, unset lock first before removal".
+
+    Deleting the device while an interface still points at it leaves an
+    assignment referring to nothing, which is what happened on the live box.
+    """
+    client = _client()
+    calls = _stub(client, {"assignment/search_item": ASSIGNED_ROWS})
+
+    challenge = await RmLoopbackTool(client).execute(
+        {"uuid": "lo-uuid", "device": "lo1"}
+    )
+    result = await RmLoopbackTool(client).execute(
+        {"uuid": "lo-uuid", "device": "lo1", "confirm": challenge["confirm_token"]}
+    )
+
+    assert result["status"] == "error"
+    assert "opt12" in result["error"]
+    assert not [c for c in calls if "loopback_settings/del_item" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_deleting_an_unassigned_loopback_proceeds() -> None:
+    client = _client()
+    calls = _stub(client, {"assignment/search_item": {"rows": []}})
+
+    challenge = await RmLoopbackTool(client).execute(
+        {"uuid": "lo-uuid", "device": "lo9"}
+    )
+    result = await RmLoopbackTool(client).execute(
+        {"uuid": "lo-uuid", "device": "lo9", "confirm": challenge["confirm_token"]}
+    )
+
+    assert result["deleted"] is True
+    assert [c for c in calls if "loopback_settings/del_item" in c["endpoint"]]
