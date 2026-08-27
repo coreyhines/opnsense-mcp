@@ -590,10 +590,15 @@ class MkLoopbackTool(_V6ToolBase):
     }
 
     async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Create the device only.
+        """Create the device, and optionally instantiate it.
 
-        Assigning it to an interface slot and giving it an address stay manual:
-        per-interface addressing has no MVC API on this firmware.
+        Assigning it is possible over the API given the
+        page-interfaces-assignnetworkports privilege. Addressing it is not, in
+        the 26.7 series: the NetworkInterface model defines only descr,
+        identifier, icon, optgroup, if and lock, and the controller exposes
+        whatever the model defines, so an address is accepted and dropped. Those
+        fields are present in master, so this is a version gap rather than a
+        permanent absence.
         """
         params = params or {}
         if not self.client:
@@ -655,9 +660,13 @@ class MkLoopbackTool(_V6ToolBase):
             # nothing. Handing the values back is the honest alternative.
             out["manual_step"] = {
                 "why": (
-                    "OPNsense has no API for per-interface addressing on this "
-                    "firmware, and the assignment model discards an address "
-                    "field silently."
+                    "Per-interface addressing has no API in the 26.7 series. "
+                    "NetworkInterface.xml there defines six fields (descr, "
+                    "identifier, icon, optgroup, if, lock) and the assignment "
+                    "controller exposes whatever the model defines, so an "
+                    "address posted to it is accepted and discarded. The fields "
+                    "exist in master, so a later release should make this "
+                    "possible; re-check the model before assuming it still is not."
                 ),
                 "where": "Interfaces -> Assignments, then the new interface",
                 "address": address,
