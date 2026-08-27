@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from opnsense_mcp.utils.mvc_merge import merge_for_set
 
+
 def test_child_collections_are_not_written_back() -> None:
     """A parent node embeds its children; posting them back is a 500.
 
