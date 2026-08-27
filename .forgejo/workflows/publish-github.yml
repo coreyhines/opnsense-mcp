@@ -21,11 +21,15 @@ on:
 
 env:
   GITHUB_REPO: coreyhines/opnsense-mcp
-  FORGEJO_API: https://forgejo.freeblizz.com/api/v1
+  # This file is published, so the Forgejo host comes from a repository
+  # variable rather than being written here. Set OPNSENSE_MCP_FORGEJO to the
+  # API base, e.g. https://forge.example/api/v1.
+  FORGEJO_API: ${{ vars.OPNSENSE_MCP_FORGEJO }}
 
 jobs:
   publish:
-    runs-on: ansible-net10
+    # The runner label names an internal network, and this file is published.
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
@@ -75,6 +79,13 @@ jobs:
             echo "  than letting this job force anything." >&2
             exit 1
           fi
+          if [ -z "${FORGEJO_API:-}" ]; then
+            echo "error: the OPNSENSE_MCP_FORGEJO repository variable is not set." >&2
+            echo "  It holds this Forgejo instance's API base, which is kept out" >&2
+            echo "  of this file because the file is published." >&2
+            exit 1
+          fi
+
           git rev-list --reverse "${PUBLISHED}..HEAD" >candidates.txt
           echo "$(wc -l <candidates.txt) commits newer than the published one" >&2
 

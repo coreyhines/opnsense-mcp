@@ -14,7 +14,7 @@ jobs:
       image: docker.io/library/alpine:3.22.0
     environment:
       name: strongpod
-      url: https://opnsense-mcp.freeblizz.com/mcp
+      url: ${{ vars.OPNSENSE_MCP_SERVICE_URL }}
     steps:
       - name: Install git, node, and ssh client
         # actions/checkout is a Node-based action; this plain alpine image

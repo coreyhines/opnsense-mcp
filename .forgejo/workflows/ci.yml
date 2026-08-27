@@ -91,7 +91,7 @@ jobs:
         id: build
         env:
           # Optional. Set the repo variable OPNSENSE_MCP_REGISTRY (e.g.
-          # hub.freeblizz.com) to push a built image; leave unset to build
+          # registry.example) to push a built image; leave unset to build
           # locally only (no push).
           REGISTRY: ${{ vars.OPNSENSE_MCP_REGISTRY }}
           HUB_FREEBLIZZ_USER: ${{ secrets.HUB_FREEBLIZZ_USER }}
