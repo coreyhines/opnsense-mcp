@@ -223,6 +223,41 @@ class ResponseError(APIError):
     """Raised when response parsing fails."""
 
 
+def _http_error_detail(error: requests.exceptions.HTTPError) -> str:
+    """Build a message from the response body, not just the status line.
+
+    OPNsense answers a rejected write with a specific reason, for example
+    "Interface locked, unset lock first before removal", or a per-field
+    validations map. Reporting only "500 Server Error" hides the one part of
+    the response that says what to do, which is how a three-command fix became
+    a dead end and left an orphaned interface behind.
+    """
+    response = getattr(error, "response", None)
+    status = getattr(response, "status_code", "")
+    prefix = f"HTTP {status}" if status else "HTTP error"
+
+    if response is None:
+        return f"{prefix}: {error}"
+
+    try:
+        body = response.json()
+    except (ValueError, AttributeError):
+        text = (getattr(response, "text", "") or "").strip()
+        return f"{prefix}: {text[:400]}" if text else f"{prefix}: {error}"
+
+    if isinstance(body, dict):
+        for key in ("errorMessage", "message", "error"):
+            if body.get(key):
+                return f"{prefix}: {body[key]}"
+        if body.get("validations"):
+            try:
+                detail = json.dumps(body["validations"], sort_keys=True)
+            except (TypeError, ValueError):
+                detail = str(body["validations"])
+            return f"{prefix}: {detail}"
+    return f"{prefix}: {str(body)[:400]}"
+
+
 class OPNsenseClient:
     """OPNsense API client for firewall management and diagnostics."""
 
@@ -449,7 +484,7 @@ class OPNsenseClient:
             except requests.exceptions.Timeout as e:
                 raise RequestError(f"Request timed out: {e!s}") from e
             except requests.exceptions.HTTPError as e:
-                raise RequestError(f"HTTP error: {e!s}") from e
+                raise RequestError(_http_error_detail(e)) from e
             except requests.exceptions.RequestException as e:
                 raise RequestError(f"Request failed: {e!s}") from e
 
