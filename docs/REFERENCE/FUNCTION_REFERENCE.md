@@ -472,7 +472,8 @@ The agent automatically handles the complexity of multi-step queries, allowing u
 
 ## Traffic shaper & FQ-CoDel
 
-Full specification: [`docs/research/traffic-shaper-spec.md`](../research/traffic-shaper-spec.md).
+The full specification lives with the project's working notes, which are kept
+outside this repository because they describe a specific deployment.
 
 ### Read tools
 

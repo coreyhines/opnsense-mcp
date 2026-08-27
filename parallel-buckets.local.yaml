@@ -1,7 +1,9 @@
 product: opnsense-mcp
 version: 0.1.0
 spec:
-  dir: docs/research
+  # Specs and buckets moved out of the repository on 2026-08-27; they describe a
+  # specific deployment and this repository is published publicly.
+  dir: ../untracked/opnsense-mcp-notes/research
   spec_suffix: -spec.md
   buckets_suffix: -buckets.md
 integration:
