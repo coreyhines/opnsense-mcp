@@ -11,6 +11,11 @@ async def test_fastmcp_server_imports():
     assert build_mcp_server is not None
 
 
+# Deliberately a little above the current count, so ordinary work does not trip
+# it, while a regression that fans the surface back out does.
+MAX_ADVERTISED_TOOLS = 16
+
+
 @pytest.mark.asyncio
 async def test_fastmcp_server_lists_tools():
     """Every advertised name resolves to something callable.
@@ -26,7 +31,13 @@ async def test_fastmcp_server_lists_tools():
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    assert len(tools) > 20
+    # An upper bound, not a lower one. Keeping the advertised surface small is
+    # the goal, and a floor would have to be edited downward every time a group
+    # absorbs another, which defeats the purpose of asserting anything.
+    assert len(tools) <= MAX_ADVERTISED_TOOLS, (
+        f"{len(tools)} tools advertised; consolidate before raising this."
+    )
+    assert tools, "no tools advertised at all"
     for tool in tools:
         assert tool.name
         assert tool.description

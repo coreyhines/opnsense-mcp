@@ -4,23 +4,35 @@ Grouping is a presentation choice made here, not in the tools. Every operation
 is still its own class with its own schema and validation; this decides how many
 names a client sees.
 
-Grouped where a domain is a resource with verbs: aliases, backups, NPT rules,
-VIPs, VLANs, gateways, routes, DHCP hosts, DNS overrides, firewall rules, the
-traffic shaper. `action` names the verb, and the model picks the object first.
+Groups are subsystems, not resources. An earlier cut grouped per resource and
+produced 31 names, which still had `route`, `gateway`, `vip`, `vlan` and
+`loopback` sitting next to each other as separate tools: exactly the
+near-identical neighbours grouping was meant to remove. Merging by subsystem
+instead gives 13.
 
-Left alone where the tools are distinct subjects rather than verbs on one
-resource: `arp`, `lldp`, `system`, `interface_list`, `pf_states` and the other
-diagnostics have no shared shape, so an `action` enum would group things that
-have nothing to do with each other.
+`arp` and `system` stay top-level. They are the two most frequently called
+tools here, usually as a one-line question, so a `diagnostics(action=...)` hop
+costs something on every casual lookup and buys nothing.
 
-Result: 103 names become 31.
+On size: cutting names is worth much less than it looks. Measured on the
+31-name surface, property definitions were 78% of the advertised schema and
+names plus wrapper only 5%, so renaming alone moved about 3%. The rest came
+from defining the repeated fields once (see `schema_fields`), dropping the
+`optional` key no client reads, and not listing the action names in both the
+description and the enum. Together: 8,101 to 6,161 tokens, 23%.
+
+The floor is lower than it should be for a reason worth knowing: MCP gives
+every tool a complete schema with no cross-tool reference, so `apply` is stored
+13 times no matter how canonical its definition is.
+
+Result: 104 operations behind 13 names.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from opnsense_mcp.utils.grouped_tool import GroupedTool
+from opnsense_mcp.utils.grouped_tool import GroupedTool, strip_dead_keys
 
 # group name -> (description, {action: tool name})
 #
@@ -48,37 +60,29 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "create_snapshot": "mk_snapshot",
         },
     ),
-    "fw_group": (
-        "Firewall interface groups, so one rule can cover several networks",
-        {
-            "list": "list_fw_groups",
-            "update": "set_fw_group",
-        },
-    ),
     "fw_rule": (
-        "Manage firewall filter rules",
+        "Firewall filter rules, and the interface groups a rule can target so "
+        "one rule covers several networks",
         {
             "list": "fw_rules",
             "create": "mkfw_rule",
             "update": "set_fw_rule",
             "toggle": "toggle_fw_rule",
             "delete": "rmfw_rule",
+            "list_groups": "list_fw_groups",
+            "set_group": "set_fw_group",
+            "ssh_fallback": "ssh_fw_rule",
         },
     ),
-    "dhcp_host": (
-        "Manage DHCP static reservations",
-        {
-            "list": "list_dhcp_hosts",
-            "create": "mk_dhcp_host",
-            "move": "move_dhcp_host",
-            "delete": "rm_dhcp_host",
-        },
-    ),
-    "dhcp_scope": (
-        "DHCP leases, ranges, options and per-subnet DNS",
+    "dhcp": (
+        "DHCP: leases, static reservations, ranges, options and per-subnet DNS",
         {
             "leases": "dhcp",
             "delete_lease": "dhcp_lease_delete",
+            "list_hosts": "list_dhcp_hosts",
+            "create_host": "mk_dhcp_host",
+            "move_host": "move_dhcp_host",
+            "delete_host": "rm_dhcp_host",
             "list_ranges": "list_dhcp_ranges",
             "create_range": "mk_dhcp_range",
             "update_range": "set_dhcp_range",
@@ -101,52 +105,31 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "flush": "flush_dns",
         },
     ),
-    "npt": (
-        "Manage NPTv6 prefix translation rules",
+    "ipv6": (
+        "IPv6: NPTv6 prefix translation, virtual IPs, router advertisements, "
+        "and planning or applying a ULA conversion",
         {
-            "list": "list_npt_rules",
-            "create": "mk_npt_rule",
-            "toggle": "toggle_npt_rule",
-            "delete": "rm_npt_rule",
+            "list_npt": "list_npt_rules",
+            "create_npt": "mk_npt_rule",
+            "toggle_npt": "toggle_npt_rule",
+            "delete_npt": "rm_npt_rule",
+            "list_vip": "list_vip",
+            "create_vip": "mk_vip",
+            "delete_vip": "rm_vip",
+            "list_adverts": "list_router_adverts",
+            "set_advert": "set_router_advert",
+            "plan_ula": "plan_dns_ula",
+            "apply_ula": "apply_ula",
         },
     ),
-    "vip": (
-        "Manage interface virtual IPs",
+    "interface_device": (
+        "Create the devices interfaces are built on: 802.1Q VLANs and loopbacks",
         {
-            "list": "list_vip",
-            "create": "mk_vip",
-            "delete": "rm_vip",
-        },
-    ),
-    "router_advert": (
-        "Manage radvd router advertisements",
-        {
-            "list": "list_router_adverts",
-            "update": "set_router_advert",
-        },
-    ),
-    "loopback": (
-        "Manage loopback interface devices",
-        {
-            "list": "list_loopback",
-            "create": "mk_loopback",
-        },
-    ),
-    "vlan": (
-        "Manage 802.1Q VLAN devices",
-        {
-            "list": "list_vlans",
-            "create": "mk_vlan",
-            "delete": "rm_vlan",
-        },
-    ),
-    "gateway": (
-        "Manage gateways and read their health",
-        {
-            "list": "list_gateways",
-            "create": "mk_gateway",
-            "toggle": "toggle_gateway",
-            "status": "gateway_status",
+            "list_vlans": "list_vlans",
+            "create_vlan": "mk_vlan",
+            "delete_vlan": "rm_vlan",
+            "list_loopback": "list_loopback",
+            "create_loopback": "mk_loopback",
         },
     ),
     "nat_outbound": (
@@ -159,17 +142,36 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "mode": "nat_outbound_mode",
         },
     ),
-    "route": (
-        "Manage static routes",
+    "routing": (
+        "Static routes and gateways. Note routes use `enabled` and gateways "
+        "use `disabled`, so a toggle means the opposite thing on each",
         {
-            "list": "list_routes",
-            "create": "mk_route",
-            "toggle": "toggle_route",
-            "delete": "rm_route",
+            "list_routes": "list_routes",
+            "create_route": "mk_route",
+            "toggle_route": "toggle_route",
+            "delete_route": "rm_route",
+            "list_gateways": "list_gateways",
+            "create_gateway": "mk_gateway",
+            "toggle_gateway": "toggle_gateway",
+            "gateway_status": "gateway_status",
+        },
+    ),
+    "diagnostics": (
+        "Read-only views of what the firewall currently sees: neighbours, "
+        "interfaces, state table, logs, captures, and reachability",
+        {
+            "lldp": "lldp",
+            "interfaces": "interface_list",
+            "interface_health": "interface_health",
+            "pf_states": "pf_states",
+            "pf_statistics": "pf_statistics",
+            "logs": "get_logs",
+            "packet_capture": "packet_capture",
+            "ping": "fw_ping",
         },
     ),
     "shaper": (
-        "Traffic shaper pipes, queues and rules",
+        "Traffic shaper: pipes, queues, rules, and applying or auditing them",
         {
             "list_pipes": "list_shaper_pipes",
             "get_pipe": "get_shaper_pipe",
@@ -189,20 +191,10 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "update_rule": "set_shaper_rule",
             "toggle_rule": "toggle_shaper_rule",
             "delete_rule": "delete_shaper_rule",
-        },
-    ),
-    "shaper_service": (
-        "Apply shaper changes, restore a snapshot, or apply a preset",
-        {
             "settings": "get_shaper_settings",
             "apply": "apply_shaper",
             "apply_preset": "apply_shaper_preset",
             "restore_snapshot": "restore_shaper_snapshot",
-        },
-    ),
-    "shaper_audit": (
-        "Inspect shaper configuration and throughput",
-        {
             "audit": "audit_shaper_config",
             "explain": "explain_shaper_config",
             "statistics": "shaper_statistics",
@@ -210,25 +202,10 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
     ),
 }
 
-# Distinct subjects rather than verbs on a shared resource. Grouping these would
-# put unrelated things behind one name.
-UNGROUPED: frozenset[str] = frozenset(
-    {
-        "arp",
-        "lldp",
-        "system",
-        "interface_list",
-        "interface_health",
-        "pf_states",
-        "pf_statistics",
-        "get_logs",
-        "packet_capture",
-        "ssh_fw_rule",
-        "fw_ping",
-        "plan_dns_ula",
-        "apply_ula",
-    }
-)
+# `arp` and `system` stay top-level. They are the two most frequently called
+# tools here, usually as a one-line question, and putting them behind
+# diagnostics(action=...) costs a hop on every casual lookup for no gain.
+UNGROUPED: frozenset[str] = frozenset({"arp", "system"})
 
 
 def build_groups(tools: dict[str, Any]) -> dict[str, Any]:
@@ -258,6 +235,27 @@ def build_groups(tools: dict[str, Any]) -> dict[str, Any]:
 
     for tool_name, tool in tools.items():
         if tool_name not in claimed:
-            exposed[tool_name] = tool
+            # Ungrouped tools go out as-is apart from the same dead-key strip a
+            # group applies, so the wire format does not depend on whether a
+            # tool happens to be grouped.
+            exposed[tool_name] = _without_dead_keys(tool)
 
     return exposed
+
+
+def _without_dead_keys(tool: Any) -> Any:
+    """Drop schema keys no client reads, leaving the tool otherwise untouched."""
+    schema = getattr(tool, "input_schema", None)
+    if not isinstance(schema, dict):
+        return tool
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return tool
+    tool.input_schema = {
+        **schema,
+        "properties": {
+            field: strip_dead_keys(spec) if isinstance(spec, dict) else spec
+            for field, spec in properties.items()
+        },
+    }
+    return tool

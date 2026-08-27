@@ -20,9 +20,22 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.schema_fields import SHARED_FIELDS, is_shared
+
 logger = logging.getLogger(__name__)
 
 HELP_ACTION = "help"
+
+# `optional` is not a JSON Schema keyword. Clients ignore it and take
+# requiredness from the `required` array, so emitting it on nearly a hundred
+# properties bought nothing. Kept on the tool classes, where it reads well and
+# `help` still surfaces it; dropped from the wire.
+DEAD_SCHEMA_KEYS = frozenset({"optional"})
+
+
+def strip_dead_keys(spec: dict[str, Any]) -> dict[str, Any]:
+    """Copy a property spec without the keys no client reads."""
+    return {k: v for k, v in spec.items() if k not in DEAD_SCHEMA_KEYS}
 
 
 class GroupedTool:
@@ -41,39 +54,57 @@ class GroupedTool:
         """
         self.name = name
         self.members = members
+        # The action names are already in the `action` enum, so listing them
+        # here too just pays for them twice.
         self.description = (
-            f"{description}. Actions: {', '.join(sorted(members))}. "
-            f"Call action='{HELP_ACTION}' for each action's fields and rules."
+            f"{description}. Call action='{HELP_ACTION}' for each action's "
+            f"fields and rules."
         )
         self.input_schema = self._build_schema()
 
     def _build_schema(self) -> dict[str, Any]:
-        """Union every member's properties under one `action` selector."""
+        """Union every member's properties under one `action` selector.
+
+        Fields listed in `SHARED_FIELDS` mean the same thing in every tool that
+        takes them, so they get one canonical definition and no action prefix.
+        That is where most of the saving is: those few names accounted for the
+        majority of the repeated property text across the whole surface.
+
+        Anything else that appears in more than one action lists every action
+        that takes it. The previous rule kept whichever definition sorted first
+        and dropped the others, so the surviving wording was arbitrary — and it
+        gets worse as groups grow.
+        """
         properties: dict[str, Any] = {
             "action": {
                 "type": "string",
-                "description": (
-                    "Operation to run. Fields differ per action; "
-                    f"'{HELP_ACTION}' lists them."
-                ),
+                "description": f"Operation to run. '{HELP_ACTION}' lists fields.",
                 "enum": [*sorted(self.members), HELP_ACTION],
             }
         }
+        # field -> actions that accept it, so a collision can name them all.
+        used_by: dict[str, list[str]] = {}
+        raw: dict[str, dict[str, Any]] = {}
+
         for action, tool in sorted(self.members.items()):
             schema = getattr(tool, "input_schema", {}) or {}
             for field, spec in (schema.get("properties") or {}).items():
-                if field in properties:
-                    # Same field name in two actions: keep the first description
-                    # and note that it is shared, rather than silently dropping
-                    # one of them.
-                    continue
-                merged = dict(spec)
-                merged["description"] = (
-                    f"[{action}] {spec.get('description', field)}"
-                    if len(self.members) > 1
-                    else spec.get("description", field)
-                )
-                properties[field] = merged
+                used_by.setdefault(field, []).append(action)
+                raw.setdefault(field, spec)
+
+        for field, spec in raw.items():
+            if is_shared(field):
+                properties[field] = SHARED_FIELDS[field]
+                continue
+            merged = strip_dead_keys(spec)
+            text = spec.get("description", field)
+            merged["description"] = (
+                f"[{', '.join(used_by[field])}] {text}"
+                if len(self.members) > 1
+                else text
+            )
+            properties[field] = merged
+
         return {
             "type": "object",
             "properties": properties,
