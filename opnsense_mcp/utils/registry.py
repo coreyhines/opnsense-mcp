@@ -25,6 +25,13 @@ from opnsense_mcp.tools.alias_write import (
 )
 from opnsense_mcp.tools.aliases import AliasesTool
 from opnsense_mcp.tools.arp import ARPTool
+from opnsense_mcp.tools.bgp import (
+    BgpStatusTool,
+    ListBgpNeighborsTool,
+    MkBgpNeighborTool,
+    RmBgpNeighborTool,
+    ToggleBgpNeighborTool,
+)
 from opnsense_mcp.tools.config_backup import (
     DiffConfigBackupsTool,
     DownloadConfigTool,
@@ -127,6 +134,7 @@ class Tool(Protocol):
 TOOL_CLASSES: tuple[type, ...] = (
     AliasesTool,
     ApplyUlaTool,
+    BgpStatusTool,
     ARPTool,
     DHCPTool,
     DHCPLeaseDeleteTool,
@@ -143,6 +151,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListBackupProvidersTool,
     ListConfigBackupsTool,
     ListDhcpHostsTool,
+    ListBgpNeighborsTool,
     ListDhcpOptionsTool,
     ListDhcpRangesTool,
     ListDhcpSubnetDnsTool,
@@ -161,6 +170,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     MkDhcpRangeTool,
     MkdnsTool,
     MkAliasTool,
+    MkBgpNeighborTool,
     MkfwRuleTool,
     MkGatewayTool,
     MkRouteTool,
@@ -177,6 +187,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     PfStatesTool,
     PfStatisticsTool,
     RmAliasTool,
+    RmBgpNeighborTool,
     RmDhcpHostTool,
     RmDhcpOptionTool,
     RmDhcpRangeTool,
@@ -198,6 +209,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     SSHFirewallRuleTool,
     SystemTool,
     ToggleAliasTool,
+    ToggleBgpNeighborTool,
     ToggleDhcpRangeTool,
     ToggleGatewayTool,
     ToggleNatOutboundTool,

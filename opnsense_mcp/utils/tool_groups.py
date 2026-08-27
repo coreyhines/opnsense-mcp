@@ -49,6 +49,17 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "delete": "rm_alias",
         },
     ),
+    "bgp": (
+        "FRR BGP: peering state and neighbours. FRR ships disabled, so an "
+        "empty result usually means it has not been turned on yet",
+        {
+            "status": "bgp_status",
+            "list_neighbors": "list_bgp_neighbors",
+            "create_neighbor": "mk_bgp_neighbor",
+            "toggle_neighbor": "toggle_bgp_neighbor",
+            "delete_neighbor": "rm_bgp_neighbor",
+        },
+    ),
     "config_backup": (
         "Configuration backups, revision history and boot environment snapshots",
         {

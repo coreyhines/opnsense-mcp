@@ -232,6 +232,14 @@
       "type": "object"
     }
   },
+  "bgp_status": {
+    "description": "Report FRR and BGP state: enabled, running, AS number, peer count",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
   "delete_shaper_pipe": {
     "description": "Delete a traffic shaper pipe; requires confirm token from prior call",
     "inputSchema": {
@@ -657,6 +665,14 @@
       "type": "object"
     }
   },
+  "list_bgp_neighbors": {
+    "description": "List BGP neighbours and their settings",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
   "list_config_backups": {
     "description": "List stored OPNsense configuration revisions, newest first",
     "inputSchema": {
@@ -946,6 +962,65 @@
         "name",
         "type",
         "content"
+      ],
+      "type": "object"
+    }
+  },
+  "mk_bgp_neighbor": {
+    "description": "Create a BGP neighbour. Created disabled unless asked otherwise, because an enabled neighbour starts trying to peer immediately",
+    "inputSchema": {
+      "properties": {
+        "address": {
+          "description": "Peer address",
+          "type": "string"
+        },
+        "apply": {
+          "description": "Reconfigure FRR, which restarts it (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "bfd": {
+          "description": "Use BFD for fast failure detection",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Start peering now. Defaults to false so the neighbour is staged rather than brought up",
+          "optional": true,
+          "type": "boolean"
+        },
+        "multihop": {
+          "description": "Peer is not on a directly connected subnet",
+          "optional": true,
+          "type": "boolean"
+        },
+        "password": {
+          "description": "MD5 session password; stored in clear by OPNsense",
+          "optional": true,
+          "type": "string"
+        },
+        "remote_as": {
+          "description": "Peer AS number. Give this or remote_as_mode, not both",
+          "optional": true,
+          "type": "string"
+        },
+        "remote_as_mode": {
+          "description": "internal or external, deriving the peer AS from the local one",
+          "optional": true,
+          "type": "string"
+        },
+        "update_source": {
+          "description": "Interface to source the session from, e.g. lo0",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "address"
       ],
       "type": "object"
     }
@@ -1689,6 +1764,29 @@
         },
         "uuid": {
           "description": "Alias uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "rm_bgp_neighbor": {
+    "description": "Delete a BGP neighbour; requires a confirm token",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Neighbour uuid",
           "type": "string"
         }
       },
@@ -2489,6 +2587,30 @@
         },
         "uuid": {
           "description": "Alias uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "enabled"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_bgp_neighbor": {
+    "description": "Enable or disable a BGP neighbour",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "Target state",
+          "type": "boolean"
+        },
+        "uuid": {
+          "description": "Neighbour uuid",
           "type": "string"
         }
       },
