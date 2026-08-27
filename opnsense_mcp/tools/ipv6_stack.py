@@ -566,6 +566,20 @@ class MkLoopbackTool(_V6ToolBase):
         "type": "object",
         "properties": {
             "description": {"type": "string", "description": "Device description"},
+            "address": {
+                "type": "string",
+                "description": (
+                    "Address this loopback should carry. Not written: OPNsense "
+                    "has no API for per-interface addressing. Returned as the "
+                    "exact step to perform, so the value does not get lost"
+                ),
+                "optional": True,
+            },
+            "subnet_bits": {
+                "type": "number",
+                "description": "Prefix length for `address`, normally 32 or 128",
+                "optional": True,
+            },
             "apply": {
                 "type": "boolean",
                 "description": "Reconfigure interfaces afterwards (default false)",
@@ -588,6 +602,18 @@ class MkLoopbackTool(_V6ToolBase):
         if not description:
             return {"status": "error", "error": "description is required"}
 
+        address = (params.get("address") or "").strip()
+        subnet_bits = params.get("subnet_bits")
+        if address and subnet_bits is None:
+            return {
+                "status": "error",
+                "error": (
+                    "subnet_bits is required with address. A loopback given the "
+                    "wrong prefix advertises a subnet it does not own; for a "
+                    "loopback this is normally 32 for IPv4 or 128 for IPv6."
+                ),
+            }
+
         try:
             result = await self.client._make_request(
                 "POST",
@@ -606,7 +632,7 @@ class MkLoopbackTool(_V6ToolBase):
             return {"status": "error", "error": str(exc)}
 
         applied = bool(params.get("apply", False))
-        return {
+        out: dict[str, Any] = {
             "status": "success",
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
             "applied": applied,
@@ -623,6 +649,31 @@ class MkLoopbackTool(_V6ToolBase):
                 'an assignment to fail with "Option [] not in list".'
             ),
         }
+        if address:
+            # Never posted. set_item accepts ipaddr and answers "saved" while
+            # changing nothing, so writing it would report success and do
+            # nothing. Handing the values back is the honest alternative.
+            out["manual_step"] = {
+                "why": (
+                    "OPNsense has no API for per-interface addressing on this "
+                    "firmware, and the assignment model discards an address "
+                    "field silently."
+                ),
+                "where": "Interfaces -> Assignments, then the new interface",
+                "address": address,
+                "subnet_bits": subnet_bits,
+                "instruction": (
+                    f"Assign this device, enable the interface, set the IPv4 or "
+                    f"IPv6 configuration type to Static, and set the address to "
+                    f"{address}/{subnet_bits}."
+                ),
+                "alternative": (
+                    f"Or skip assignment entirely: add a virtual IP of mode "
+                    f"ipalias with {address}/{subnet_bits} on an already-assigned "
+                    f"interface such as lo0, which mk_vip does over the API."
+                ),
+            }
+        return out
 
 
 class RmLoopbackTool(_V6ToolBase):

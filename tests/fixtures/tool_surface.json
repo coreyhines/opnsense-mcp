@@ -1184,6 +1184,11 @@
     "description": "Create a loopback interface device",
     "inputSchema": {
       "properties": {
+        "address": {
+          "description": "Address this loopback should carry. Not written: OPNsense has no API for per-interface addressing. Returned as the exact step to perform, so the value does not get lost",
+          "optional": true,
+          "type": "string"
+        },
         "apply": {
           "description": "Reconfigure interfaces afterwards (default false)",
           "optional": true,
@@ -1192,6 +1197,11 @@
         "description": {
           "description": "Device description",
           "type": "string"
+        },
+        "subnet_bits": {
+          "description": "Prefix length for `address`, normally 32 or 128",
+          "optional": true,
+          "type": "number"
         }
       },
       "required": [

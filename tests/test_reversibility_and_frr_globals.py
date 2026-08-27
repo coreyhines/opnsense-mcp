@@ -12,6 +12,7 @@ being drivable exactly where it got interesting.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -328,3 +329,63 @@ async def test_deleting_an_unassigned_loopback_proceeds() -> None:
 
     assert result["deleted"] is True
     assert [c for c in calls if "loopback_settings/del_item" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_a_loopback_created_with_an_address_says_exactly_what_to_set() -> None:
+    """Addressing has no API, so the tool hands over the values instead.
+
+    "do it in the UI" is not an instruction. The caller already knows the
+    address it wanted; echoing it back with the page and the field names is the
+    difference between a dead end and a two-minute step.
+    """
+    client = _client()
+    _stub(client, {})
+
+    result = await MkLoopbackTool(client).execute(
+        {"description": "bgp", "address": "172.16.99.2", "subnet_bits": 32}
+    )
+
+    manual = result["manual_step"]
+    assert manual["address"] == "172.16.99.2"
+    assert manual["subnet_bits"] == 32
+    assert "Interfaces" in manual["where"]
+    assert "172.16.99.2/32" in manual["instruction"]
+
+
+@pytest.mark.asyncio
+async def test_the_address_is_never_posted_since_the_model_would_swallow_it() -> None:
+    """set_item accepts ipaddr and returns saved while changing nothing."""
+    client = _client()
+    calls = _stub(client, {})
+
+    await MkLoopbackTool(client).execute(
+        {"description": "bgp", "address": "172.16.99.2", "subnet_bits": 32}
+    )
+
+    posted = json.dumps([c.get("json") for c in calls])
+    assert "172.16.99.2" not in posted
+
+
+@pytest.mark.asyncio
+async def test_an_address_without_a_prefix_is_refused() -> None:
+    """A loopback with the wrong prefix advertises a subnet it does not own."""
+    client = _client()
+    _stub(client, {})
+
+    result = await MkLoopbackTool(client).execute(
+        {"description": "bgp", "address": "172.16.99.2"}
+    )
+
+    assert result["status"] == "error"
+    assert "subnet_bits" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_no_address_means_no_manual_step() -> None:
+    client = _client()
+    _stub(client, {})
+
+    result = await MkLoopbackTool(client).execute({"description": "bgp"})
+
+    assert "manual_step" not in result
