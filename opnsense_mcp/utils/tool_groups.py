@@ -141,6 +141,7 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "delete_vlan": "rm_vlan",
             "list_loopback": "list_loopback",
             "create_loopback": "mk_loopback",
+            "set_address": "set_interface_address",
             "delete_loopback": "rm_loopback",
         },
     ),

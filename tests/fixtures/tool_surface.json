@@ -2420,6 +2420,36 @@
       "type": "object"
     }
   },
+  "set_interface_address": {
+    "description": "Set a static IPv4 or IPv6 address on an assigned interface. Uses SSH, because the 26.7 API model has no address field and discards one silently",
+    "inputSchema": {
+      "properties": {
+        "address": {
+          "description": "IPv4 or IPv6 address",
+          "type": "string"
+        },
+        "interface": {
+          "description": "Interface identifier, e.g. opt12, from the assignment list",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Recorded in the configuration history",
+          "optional": true,
+          "type": "string"
+        },
+        "subnet_bits": {
+          "description": "Prefix length; 32 or 128 for a loopback",
+          "type": "number"
+        }
+      },
+      "required": [
+        "interface",
+        "address",
+        "subnet_bits"
+      ],
+      "type": "object"
+    }
+  },
   "set_router_advert": {
     "description": "Update a radvd entry: enable it, change mode, or deprecate the old prefix",
     "inputSchema": {

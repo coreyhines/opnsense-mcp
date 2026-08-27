@@ -64,6 +64,7 @@ from opnsense_mcp.tools.fw_groups import ListFwGroupsTool, SetFwGroupTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.gateway_status import GatewayStatusTool
 from opnsense_mcp.tools.get_logs import GetLogsTool
+from opnsense_mcp.tools.interface_address import SetInterfaceAddressTool
 from opnsense_mcp.tools.interface_health import InterfaceHealthTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
 from opnsense_mcp.tools.ipv6_stack import (
@@ -205,6 +206,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     SetAliasTool,
     SetBgpGlobalTool,
     SetDhcpSubnetDnsTool,
+    SetInterfaceAddressTool,
     SetDhcpRangeTool,
     SetDhcpRouterOptionTool,
     SetFwRuleTool,
