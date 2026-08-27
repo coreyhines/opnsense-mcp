@@ -93,7 +93,10 @@ async def test_shaper_write_tools_registered() -> None:
         tools = await client.list_tools()
 
     tool_names = {t.name for t in tools}
-    assert {"shaper", "shaper_service"} <= tool_names
+    # Applying and auditing are actions on the one shaper tool now, not
+    # separate names; the point of the check is that the operations survived
+    # the regrouping, which _shaper_actions() below is what actually verifies.
+    assert "shaper" in tool_names
 
     missing = SHAPER_WRITE_TOOLS - _shaper_actions()
     assert not missing, (
@@ -112,10 +115,10 @@ async def test_restore_shaper_snapshot_mcp_remove_orphans_param() -> None:
     async with Client(mcp) as client:
         tools = await client.list_tools()
 
-    # restore_shaper_snapshot is now the restore_snapshot action on
-    # shaper_service, so the field appears in that group's merged schema.
-    service = next(t for t in tools if t.name == "shaper_service")
-    props = (service.inputSchema or {}).get("properties", {})
+    # restore_shaper_snapshot is the restore_snapshot action on the shaper
+    # tool, so the field appears in that group's merged schema.
+    shaper = next(t for t in tools if t.name == "shaper")
+    props = (shaper.inputSchema or {}).get("properties", {})
     assert "remove_orphans" in props
     assert props["remove_orphans"].get("default") is False
     assert "restore_snapshot" in props["action"]["enum"]
