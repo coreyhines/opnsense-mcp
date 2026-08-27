@@ -26,7 +26,7 @@ fixture before committing.
 
 Left as-is, because they are OPNsense or FreeBSD vocabulary rather than site identifiers:
 interface device names (`ax0`, `igb3`, `optN`, `wg0`, `bridge0`), generated alias names
-(`__optN_network`), zone names (`trustedNets`, `cams`, `labNets`), and VLAN tag numbers.
+(`__optN_network`), zone names (`innerNets`, `cams`, `workshopNets`), and VLAN tag numbers.
 
 ## Files
 

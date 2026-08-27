@@ -130,7 +130,7 @@ Installer modes:
 | Local dev build | `sudo OPNSENSE_MCP_IMAGE_TAG=dev-test bash deploy/install.sh --build-local` |
 | Build and push | `sudo OPNSENSE_MCP_IMAGE_TAG=1.0.0 bash deploy/install.sh --build-push` |
 
-CI uses Kaniko to build and push images. A manual `deploy:strongpod` job is available for pushing to a specific host after a successful CI build.
+CI uses Kaniko to build and push images. A manual `deploy:cyclops` job is available for pushing to a specific host after a successful CI build.
 
 ---
 

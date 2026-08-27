@@ -290,13 +290,13 @@
         "selected": 0,
         "value": "cams"
       },
-      "labNets": {
+      "workshopNets": {
         "selected": 0,
-        "value": "labNets"
+        "value": "workshopNets"
       },
-      "noguests": {
+      "novisitors": {
         "selected": 0,
-        "value": "noguests"
+        "value": "novisitors"
       },
       "openvpn": {
         "selected": 0,
@@ -320,19 +320,19 @@
       },
       "opt2": {
         "selected": 0,
-        "value": "VLAN2wired"
+        "value": "VLAN2office"
       },
       "opt3": {
         "selected": 0,
-        "value": "VLAN3LAB"
+        "value": "VLAN3workshop"
       },
       "opt4": {
         "selected": 0,
-        "value": "VLAN5LAB"
+        "value": "VLAN5studio"
       },
       "opt5": {
         "selected": 0,
-        "value": "VLAN81wifi"
+        "value": "VLAN81wireless"
       },
       "opt6": {
         "selected": 0,
@@ -350,13 +350,13 @@
         "selected": 0,
         "value": "wg0"
       },
-      "trustedNets": {
+      "innerNets": {
         "selected": 0,
-        "value": "trustedNets"
+        "value": "innerNets"
       },
-      "unTrustedNets": {
+      "outerNets": {
         "selected": 0,
-        "value": "unTrustedNets"
+        "value": "outerNets"
       },
       "wan": {
         "selected": 1,
@@ -430,17 +430,17 @@
         "selected": 0,
         "value": "__cams_network"
       },
-      "__labNets_network": {
+      "__workshopNets_network": {
         "selected": 0,
-        "value": "__labNets_network"
+        "value": "__workshopNets_network"
       },
       "__lo0_network": {
         "selected": 0,
         "value": "__lo0_network"
       },
-      "__noguests_network": {
+      "__novisitors_network": {
         "selected": 0,
-        "value": "__noguests_network"
+        "value": "__novisitors_network"
       },
       "__openvpn_network": {
         "selected": 0,
@@ -494,13 +494,13 @@
         "selected": 0,
         "value": "__opt9_network"
       },
-      "__trustedNets_network": {
+      "__innerNets_network": {
         "selected": 0,
-        "value": "__trustedNets_network"
+        "value": "__innerNets_network"
       },
-      "__unTrustedNets_network": {
+      "__outerNets_network": {
         "selected": 0,
-        "value": "__unTrustedNets_network"
+        "value": "__outerNets_network"
       },
       "__wan_network": {
         "selected": 0,

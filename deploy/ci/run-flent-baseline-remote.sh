@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Run flent rrul baseline on strongpod from Forgejo Actions (SSH + podman sidecar).
+# Run flent rrul baseline on the deploy host from Forgejo Actions (SSH + podman sidecar).
 set -euo pipefail
 
 DEPLOY_USER="${OPNSENSE_MCP_DEPLOY_USER:-root}"
 DEPLOY_HOST="${OPNSENSE_MCP_DEPLOY_HOST:?OPNSENSE_MCP_DEPLOY_HOST is required}"
 REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
 
-REMOTE_SCRIPT="/opt/containerdata/flent-sidecar-net10.sh"
+REMOTE_SCRIPT="/opt/containerdata/flent-sidecar.sh"
 REMOTE_RESULTS="/opt/containerdata/flent-results"
 ARTIFACT_DIR="${CI_PROJECT_DIR:-.}/flent-artifacts"
 
@@ -18,7 +18,7 @@ FLENT_RUNS="${FLENT_RUNS:-3}"
 mkdir -p "${ARTIFACT_DIR}"
 
 echo "=== Deploy flent sidecar script to ${REMOTE} ==="
-scp deploy/flent-sidecar-net10.sh "${REMOTE}:${REMOTE_SCRIPT}"
+scp deploy/flent-sidecar.sh "${REMOTE}:${REMOTE_SCRIPT}"
 ssh -o StrictHostKeyChecking=no "${REMOTE}" "chmod +x '${REMOTE_SCRIPT}'"
 
 echo "=== Run flent rrul baseline (label=${LABEL}) ==="

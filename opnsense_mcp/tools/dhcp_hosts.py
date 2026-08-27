@@ -46,7 +46,7 @@ class ListDhcpHostsTool:
                 "type": "string",
                 "description": (
                     "Optional client-side filter: reservation descr substring "
-                    "(e.g. VLAN2wired)"
+                    "(e.g. VLAN2office)"
                 ),
                 "optional": True,
             },

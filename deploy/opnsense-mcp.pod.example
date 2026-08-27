@@ -10,7 +10,7 @@ After=network-online.target
 
 [Pod]
 PodName=opnsense-mcp-pod
-# Optional custom network / static addresses (strongpod-style):
+# Optional custom network / static addresses:
 # Network=net-10
 # IP=172.20.10.50
 # IP6=2001:db8:5eed:b7e1::50

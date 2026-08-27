@@ -245,8 +245,8 @@
     "macaddr_hw": "52:54:00:99:5d:42",
     "groups": [
       "vlan",
-      "noguests",
-      "trustedNets"
+      "novisitors",
+      "innerNets"
     ],
     "vlan": {
       "tag": "81",
@@ -302,7 +302,7 @@
     ],
     "config": {
       "if": "ax0_vlan81",
-      "descr": "VLAN81wifi",
+      "descr": "VLAN81wireless",
       "enable": "1",
       "lock": "1",
       "spoofmac": "",
@@ -317,7 +317,7 @@
       "identifier": "opt5"
     },
     "identifier": "opt5",
-    "description": "VLAN81wifi",
+    "description": "VLAN81wireless",
     "enabled": true,
     "link_type": "static",
     "addr4": "172.20.8.1/24",
@@ -481,8 +481,8 @@
     },
     "groups": [
       "bridge",
-      "noguests",
-      "trustedNets"
+      "novisitors",
+      "innerNets"
     ],
     "nd6": {
       "flags": [
@@ -591,9 +591,9 @@
     "macaddr_hw": "52:54:00:99:5d:42",
     "groups": [
       "vlan",
-      "labNets",
-      "noguests",
-      "trustedNets"
+      "workshopNets",
+      "novisitors",
+      "innerNets"
     ],
     "vlan": {
       "tag": "5",
@@ -645,12 +645,12 @@
     },
     "config": {
       "if": "ax0_vlan5",
-      "descr": "VLAN5LAB",
+      "descr": "VLAN5studio",
       "spoofmac": "",
       "identifier": "opt4"
     },
     "identifier": "opt4",
-    "description": "VLAN5LAB",
+    "description": "VLAN5studio",
     "enabled": false,
     "link_type": "none",
     "addr4": "",

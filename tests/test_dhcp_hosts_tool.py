@@ -21,14 +21,14 @@ async def test_tool_lists_all_hosts():
             "host": "printer",
             "ip": "172.20.8.2,::2",
             "hwaddr": "aa:bb:cc:dd:ee:ff",
-            "descr": "VLAN81wifi",
+            "descr": "VLAN81wireless",
         },
         {
             "uuid": "u2",
             "host": "ztx",
             "ip": "172.20.5.6",
             "hwaddr": "52:54:00:f9:68:7f",
-            "descr": "VLAN5LAB",
+            "descr": "VLAN5studio",
         },
     ]
     client = FakeClient(rows)
@@ -56,14 +56,14 @@ async def test_tool_filters_by_descr():
             "host": "a",
             "ip": "172.20.2.1,::1",
             "hwaddr": "aa:bb:cc:dd:ee:01",
-            "descr": "VLAN2wired",
+            "descr": "VLAN2office",
         },
         {
             "uuid": "u2",
             "host": "b",
             "ip": "172.20.8.2,::2",
             "hwaddr": "aa:bb:cc:dd:ee:02",
-            "descr": "VLAN81wifi",
+            "descr": "VLAN81wireless",
         },
     ]
     tool = ListDhcpHostsTool(FakeClient(rows))
@@ -80,14 +80,14 @@ async def test_tool_missing_ipv6_filter():
             "host": "a",
             "ip": "172.20.2.1,::1",
             "hwaddr": "aa:bb:cc:dd:ee:01",
-            "descr": "VLAN2wired",
+            "descr": "VLAN2office",
         },
         {
             "uuid": "u2",
             "host": "b",
             "ip": "172.20.5.6",
             "hwaddr": "aa:bb:cc:dd:ee:02",
-            "descr": "VLAN5LAB",
+            "descr": "VLAN5studio",
         },
     ]
     tool = ListDhcpHostsTool(FakeClient(rows))

@@ -18,7 +18,7 @@ env:
 
 jobs:
   gitleaks:
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: ghcr.io/gitleaks/gitleaks:v8.30.1
       options: --entrypoint ""
@@ -33,7 +33,7 @@ jobs:
         run: gitleaks detect --config .gitleaks.toml --redact --log-opts main --verbose
 
   gitguardian:
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/gitguardian/ggshield:latest
     steps:
@@ -58,7 +58,7 @@ jobs:
     # Replaces GitLab's Security/SAST.gitlab-ci.yml template, which has no
     # Forgejo equivalent. Rulesets are pinned explicitly rather than using
     # --config auto, so runs stay reproducible and offline-registry friendly.
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/semgrep/semgrep:latest
     steps:
@@ -84,7 +84,7 @@ jobs:
 
   pip_audit_prod:
     # Blocking supply-chain gate: production closure only (requirements.txt).
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
@@ -110,7 +110,7 @@ jobs:
 
   sbom:
     # CycloneDX SBOM for the production dependency closure.
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
@@ -135,7 +135,7 @@ jobs:
 
   trivy_fs:
     # Repo filesystem, HIGH/CRITICAL only.
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/aquasec/trivy:latest
       options: --entrypoint ""
@@ -157,7 +157,7 @@ jobs:
     # Informational scanners plus the report bundle GitLab's collect_reports
     # produced. Never blocks the pipeline; findings are read from the artifact
     # or the job log.
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     continue-on-error: true
     container:
       image: docker.io/library/python:3.12-alpine

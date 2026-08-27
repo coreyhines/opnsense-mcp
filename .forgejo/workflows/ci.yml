@@ -9,7 +9,7 @@ on:
 
 jobs:
   ruff:
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
@@ -26,7 +26,7 @@ jobs:
           ruff format --check .
 
   pytest:
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/library/python:3.12-bookworm
     steps:
@@ -51,7 +51,7 @@ jobs:
   build_image:
     needs: [ruff, pytest]
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: quay.io/buildah/stable:v1.38
       options: --privileged
@@ -94,8 +94,10 @@ jobs:
           # registry.example) to push a built image; leave unset to build
           # locally only (no push).
           REGISTRY: ${{ vars.OPNSENSE_MCP_REGISTRY }}
-          HUB_FREEBLIZZ_USER: ${{ secrets.HUB_FREEBLIZZ_USER }}
-          HUB_FREEBLIZZ_PASSWORD: ${{ secrets.HUB_FREEBLIZZ_PASSWORD }}
+          # Named for what they are, not for one registry. This file is
+          # published, and the old names spelled out the host.
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
           set -euo pipefail
           if [ -n "${REGISTRY:-}" ]; then
@@ -110,8 +112,12 @@ jobs:
             --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -t "${IMAGE}" .
           if [ -n "${REGISTRY:-}" ]; then
-            if [ -n "${HUB_FREEBLIZZ_USER:-}" ] && [ -n "${HUB_FREEBLIZZ_PASSWORD:-}" ]; then
-              buildah login -u "${HUB_FREEBLIZZ_USER}" -p "${HUB_FREEBLIZZ_PASSWORD}" "${REGISTRY}"
+            if [ -n "${REGISTRY_USER:-}" ] && [ -n "${REGISTRY_PASSWORD:-}" ]; then
+              buildah login -u "${REGISTRY_USER}" -p "${REGISTRY_PASSWORD}" "${REGISTRY}"
+            else
+              # Previously this fell through to an anonymous push, which fails
+              # against an authenticated registry with a less obvious error.
+              echo "note: REGISTRY_USER/REGISTRY_PASSWORD unset; pushing anonymously." >&2
             fi
             buildah push "${IMAGE}"
           else

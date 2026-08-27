@@ -414,7 +414,7 @@
     "inputSchema": {
       "properties": {
         "hostname": {
-          "description": "FQDN to flush from cache (e.g. headroom.frobozz.example). Required when mode=name.",
+          "description": "FQDN to flush from cache (e.g. brogmoid.frobozz.example). Required when mode=name.",
           "optional": true,
           "type": "string"
         },
@@ -681,7 +681,7 @@
     "inputSchema": {
       "properties": {
         "descr": {
-          "description": "Optional client-side filter: reservation descr substring (e.g. VLAN2wired)",
+          "description": "Optional client-side filter: reservation descr substring (e.g. VLAN2office)",
           "optional": true,
           "type": "string"
         },
@@ -733,7 +733,7 @@
       ],
       "properties": {
         "interface": {
-          "description": "Interface identifier or description (e.g. opt2, VLAN2wired)",
+          "description": "Interface identifier or description (e.g. opt2, VLAN2office)",
           "optional": true,
           "type": "string"
         },
@@ -2041,7 +2041,7 @@
           "type": "string"
         },
         "interface": {
-          "description": "Interface identifier or description (e.g. opt2, VLAN2wired)",
+          "description": "Interface identifier or description (e.g. opt2, VLAN2office)",
           "optional": true,
           "type": "string"
         },

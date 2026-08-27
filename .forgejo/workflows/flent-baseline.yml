@@ -1,6 +1,6 @@
 name: Flent baseline
 
-# Scheduled FQ-CoDel baseline: flent rrul from the net-10 sidecar on strongpod.
+# Scheduled FQ-CoDel baseline: flent rrul from the sidecar on the deploy host.
 # Replaces the GitLab pipeline schedule that set SCHEDULED_JOB=flent-baseline.
 # In GitLab this shared a pipeline with lint/test and was gated off by rules;
 # as its own workflow it simply never triggers on push, so those rules are gone.
@@ -30,7 +30,7 @@ on:
 
 jobs:
   baseline:
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     timeout-minutes: 45
     container:
       image: docker.io/library/alpine:3.22.0
@@ -38,7 +38,7 @@ jobs:
       - name: Install git, node, ssh client and python
         run: apk add --no-cache git nodejs openssh-client bash python3
       - uses: https://data.forgejo.org/actions/checkout@v6
-      - name: Run flent rrul on strongpod
+      - name: Run flent rrul on the deploy host
         env:
           OPNSENSE_MCP_DEPLOY_SSH_KEY_B64: ${{ secrets.OPNSENSE_MCP_DEPLOY_SSH_KEY_B64 }}
           OPNSENSE_MCP_DEPLOY_HOST: ${{ secrets.OPNSENSE_MCP_DEPLOY_HOST }}

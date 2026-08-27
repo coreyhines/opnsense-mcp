@@ -87,7 +87,7 @@ Set via **environment** before running `install.sh`, add the same keys to **`$IN
 2. Commit and push **`main`**.
 3. Tag and push: **`git tag v1.0.1 && git push origin v1.0.1`**
 4. Forgejo Actions **`build:image`** publishes **`hub.frobozz.example/opnsense-mcp:1.0.1`**.
-5. Deploy: **`sudo OPNSENSE_MCP_IMAGE_TAG=1.0.1 bash deploy/install.sh`** or manual **`deploy:strongpod`**.
+5. Deploy: **`sudo OPNSENSE_MCP_IMAGE_TAG=1.0.1 bash deploy/install.sh`** or manual **`deploy:cyclops`**.
 | `OPNSENSE_MCP_CADDY_IMAGE` | Pinned Caddy image (default `docker.io/library/caddy:2.9.1-alpine`). |
 
 The installer does **not** set **`PublishPort`** on the pod (typical **macvlan** / static **`IP=`** setups expose **443** and **8765** on the pod’s address instead of mapping host ports). Both containers set **`Pod=<PodName>.pod`** (default **`opnsense-mcp-pod.pod`**). Add **`PublishPort=`** in the generated **`<PodName>.pod`** only if you use bridge/NAT and need host port forwarding.
@@ -104,13 +104,13 @@ sudo env OPNSENSE_MCP_IMAGE_TAG=1.0.0 \
 
 | CI/CD variable | Purpose |
 |----------------|---------|
-| `HUB_FREEBLIZZ_USER` / `HUB_FREEBLIZZ_PASSWORD` | Kaniko push to `hub.frobozz.example` |
-| `OPNSENSE_MCP_DEPLOY_HOST` | strongpod hostname/IP for `deploy:strongpod` |
+| `REGISTRY_USER` / `REGISTRY_PASSWORD` | Registry push credentials |
+| `OPNSENSE_MCP_DEPLOY_HOST` | cyclops hostname/IP for `deploy:cyclops` |
 | `OPNSENSE_MCP_DEPLOY_SSH_KEY_B64` | Root SSH key (base64) for deploy job |
 
-`build:image` runs on **`main`** (and git tags). **`deploy:strongpod`** is **manual** on `main` after a successful build.
+`build:image` runs on **`main`** (and git tags). **`deploy:cyclops`** is **manual** on `main` after a successful build.
 
-### Install troubleshooting (strongpod / quadlet)
+### Install troubleshooting (cyclops / quadlet)
 
 - **Image update but old code still running:** `systemctl restart` alone may leave the previous container instance. After changing **`OPNSENSE_MCP_IMAGE_TAG`**, run **`podman rm -f opnsense-mcp-app opnsense-mcp-caddy`** (or your **`OPNSENSE_MCP_*_CONTAINER_NAME`** values), then **`systemctl restart opnsense-mcp-pod.service opnsense-mcp-app.service opnsense-mcp-caddy.service`**. Reconnect MCP clients in Cursor after redeploy.
 - **Diverged git clone:** the installer **`git reset --hard origin/<branch>`** so `/opt/containerdata/.../src` always matches Forgejo (no lingering local commits).

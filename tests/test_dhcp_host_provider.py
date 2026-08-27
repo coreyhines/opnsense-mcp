@@ -131,7 +131,7 @@ async def test_move_host_dry_run_does_not_write():
                         "host": "printer",
                         "ip": "172.20.8.55,::55",
                         "hwaddr": "AA",
-                        "descr": "VLAN81wifi",
+                        "descr": "VLAN81wireless",
                         "domain": "",
                         "local": "0",
                         "cnames": "",
@@ -495,7 +495,7 @@ async def test_delete_host_dry_run_does_not_write():
                         "host": "chines",
                         "ip": "172.20.2.4,::4",
                         "hwaddr": "52:54:00:b3:02:20",
-                        "descr": "VLAN2wired",
+                        "descr": "VLAN2office",
                     }
                 ],
                 "total": 1,
@@ -520,7 +520,7 @@ async def test_delete_host_applies_and_reconfigures():
                         "host": "chines",
                         "ip": "172.20.2.4,::4",
                         "hwaddr": "52:54:00:b3:02:20",
-                        "descr": "VLAN2wired",
+                        "descr": "VLAN2office",
                     }
                 ],
                 "total": 1,

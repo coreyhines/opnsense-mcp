@@ -44,7 +44,7 @@ arp search="trogdor"
 dhcp
 
 # Find lease for specific device
-dhcp search="morpheus"
+dhcp search="flathead"
 ```
 
 **What it returns**: Active and expired DHCP leases with hostnames, IP addresses, MAC addresses, and expiration times.
@@ -380,16 +380,16 @@ interface_health interface="WAN" include_raw=true
 
 The MCP server is designed to handle complex queries that combine multiple functions. Here are examples of how the AI agent interprets and resolves multi-step questions:
 
-### "What is morpheus doing on the network?"
+### "What is flathead doing on the network?"
 
 **Agent Resolution Process**:
-1. **Identify and verify the device IP**: `dhcp search="morpheus"` (plus DNS forward/PTR verification when available), then `arp search="<resolved_ip>"` for interface/MAC confirmation
+1. **Identify and verify the device IP**: `dhcp search="flathead"` (plus DNS forward/PTR verification when available), then `arp search="<resolved_ip>"` for interface/MAC confirmation
 2. **Get network details**: Extract IP address, MAC address, interface location
-3. **Analyze current activity**: `get_logs src_ip="<morpheus_ip>"` and `get_logs dst_ip="<morpheus_ip>"`
-4. **Live traffic analysis**: `packet_capture interface="<appropriate_interface>" filter="host <morpheus_ip>"`
+3. **Analyze current activity**: `get_logs src_ip="<flathead_ip>"` and `get_logs dst_ip="<flathead_ip>"`
+4. **Live traffic analysis**: `packet_capture interface="<appropriate_interface>" filter="host <flathead_ip>"`
 5. **Correlation**: Combine DHCP lease info, ARP entries, firewall logs, and live packet data
 
-**Expected Result**: Complete picture of morpheus including:
+**Expected Result**: Complete picture of flathead including:
 - Current IP address and lease status
 - MAC address and physical interface location
 - Recent network connections and blocked attempts

@@ -189,7 +189,7 @@ Recent Firewall Logs (Last 5 entries):
 DHCP Leases:
 Active Leases:
 - 192.168.1.100 - aa:bb:cc:dd:ee:ff - coreymbp - Expires: 2024-12-15 14:30:00
-- 192.168.1.101 - 52:54:00:f9:68:7f - morpheus - Expires: 2024-12-15 15:45:00
+- 192.168.1.101 - 52:54:00:f9:68:7f - flathead - Expires: 2024-12-15 15:45:00
 - 192.168.1.102 - aa:bb:cc:dd:ee:ff - trogdor - Expires: 2024-12-15 16:20:00
 
 Expired Leases:

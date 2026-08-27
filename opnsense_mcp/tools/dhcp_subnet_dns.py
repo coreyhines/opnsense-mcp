@@ -18,7 +18,7 @@ _SCOPE_PROPERTIES = {
     },
     "interface": {
         "type": "string",
-        "description": "Interface identifier or description (e.g. opt2, VLAN2wired)",
+        "description": "Interface identifier or description (e.g. opt2, VLAN2office)",
         "optional": True,
     },
 }

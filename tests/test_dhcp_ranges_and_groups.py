@@ -42,7 +42,7 @@ RANGE_ROWS = {
         {
             "uuid": RANGE_UUID,
             "interface": "opt3",
-            "%interface": "VLAN3LAB",
+            "%interface": "VLAN3workshop",
             "start_addr": "172.20.3.100",
             "end_addr": "172.20.3.200",
             "subnet_mask": "255.255.255.0",
@@ -93,9 +93,9 @@ GROUP_ROWS = {
     "rows": [
         {
             "uuid": GROUP_UUID,
-            "ifname": "labNets",
+            "ifname": "workshopNets",
             "members": "opt3,opt4",
-            "%members": "VLAN3LAB,VLAN5LAB",
+            "%members": "VLAN3workshop,VLAN5studio",
             "nogroup": "0",
             "sequence": "0",
             "descr": "lab networks",
@@ -152,7 +152,7 @@ async def test_list_ranges_drops_display_labels() -> None:
     row = result["ranges"][0]
     assert row["start_addr"] == "172.20.3.100"
     assert "%interface" not in row
-    assert row["interface_label"] == "VLAN3LAB"
+    assert row["interface_label"] == "VLAN3workshop"
 
 
 @pytest.mark.asyncio
@@ -341,7 +341,7 @@ async def test_list_groups_marks_the_built_in_ones_as_not_editable() -> None:
     result = await ListFwGroupsTool(client).execute({})
 
     by_name = {g["ifname"]: g for g in result["groups"]}
-    assert by_name["labNets"]["editable"] is True
+    assert by_name["workshopNets"]["editable"] is True
     assert by_name["openvpn"]["editable"] is False
 
 
@@ -352,7 +352,7 @@ async def test_group_members_are_returned_as_a_list() -> None:
 
     result = await ListFwGroupsTool(client).execute({})
 
-    labs = next(g for g in result["groups"] if g["ifname"] == "labNets")
+    labs = next(g for g in result["groups"] if g["ifname"] == "workshopNets")
     assert labs["members"] == ["opt3", "opt4"]
 
 
@@ -374,7 +374,7 @@ async def test_set_group_replaces_membership_with_a_comma_joined_list() -> None:
     assert result["status"] == "success"
     payload = next(c for c in calls if "set_item" in c["endpoint"])["json"]["group"]
     assert payload["members"] == "opt3,opt4,opt7"
-    assert payload["ifname"] == "labNets"
+    assert payload["ifname"] == "workshopNets"
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,15 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 # was missing here, and that is where a sibling IPv6 prefix survived every pass
 # and reached the published copy. The sanitiser only removes what its rules
 # name; this check is what notices the rest.
-SCANNED_ROOTS = ("tests", "docs", "examples", "opnsense_mcp", "scripts", "deploy")
+SCANNED_ROOTS = (
+    "tests",
+    "docs",
+    "examples",
+    "opnsense_mcp",
+    "scripts",
+    "deploy",
+    ".forgejo",
+)
 
 SKIP_PARTS = frozenset({".git", ".venv", "__pycache__", ".ruff_cache", ".pytest_cache"})
 SKIP_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".pdf", ".ico", ".woff2"})
@@ -76,6 +84,85 @@ ALLOWED_PRIVATE_V4 = tuple(
 ALLOWED_PUBLIC_HOSTS = frozenset(
     {"1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "9.9.9.9", "149.112.112.112"}
 )
+
+# Domains the project legitimately depends on. Anything else that looks like a
+# hostname is presumed to be this site's, which is the check the address rules
+# could not make: an internal Forgejo URL sat in a published workflow and every
+# structural rule here passed it, because it is a name, not an address.
+ALLOWED_DOMAINS = frozenset(
+    {
+        # Reserved for documentation and examples (RFC 2606, RFC 6761).
+        "example",
+        "example.com",
+        "example.org",
+        "example.net",
+        "invalid",
+        "test",
+        "localhost",
+        # Registries, forges and services the build actually talks to.
+        "github.com",
+        "raw.githubusercontent.com",
+        "docs.github.com",
+        "data.forgejo.org",
+        "forgejo.org",
+        "codeberg.org",
+        "docker.io",
+        "quay.io",
+        "ghcr.io",
+        "pypi.org",
+        "python.org",
+        "glama.ai",
+        "modelcontextprotocol.io",
+        "anthropic.com",
+        "claude.ai",
+        "semgrep.dev",
+        "opnsense.org",
+        "freebsd.org",
+        "bufferbloat.net",
+        "json-schema.org",
+        "schemastore.org",
+        "creativecommons.org",
+        "apache.org",
+        "mit-license.org",
+        "spdx.org",
+        "cyclonedx.org",
+        "aquasec.com",
+        "gitguardian.com",
+        # Third parties named in documentation and examples rather than
+        # depended on: a smart thermostat as an example DHCP client, and the
+        # documentation sites for tools this project uses.
+        "nest.com",
+        "caddyserver.com",
+        "pytest.org",
+    }
+)
+
+# Deliberately narrow: a dotted name with a plausible public suffix. Matching
+# every dotted token would flag module paths and file names.
+HOSTNAME = re.compile(
+    r"\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+"
+    # `sh` and `run` are deliberately absent. As TLDs they matched install.sh
+    # and subprocess.run far more often than any real host, and the two
+    # dependencies that use them appear only in comments.
+    r"(?:com|net|org|io|ai|dev|example|invalid|test|localhost)\b",
+    re.IGNORECASE,
+)
+
+
+def _offending_hostnames(text: str) -> list[str]:
+    """Hostnames that are neither documentation nor a known dependency."""
+    bad = []
+    for candidate in HOSTNAME.findall(text):
+        name = candidate.lower()
+        if name in ALLOWED_DOMAINS:
+            continue
+        # A subdomain of an allowed domain is allowed: mcp.example.com is fine
+        # because example.com is, and so is data.forgejo.org under forgejo.org.
+        if any(name.endswith("." + allowed) for allowed in ALLOWED_DOMAINS):
+            continue
+        bad.append(candidate)
+    return bad
+
 
 V4 = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")
 # Groups may be empty, so `::` compression is matched. Requiring non-empty
@@ -184,10 +271,12 @@ def test_addresses_are_documentation_ranges_only(path: pathlib.Path) -> None:
     except (UnicodeDecodeError, OSError):
         pytest.skip("not a text file")
 
-    offenders = sorted(set(_offending_v4(text) + _offending_v6(text)))
+    offenders = sorted(
+        set(_offending_v4(text) + _offending_v6(text) + _offending_hostnames(text))
+    )
     assert not offenders, (
-        f"{path.relative_to(REPO_ROOT)} contains addresses outside the "
-        f"documentation ranges: {', '.join(offenders)}. "
+        f"{path.relative_to(REPO_ROOT)} contains identifiers outside the "
+        f"documentation ranges and known dependencies: {', '.join(offenders)}. "
         f"Run scripts/sanitize_site_identifiers.py rather than widening the "
         f"allowlist."
     )
@@ -207,3 +296,28 @@ def test_the_check_would_catch_a_real_address() -> None:
 
     assert _offending_v4("203.0.113.1 and 172.20.8.50 and 127.0.0.1") == []
     assert _offending_v6("2001:db8:5eed:b508::1 and fd0b:b022:101::1") == []
+
+
+def test_the_check_would_catch_a_real_hostname() -> None:
+    """Addresses were covered; names were not, and that is what got through."""
+    assert _offending_hostnames("see https://forge.somesite.com/api/v1") == [
+        "forge.somesite.com"
+    ]
+    assert _offending_hostnames("registry at hub.somesite.net") == ["hub.somesite.net"]
+
+    assert _offending_hostnames("clone from github.com/owner/repo") == []
+    assert _offending_hostnames("point mcp.example.com at the pod") == []
+    assert _offending_hostnames("uses https://data.forgejo.org/actions/checkout") == []
+
+
+def test_what_the_hostname_check_does_not_catch() -> None:
+    """Recorded so the coverage is known rather than assumed.
+
+    This finds names under common public TLDs. It cannot find an internal-only
+    suffix or a bare hostname, because neither is distinguishable from ordinary
+    prose or a dotted identifier. Those still depend on the sanitiser's rules,
+    which is to say on somebody having named them.
+    """
+    assert _offending_hostnames("forge.internal.corp") == []
+    assert _offending_hostnames("ssh root@buildbox") == []
+    assert _offending_hostnames("host.lan is up") == []

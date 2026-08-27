@@ -19,7 +19,7 @@ async def test_list_subnet_dns_reads_scoped_options(make_request: AsyncMock) -> 
         {
             "opt2": {
                 "identifier": "opt2",
-                "description": "VLAN2wired",
+                "description": "VLAN2office",
                 "ipaddr": "172.20.2.1",
                 "subnet": "24",
             }
@@ -149,7 +149,7 @@ async def test_list_subnet_dns_uses_dhcp_range_tag(make_request: AsyncMock) -> N
         {
             "opt5": {
                 "identifier": "opt5",
-                "description": "VLAN81wifi",
+                "description": "VLAN81wireless",
                 "ipaddr": "172.20.8.1",
                 "subnet": "24",
             }

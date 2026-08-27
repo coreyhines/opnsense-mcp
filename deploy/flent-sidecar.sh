@@ -2,9 +2,9 @@
 # Run flent rrul from a disposable sidecar on net-10 (wired podman segment).
 # Traffic: sidecar -> gw 172.20.10.1 -> OPNsense WAN (fq_codel) -> internet netperf peer.
 #
-# Usage (on strongpod host):
-#   NETPERF_HOST=netperf-west.bufferbloat.net ./deploy/flent-sidecar-net10.sh baseline
-#   NETPERF_HOST=netperf-west.bufferbloat.net LABEL=1865down ./deploy/flent-sidecar-net10.sh
+# Usage (on the deploy host):
+#   NETPERF_HOST=netperf-west.bufferbloat.net ./deploy/flent-sidecar.sh baseline
+#   NETPERF_HOST=netperf-west.bufferbloat.net LABEL=1865down ./deploy/flent-sidecar.sh
 #
 # Requires: podman, macvlan network "net-10" (same as opnsense-mcp pod).
 

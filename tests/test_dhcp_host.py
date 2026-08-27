@@ -43,7 +43,7 @@ def test_record_from_search_row():
         "hwaddr": "52:54:00:6c:7b:7f",
         "client_id": "",
         "set_tag": "",
-        "descr": "VLAN81wifi",
+        "descr": "VLAN81wireless",
         "comments": "",
         "cnames": "",
         "aliases": "",
@@ -66,13 +66,13 @@ def test_record_to_summary():
         "ip": "172.20.8.2,::2",
         "hwaddr": "52:54:00:6c:7b:7f",
         "client_id": "duid-here",
-        "descr": "VLAN81wifi",
+        "descr": "VLAN81wireless",
     }
     summary = DhcpHostRecord.from_row(row).to_summary()
     assert summary["ipv4"] == "172.20.8.2"
     assert summary["ipv6_suffix"] == "::2"
     assert summary["has_ipv6"] is True
-    assert summary["descr"] == "VLAN81wifi"
+    assert summary["descr"] == "VLAN81wireless"
     assert summary["client_id"] == "duid-here"
 
 

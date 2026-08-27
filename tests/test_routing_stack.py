@@ -47,7 +47,7 @@ VLAN_ROWS = {
             "tag": "2",
             "pcp": "0",
             "descr": "wired",
-            "vlanif": "ax0_vlan2 [VLAN2wired]",
+            "vlanif": "ax0_vlan2 [VLAN2office]",
         }
     ],
     "total": 1,

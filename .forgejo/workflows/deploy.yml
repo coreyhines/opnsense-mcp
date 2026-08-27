@@ -1,4 +1,4 @@
-name: Deploy to strongpod
+name: Deploy
 
 on:
   workflow_dispatch:
@@ -9,11 +9,11 @@ on:
 
 jobs:
   deploy:
-    runs-on: ansible-net10
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
       image: docker.io/library/alpine:3.22.0
     environment:
-      name: strongpod
+      name: ${{ vars.OPNSENSE_MCP_DEPLOY_ENV }}
       url: ${{ vars.OPNSENSE_MCP_SERVICE_URL }}
     steps:
       - name: Install git, node, and ssh client
@@ -37,7 +37,7 @@ jobs:
             OPNSENSE_MCP_IMAGE_REPO="opnsense-mcp"
           fi
           bash deploy/ci/ssh-setup.sh
-          scp -o StrictHostKeyChecking=no deploy/ci/deploy-strongpod.sh \
+          scp -o StrictHostKeyChecking=no deploy/ci/deploy-host.sh \
             "${OPNSENSE_MCP_DEPLOY_USER:-root}@${OPNSENSE_MCP_DEPLOY_HOST}:/tmp/opnsense-mcp-deploy.sh"
           ssh -o StrictHostKeyChecking=no "${OPNSENSE_MCP_DEPLOY_USER:-root}@${OPNSENSE_MCP_DEPLOY_HOST}" \
             "sudo env OPNSENSE_MCP_IMAGE_REPO=${OPNSENSE_MCP_IMAGE_REPO} OPNSENSE_MCP_IMAGE_TAG=${OPNSENSE_MCP_IMAGE_TAG} bash /tmp/opnsense-mcp-deploy.sh"

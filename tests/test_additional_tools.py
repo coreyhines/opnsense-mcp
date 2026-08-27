@@ -99,10 +99,10 @@ async def test_flush_dns_success_and_error_paths(
         "execute_command",
         lambda _cmd: {"success": True, "stdout": "ok", "stderr": "", "exit_code": 0},
     )
-    name_result = await tool.execute({"hostname": "headroom.frobozz.example"})
+    name_result = await tool.execute({"hostname": "brogmoid.frobozz.example"})
     assert name_result["status"] == "success"
     assert name_result["mode"] == "name"
-    assert name_result["hostname"] == "headroom.frobozz.example"
+    assert name_result["hostname"] == "brogmoid.frobozz.example"
 
     restart_result = await tool.execute({"mode": "restart"})
     assert restart_result["status"] == "success"

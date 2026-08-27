@@ -15,21 +15,21 @@ The AI agent automatically:
 
 ## Real-World Scenarios
 
-### Scenario 1: "What is morpheus doing on the network?"
+### Scenario 1: "What is flathead doing on the network?"
 
-**User Query**: "What is morpheus doing on the network?"
+**User Query**: "What is flathead doing on the network?"
 
 **AI Agent Analysis Process**:
 
 #### Step 1: Device Identification
 ```bash
 # Agent resolves identity first, then confirms in ARP:
-dhcp search="morpheus"
+dhcp search="flathead"
 arp search="172.20.2.150"
 ```
 
 **Sample Results**:
-- **DHCP**: `morpheus` → IP: `172.20.2.150`, MAC: `52:54:00:12:34:56`, Lease expires: 2024-12-15 14:30:00
+- **DHCP**: `flathead` → IP: `172.20.2.150`, MAC: `52:54:00:12:34:56`, Lease expires: 2024-12-15 14:30:00
 - **ARP**: IP: `172.20.2.150` → MAC: `52:54:00:12:34:56`, Interface: `ax0_vlan2` (Wired LAN)
 
 #### Step 2: Historical Activity Analysis
@@ -58,7 +58,7 @@ packet_capture interface="ax0_vlan2" filter="host 172.20.2.150" duration=60 coun
 
 #### AI Agent's Comprehensive Response:
 
-> **morpheus Network Activity Summary**
+> **flathead Network Activity Summary**
 >
 > **Device Details:**
 > - **Location**: Wired LAN (VLAN2) via interface ax0_vlan2
