@@ -37,12 +37,22 @@ from opnsense_mcp.tools.dhcp import DHCPTool
 from opnsense_mcp.tools.dhcp_host_move import MoveDhcpHostTool
 from opnsense_mcp.tools.dhcp_hosts import ListDhcpHostsTool
 from opnsense_mcp.tools.dhcp_lease_delete import DHCPLeaseDeleteTool
+from opnsense_mcp.tools.dhcp_ranges import (
+    ListDhcpOptionsTool,
+    ListDhcpRangesTool,
+    MkDhcpRangeTool,
+    RmDhcpOptionTool,
+    RmDhcpRangeTool,
+    SetDhcpRangeTool,
+    SetDhcpRouterOptionTool,
+)
 from opnsense_mcp.tools.dhcp_subnet_dns import (
     ListDhcpSubnetDnsTool,
     SetDhcpSubnetDnsTool,
 )
 from opnsense_mcp.tools.dns import DNSTool
 from opnsense_mcp.tools.flush_dns import FlushDnsTool
+from opnsense_mcp.tools.fw_groups import ListFwGroupsTool, SetFwGroupTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.gateway_status import GatewayStatusTool
 from opnsense_mcp.tools.get_logs import GetLogsTool
@@ -133,10 +143,13 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListBackupProvidersTool,
     ListConfigBackupsTool,
     ListDhcpHostsTool,
+    ListDhcpOptionsTool,
+    ListDhcpRangesTool,
     ListDhcpSubnetDnsTool,
     ListLoopbackTool,
     ListNptRulesTool,
     ListGatewaysTool,
+    ListFwGroupsTool,
     ListNatOutboundTool,
     ListRouterAdvertsTool,
     ListRoutesTool,
@@ -145,6 +158,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListVipTool,
     LLDPTool,
     MkDhcpHostTool,
+    MkDhcpRangeTool,
     MkdnsTool,
     MkAliasTool,
     MkfwRuleTool,
@@ -164,6 +178,8 @@ TOOL_CLASSES: tuple[type, ...] = (
     PfStatisticsTool,
     RmAliasTool,
     RmDhcpHostTool,
+    RmDhcpOptionTool,
+    RmDhcpRangeTool,
     RmNatOutboundTool,
     RmNptRuleTool,
     RmRouteTool,
@@ -173,7 +189,10 @@ TOOL_CLASSES: tuple[type, ...] = (
     RmfwRuleTool,
     SetAliasTool,
     SetDhcpSubnetDnsTool,
+    SetDhcpRangeTool,
+    SetDhcpRouterOptionTool,
     SetFwRuleTool,
+    SetFwGroupTool,
     SetHostOverrideTool,
     SetRouterAdvertTool,
     SSHFirewallRuleTool,
