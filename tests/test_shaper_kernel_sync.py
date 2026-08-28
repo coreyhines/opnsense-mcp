@@ -12,8 +12,10 @@ inert, but one accumulates per delete and `applied: true` actively hid the
 divergence.
 
 OPNsense exposes only service/reconfigure, with no flush endpoint, so these
-tests cover detecting and reporting the divergence. Removing the orphan still
-needs a full shaper apply or `ipfw pipe <n> delete`.
+tests cover detecting and reporting the divergence. Removing the orphan needs
+`ipfw pipe <n> delete` on the firewall, or a reboot. Note that
+`shaper action='apply'` will not do it: that is the same service/reconfigure
+call that left the orphan behind.
 """
 
 from __future__ import annotations
@@ -155,3 +157,22 @@ def test_verification_is_skipped_when_nothing_was_applied() -> None:
     )
 
     assert not any("service/statistics" in call for call in client.calls)
+
+
+def test_the_hint_does_not_name_the_call_that_left_the_orphan() -> None:
+    """`shaper action='apply'` is service/reconfigure, which is the problem.
+
+    An earlier version of this hint offered "a full shaper apply" as the
+    remedy. That is the same call whose failure to flush created the orphan,
+    so following the hint would have left the pipe in place and looked like
+    the detection was wrong.
+    """
+    import asyncio
+
+    from opnsense_mcp.utils.shaper_mutation import _kernel_sync_fields
+
+    _fields, hints = asyncio.run(_kernel_sync_fields(_Client(orphan=True)))
+    hint = " ".join(hints)
+
+    assert "ipfw pipe 10002 delete" in hint
+    assert "will not" in hint, "the hint must say reconfigure does not clear it"

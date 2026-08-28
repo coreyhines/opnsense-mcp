@@ -332,9 +332,13 @@ async def _kernel_sync_fields(client: ClientT) -> tuple[dict[str, Any], list[str
         {"kernel_in_sync": False, "orphaned_kernel_pipes": orphans},
         [
             f"The config applied, but the running dummynet still holds "
-            f"pipe(s) {', '.join(orphans)}. reconfigure does not flush a "
-            f"removed pipe. Clear them with a full shaper apply, or "
-            f"`ipfw pipe <n> delete` on the firewall."
+            f"pipe(s) {', '.join(orphans)}. Removing the config row does not "
+            f"flush the kernel object, and `shaper action='apply'` will not "
+            f"clear it either: that is the same service/reconfigure call that "
+            f"left it behind. Remove it on the firewall with "
+            f"`ipfw pipe {orphans[0]} delete` (repeat per pipe, then confirm "
+            f"with `ipfw pipe show`). A reboot also clears it. The orphan is "
+            f"inert meanwhile: no ipfw rule references it."
         ],
     )
 
