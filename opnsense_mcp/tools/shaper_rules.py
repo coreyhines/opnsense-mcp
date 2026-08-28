@@ -590,4 +590,8 @@ class DeleteShaperRuleTool:
             apply=apply,
             summary=f"**Deleted rule** `{uuid}`.",
             structured={"uuid": uuid, "api_result": result},
+            # reconfigure removes the config object without flushing the
+            # dummynet pipe, so an applied delete is checked against the
+            # running shaper before it is reported as done.
+            verify_kernel=True,
         )

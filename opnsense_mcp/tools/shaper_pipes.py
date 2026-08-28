@@ -578,4 +578,8 @@ class DeleteShaperPipeTool:
             apply=apply,
             summary=f"**Deleted pipe** `{uuid}`.",
             structured={"uuid": uuid, "api_result": result},
+            # reconfigure removes the config object without flushing the
+            # dummynet pipe, so an applied delete is checked against the
+            # running shaper before it is reported as done.
+            verify_kernel=True,
         )
