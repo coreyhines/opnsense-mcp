@@ -111,8 +111,9 @@ class SetInterfaceAddressTool:
 
     name = "set_interface_address"
     description = (
-        "Set a static IPv4 or IPv6 address on an assigned interface. Uses SSH, "
-        "because the 26.7 API model has no address field and discards one silently"
+        "Set a static IPv4 or IPv6 address on an assigned interface, enabling "
+        "the interface if it is disabled. Uses SSH, because the 26.7 API model "
+        "has no address field and discards one silently"
     )
     input_schema: dict[str, Any] = {
         "type": "object",
@@ -124,7 +125,10 @@ class SetInterfaceAddressTool:
             "address": {"type": "string", "description": "IPv4 or IPv6 address"},
             "subnet_bits": {
                 "type": "number",
-                "description": "Prefix length; 32 or 128 for a loopback",
+                "description": (
+                    "Prefix length; 32 or 128 for a loopback. 0 is refused: it "
+                    "would claim the whole address space on the interface"
+                ),
             },
             "reason": {
                 "type": "string",
@@ -215,10 +219,15 @@ class SetInterfaceAddressTool:
             except (TypeError, ValueError):
                 return {"status": "error", "error": "subnet_bits must be a number"}
             limit = 32 if address.version == 4 else 128
-            if not 0 <= bits <= limit:
+            # A /0 is syntactically fine and operationally never what was meant:
+            # it claims the entire address space on the interface.
+            if not 1 <= bits <= limit:
                 return {
                     "status": "error",
-                    "error": f"subnet_bits must be between 0 and {limit} for IPv{address.version}",
+                    "error": (
+                        f"subnet_bits must be between 1 and {limit} for "
+                        f"IPv{address.version}"
+                    ),
                 }
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to validate the address change")
