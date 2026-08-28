@@ -60,6 +60,25 @@ _NOT_TOOLS = frozenset(
         "no_matches",
         "partial_success",
         "bufferbloat_wan",
+        # Config keys, params, device names, env vars — tool-shaped but not
+        # tools. This is where false positives belong now that the check no
+        # longer filters by verb (which blinded it to removed verb families).
+        "api_key",
+        "api_secret",
+        "firewall_host",
+        "verify_ssl",
+        "max_retries",
+        "source_net",
+        "source_port",
+        "destination_net",
+        "destination_port",
+        "password_hash",
+        "secret_key",
+        "token_expire_minutes",
+        "proxy_pass",
+        "package_manager",
+        "ax0_vlan2",
+        "ax0_vlan100",
     }
 )
 
@@ -95,7 +114,6 @@ def test_no_document_advertises_a_tool_that_does_not_exist() -> None:
     neither a known tool nor an allowlisted non-tool, is a finding.
     """
     known = _exposed_names()
-    verbs = {n.split("_", 1)[0] for n in known if "_" in n}
     candidates = re.compile(r"`([a-z][a-z0-9]+(?:_[a-z0-9]+)+)`")
     stale: list[str] = []
 
@@ -105,14 +123,19 @@ def test_no_document_advertises_a_tool_that_does_not_exist() -> None:
         except (UnicodeDecodeError, OSError):
             continue
         for name in candidates.findall(text):
+            # No verb filter: deriving verbs from surviving tools blinded this
+            # to a fully-removed verb family, which is exactly the removal case
+            # (ssh_fw_rule) it exists to catch. Any backticked snake_case name
+            # that is not a live tool and not an allowlisted non-tool is a
+            # finding; genuine non-tools go in _NOT_TOOLS.
             if name in known or name in _NOT_TOOLS:
                 continue
-            if name.split("_", 1)[0] in verbs:
-                stale.append(f"{doc.relative_to(REPO)}: {name}")
+            stale.append(f"{doc.relative_to(REPO)}: {name}")
 
     assert not stale, (
-        "documents reference tools that do not exist (fix the doc, or add a "
-        "genuine non-tool to _NOT_TOOLS): " + ", ".join(sorted(set(stale)))
+        "documents reference names that look like tools but are not registered "
+        "(fix the doc, or add a genuine non-tool to _NOT_TOOLS): "
+        + ", ".join(sorted(set(stale)))
     )
 
 

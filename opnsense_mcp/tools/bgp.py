@@ -131,26 +131,44 @@ def _join_error(existing: str | None, addition: str) -> str:
     return f"{existing}; {addition}" if existing else addition
 
 
-def _has_established_peer(summary: Any) -> bool:
-    """Does this bgpsummary response show a peer in state Established?
+def _peer_states(summary: Any) -> list[str]:
+    """Collect the `state` of every peer object found in a bgpsummary response.
 
-    Reads the `state` field on peer objects, wherever they nest, rather than
-    substring-matching the whole document. The document carries a `desc` field
-    that is the caller's own neighbour description, so "peering established 2024"
-    matched, blocking every AS change; and an error string mentioning the word
-    was read as evidence of the thing it failed to determine.
-
-    A peer object is a dict with a `state`. Everything else is walked through to
-    find them.
+    A peer object is a dict carrying a `state`. Reading that field specifically,
+    rather than substring-matching the whole document, is what stopped the
+    caller's own neighbour `desc` ("peering established 2024") from being read
+    as a session state.
     """
+    states: list[str] = []
     if isinstance(summary, dict):
         state = summary.get("state")
-        if isinstance(state, str) and state.strip().lower() == "established":
-            return True
-        return any(_has_established_peer(v) for v in summary.values())
-    if isinstance(summary, (list, tuple)):
-        return any(_has_established_peer(v) for v in summary)
-    return False
+        if isinstance(state, str):
+            states.append(state.strip().lower())
+        for value in summary.values():
+            states.extend(_peer_states(value))
+    elif isinstance(summary, (list, tuple)):
+        for value in summary:
+            states.extend(_peer_states(value))
+    return states
+
+
+def _any_established(summary: Any) -> bool | None:
+    """Tri-state: True if a peer is Established, False if none is, None if the
+    response cannot be parsed into peer states at all.
+
+    The guard must fail closed on None. The live os-frr returns structured JSON
+    (verified: response.ipv4Unicast.peers.<ip>.state), but a text/vtysh shape or
+    an error string at HTTP 200 carries no parseable state, and "no state found"
+    is not the same as "no session up" — reading it as the latter permitted an
+    AS change that resets every peer. The word "established" appearing anywhere
+    in an unparseable blob is treated as could-be-established, not proof of none.
+    """
+    states = _peer_states(summary)
+    if states:
+        return "established" in states
+    # No structured peer states. If the raw text mentions the word at all, we
+    # cannot rule out an established session; either way we could not parse it.
+    return None
 
 
 def _selected(field: Any) -> list[str]:
@@ -637,8 +655,12 @@ class SetBgpGlobalTool(_BgpToolBase):
             bgp = bgp_doc.get("bgp", {}) if isinstance(bgp_doc, dict) else {}
 
             # The AS number appears in every OPEN message, so changing it makes
-            # each peer renegotiate from scratch.
-            if as_number and as_number != str(bgp.get("asnumber", "")):
+            # each peer renegotiate from scratch. Only relevant while BGP is
+            # actually running: if it is disabled, no session can exist, so the
+            # session check (which fails closed on an unparseable summary) would
+            # otherwise refuse a safe change on a switched-off daemon.
+            bgp_running = _on(bgp.get("enabled")) and enabled is not False
+            if as_number and as_number != str(bgp.get("asnumber", "")) and bgp_running:
                 try:
                     summary = await self.client._make_request("GET", QUAGGA["summary"])
                 except Exception as exc:  # noqa: BLE001
@@ -653,7 +675,19 @@ class SetBgpGlobalTool(_BgpToolBase):
                             f"if a reset is intended."
                         ),
                     }
-                if _has_established_peer(summary):
+                established = _any_established(summary)
+                if established is None:
+                    return {
+                        "status": "error",
+                        "error": (
+                            "refusing to change the AS number: the session "
+                            "summary could not be parsed to confirm no peers are "
+                            "Established, and an unparseable summary is not "
+                            "evidence of none. Retry, or disable BGP first if a "
+                            "reset is intended."
+                        ),
+                    }
+                if established:
                     return {
                         "status": "error",
                         "error": (

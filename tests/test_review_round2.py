@@ -144,7 +144,7 @@ async def test_a_failed_apply_on_delete_keeps_status_success() -> None:
 
 def test_the_as_guard_ignores_a_description_containing_the_word() -> None:
     """A peer described "established 2024" blocked every AS change forever."""
-    from opnsense_mcp.tools.bgp import _has_established_peer
+    from opnsense_mcp.tools.bgp import _any_established
 
     down_with_loaded_desc = {
         "response": {
@@ -158,36 +158,47 @@ def test_the_as_guard_ignores_a_description_containing_the_word() -> None:
             }
         }
     }
-    assert _has_established_peer(down_with_loaded_desc) is False
+    assert _any_established(down_with_loaded_desc) is False
 
 
 def test_the_as_guard_still_sees_a_real_established_state() -> None:
-    from opnsense_mcp.tools.bgp import _has_established_peer
+    from opnsense_mcp.tools.bgp import _any_established
 
     up = {
         "response": {
             "ipv4Unicast": {"peers": {"198.51.100.2": {"state": "Established"}}}
         }
     }
-    assert _has_established_peer(up) is True
+    assert _any_established(up) is True
 
 
 @pytest.mark.asyncio
-async def test_an_error_string_summary_does_not_block_the_change() -> None:
-    """An error mentioning the word was read as evidence of the thing it failed
-    to determine; but an unreadable summary should refuse, not guess."""
-    client, _ = _client(
-        {
-            "general/get": {"general": {"enabled": "1", "daemons": {}}},
-            "bgp/get": {"bgp": {"enabled": "1", "asnumber": "65001"}},
-            "bgpsummary": {"response": "Error: cannot determine if established"},
-        }
-    )
+async def test_an_unstructured_summary_refuses_the_change() -> None:
+    """A successful-but-unstructured 200 must fail closed, not open.
 
-    result = await SetBgpGlobalTool(client).execute({"as_number": "65010"})
+    The AS guard treats "no Established peer found" as permission to change the
+    AS number. A response it cannot parse — a text/vtysh shape, an error string
+    at HTTP 200 — is not evidence of no sessions. A first version of this test
+    asserted only that a phrase was absent, which passed while the guard failed
+    open; it now asserts the change is refused.
+    """
+    for shape in (
+        {"response": "BGP neighbor 198.51.100.254 state = Established"},
+        {"response": "Error: cannot determine if established"},
+        "Established",
+        {"response": {"unexpected": "shape"}},
+    ):
+        client, _ = _client(
+            {
+                "general/get": {"general": {"enabled": "1", "daemons": {}}},
+                "bgp/get": {"bgp": {"enabled": "1", "asnumber": "65001"}},
+                "bgpsummary": shape,
+            }
+        )
 
-    # It must not fire the "sessions are Established" refusal on an error string.
-    assert "sessions are established" not in result.get("error", "").lower()
+        result = await SetBgpGlobalTool(client).execute({"as_number": "65010"})
+
+        assert result["status"] == "error", shape
 
 
 # --- link-local read-back --------------------------------------------------
@@ -215,3 +226,27 @@ def test_mixed_encodings_of_a_dot_segment_are_refused() -> None:
 def test_an_empty_trailing_segment_is_allowed() -> None:
     """get_item/ ends in an empty segment, which is not a dot segment."""
     _reject_unsafe_endpoint("/api/interfaces/assignment/get_item/")
+
+
+def test_the_doc_drift_test_catches_a_fully_removed_verb_family() -> None:
+    """Round 2 derived the verb set from surviving tools, so a name whose whole
+    verb family was removed — ssh_fw_rule, the exact motivating case — could no
+    longer be caught. The check must not depend on the stale name's verb still
+    being in use."""
+    import re
+    import sys
+
+    sys.path.insert(0, "tests")
+    from test_review_wave4 import _NOT_TOOLS, _exposed_names
+
+    known = _exposed_names()
+    candidates = re.compile(r"`([a-z][a-z0-9]+(?:_[a-z0-9]+)+)`")
+
+    # A removed tool's name, in a doc, must be flagged.
+    doc_text = "See `ssh_fw_rule` for the SSH path."
+    flagged = [
+        n
+        for n in candidates.findall(doc_text)
+        if n not in known and n not in _NOT_TOOLS
+    ]
+    assert "ssh_fw_rule" in flagged
