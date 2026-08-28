@@ -80,6 +80,25 @@ echo "opnsense-mcp install: INSTALL_ROOT=${INSTALL_ROOT} SRC_DIR=${SRC_DIR} GIT_
 
 mkdir -p "${INSTALL_ROOT}" /etc/containers/systemd/opnsense-mcp
 
+# Directories the app quadlet bind-mounts. Podman creates a missing bind
+# source as an empty directory rather than failing, so an uncreated path here
+# does not break the deploy: it silently hands the container an empty mount
+# and the tools behind it fail one call at a time.
+#   ssh      -> /root/.ssh, read-only. You supply the key and known_hosts.
+#   backups  -> config_backup action=download. Needs to be writable, and the
+#               install root itself is mounted read-only.
+mkdir -p "${INSTALL_ROOT}/ssh" "${INSTALL_ROOT}/backups"
+chmod 700 "${INSTALL_ROOT}/ssh"
+
+if [[ -z "$(ls -A "${INSTALL_ROOT}/ssh" 2>/dev/null)" ]]; then
+  echo "note: ${INSTALL_ROOT}/ssh is empty. The SSH-backed tools" >&2
+  echo "      (packet_capture, flush_dns, set_interface_address) need a private" >&2
+  echo "      key and a known_hosts entry there. For example:" >&2
+  echo "        cp ~/.ssh/id_ed25519 ${INSTALL_ROOT}/ssh/" >&2
+  echo "        ssh-keyscan <firewall-hostname> >> ${INSTALL_ROOT}/ssh/known_hosts" >&2
+  echo "      Record the hostname, not the address: that is what the check reads." >&2
+fi
+
 if [[ ! -d "${SRC_DIR}/.git" ]]; then
   git clone --depth 1 --branch "${GIT_REF}" "${DEFAULT_REPO_URL}" "${SRC_DIR}"
 else

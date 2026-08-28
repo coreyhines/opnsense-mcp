@@ -23,6 +23,7 @@ from opnsense_mcp.utils.shaper_serialize import (
     serialize_rule_api_post,
 )
 from opnsense_mcp.utils.shaper_types import (
+    TOOL_STATUS_CONFIRMATION_REQUIRED,
     TOOL_STATUS_ERROR,
     TOOL_STATUS_SUCCESS,
     TOOL_STATUS_WARNING,
@@ -491,7 +492,13 @@ class ToggleShaperRuleTool:
     description = "Toggle rule enabled state"
     input_schema: dict[str, Any] = {
         "type": "object",
-        "properties": {"uuid": {"type": "string"}, "apply": {"type": "boolean"}},
+        "properties": {
+            "uuid": {"type": "string"},
+            "apply": {
+                "type": "boolean",
+                "default": True,
+            },
+        },
         "required": ["uuid"],
     }
 
@@ -557,9 +564,8 @@ class DeleteShaperRuleTool:
         if not validate_delete_confirm_token("rule", uuid, str(confirm or "")):
             token_info = issue_delete_confirm_token("rule", uuid)
             return make_tool_response(
-                status=TOOL_STATUS_ERROR,
+                status=TOOL_STATUS_CONFIRMATION_REQUIRED,
                 structured={
-                    "error": "confirmation_required",
                     "confirm_token": token_info["token"],
                 },
                 summary=f"**Confirmation required.** {token_info['message']}",
@@ -584,4 +590,8 @@ class DeleteShaperRuleTool:
             apply=apply,
             summary=f"**Deleted rule** `{uuid}`.",
             structured={"uuid": uuid, "api_result": result},
+            # reconfigure removes the config object without flushing the
+            # dummynet pipe, so an applied delete is checked against the
+            # running shaper before it is reported as done.
+            verify_kernel=True,
         )

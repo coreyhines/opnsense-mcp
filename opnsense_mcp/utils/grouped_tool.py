@@ -46,14 +46,24 @@ class GroupedTool:
         name: str,
         description: str,
         members: dict[str, Any],
+        field_aliases: dict[str, dict[str, str]] | None = None,
     ) -> None:
         """Build the group.
 
         ``members`` maps an action name to a tool instance. The instance keeps
         its own name, description and schema, which are what `help` reports.
+
+        ``field_aliases`` maps a member tool's name to ``{own_field: alias}``.
+        It exists because the group consumes `action` to pick the member, so a
+        member declaring its own `action` field could never receive one: every
+        rule created through `fw_rule` came out `pass`, list could not filter by
+        action, and packet capture could be started but never stopped. The
+        member keeps its own field name and standalone behaviour; only the name
+        the group advertises changes, and it is translated back on dispatch.
         """
         self.name = name
         self.members = members
+        self.field_aliases = field_aliases or {}
         # The action names are already in the `action` enum, so listing them
         # here too just pays for them twice.
         self.description = (
@@ -88,9 +98,11 @@ class GroupedTool:
 
         for action, tool in sorted(self.members.items()):
             schema = getattr(tool, "input_schema", {}) or {}
+            aliases = self._aliases_for(tool)
             for field, spec in (schema.get("properties") or {}).items():
-                used_by.setdefault(field, []).append(action)
-                raw.setdefault(field, spec)
+                advertised = aliases.get(field, field)
+                used_by.setdefault(advertised, []).append(action)
+                raw.setdefault(advertised, spec)
 
         for field, spec in raw.items():
             if is_shared(field):
@@ -113,13 +125,38 @@ class GroupedTool:
             "required": ["action"],
         }
 
+    def _aliases_for(self, tool: Any) -> dict[str, str]:
+        """The `{own_field: alias}` map for one member tool."""
+        return self.field_aliases.get(getattr(tool, "name", ""), {})
+
+    def _rename_to_member_fields(
+        self, tool: Any, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Translate advertised alias names back to the member's own fields."""
+        aliases = self._aliases_for(tool)
+        if not aliases:
+            return params
+        renamed = dict(params)
+        for own_field, alias in aliases.items():
+            if alias in renamed:
+                renamed[own_field] = renamed.pop(alias)
+        return renamed
+
     def _help(self) -> dict[str, Any]:
         """Describe every action from its own tool's metadata."""
         actions = []
         for action, tool in sorted(self.members.items()):
             schema = getattr(tool, "input_schema", {}) or {}
-            props = schema.get("properties") or {}
-            required = list(schema.get("required") or [])
+            aliases = self._aliases_for(tool)
+            props = {
+                aliases.get(field, field): spec
+                for field, spec in (schema.get("properties") or {}).items()
+            }
+            # `help` is the contract, so it names fields the way a caller must
+            # send them, not the way the member declares them.
+            required = [
+                aliases.get(field, field) for field in (schema.get("required") or [])
+            ]
             actions.append(
                 {
                     "action": action,
@@ -130,6 +167,15 @@ class GroupedTool:
                     "fields": {
                         field: spec.get("description", "")
                         for field, spec in sorted(props.items())
+                    },
+                    # Defaults differ per action -- `apply` most consequentially,
+                    # since it decides whether a change goes live. One shared
+                    # sentence in the grouped schema cannot carry that, so help
+                    # reports each action's own.
+                    "defaults": {
+                        field: spec["default"]
+                        for field, spec in sorted(props.items())
+                        if "default" in spec
                     },
                 }
             )
@@ -167,10 +213,11 @@ class GroupedTool:
             }
 
         schema = getattr(tool, "input_schema", {}) or {}
+        aliases = self._aliases_for(tool)
         missing = [
-            field
+            aliases.get(field, field)
             for field in (schema.get("required") or [])
-            if params.get(field) in (None, "")
+            if params.get(aliases.get(field, field)) in (None, "")
         ]
         if missing:
             return {
@@ -181,4 +228,4 @@ class GroupedTool:
                 ),
             }
 
-        return await tool.execute(params)
+        return await tool.execute(self._rename_to_member_fields(tool, params))

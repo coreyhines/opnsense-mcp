@@ -133,9 +133,13 @@ def normalize_rule(row: dict[str, Any]) -> FlatShaperRule:
         else (selected_enum(interface2_raw) or None),
         direction=_resolve_str_or_enum(row.get("direction", "")),
         proto=_resolve_str_or_enum(row.get("proto", "")),
-        source=row.get("source", "any"),
+        # Resolved like every other enum field on the rule. Passing these
+        # through raw meant `settings` returned {'any': {'selected': 1, ...}}
+        # where `list_rules` returned 'any' -- the same field in two shapes
+        # depending on which action a caller happened to use.
+        source=_resolve_str_or_enum(row.get("source", "any")) or "any",
         source_port=_resolve_optional_str(row.get("source_port", "")),
-        destination=row.get("destination", "any"),
+        destination=_resolve_str_or_enum(row.get("destination", "any")) or "any",
         destination_port=_resolve_optional_str(row.get("destination_port", "")),
         dscp=_resolve_optional_str(dscp_raw)
         if not isinstance(dscp_raw, dict)

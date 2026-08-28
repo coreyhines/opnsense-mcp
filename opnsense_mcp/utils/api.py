@@ -29,6 +29,48 @@ from opnsense_mcp.utils.mvc_merge import merge_for_set
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 logger = logging.getLogger(__name__)
+
+# Bootgrid search pagination. The page size is a transport detail; callers get
+# every row. The page cap only bounds a server that keeps returning full pages
+# without ever reaching its own reported total.
+SEARCH_PAGE_SIZE = 500
+SEARCH_MAX_PAGES = 100
+
+
+def _api_error_detail(payload: Any) -> str:
+    """The most specific thing a failed OPNsense response body can tell us.
+
+    Order: an explicit `message`, then `validations` field by field, then the
+    body itself. The body fallback matters: `del_item` returning 500 was once
+    declared undoable because the caller only saw "Unknown API error", while
+    the body said "Interface locked, unset lock first before removal".
+    Discarding the body is what turns a three-command fix into a wrong answer.
+    """
+    if not isinstance(payload, dict):
+        return str(payload) if payload else "Unknown API error"
+
+    message = payload.get("message")
+    if message:
+        return str(message)
+
+    validations = payload.get("validations")
+    if validations:
+        try:
+            return json.dumps(validations, sort_keys=True)
+        except (TypeError, ValueError):
+            return str(validations)
+
+    # Nothing named; hand back what the firewall actually said, minus the
+    # `result: failed` marker that carries no information of its own.
+    rest = {k: v for k, v in payload.items() if k != "result"}
+    if rest:
+        try:
+            return json.dumps(rest, sort_keys=True)
+        except (TypeError, ValueError):
+            return str(rest)
+    return "Unknown API error"
+
+
 _MAC_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.IGNORECASE)
 
 
@@ -499,20 +541,7 @@ class OPNsenseClient:
                         isinstance(json_data, dict)
                         and json_data.get("result") == "failed"
                     ):
-                        error_msg = json_data.get("message")
-                        if not error_msg:
-                            vals = json_data.get("validations")
-                            if vals:
-                                try:
-                                    error_msg = json.dumps(
-                                        vals,
-                                        sort_keys=True,
-                                    )
-                                except (TypeError, ValueError):
-                                    error_msg = str(vals)
-                        if not error_msg:
-                            error_msg = "Unknown API error"
-                        raise RequestError(f"API error: {error_msg}")
+                        raise RequestError(f"API error: {_api_error_detail(json_data)}")
                     return json_data
 
                 response.raise_for_status()
@@ -694,7 +723,7 @@ class OPNsenseClient:
 
             # Check for successful creation
             if response.get("result") != "saved" or "uuid" not in response:
-                error_msg = response.get("message", "Unknown error")
+                error_msg = _api_error_detail(response)
                 self._raise_create_rule_failed(error_msg)
 
             # Get the rule UUID
@@ -741,7 +770,7 @@ class OPNsenseClient:
             )
 
             if response.get("result") != "saved":
-                error_msg = response.get("message", "Unknown error")
+                error_msg = _api_error_detail(response)
                 self._raise_update_rule_failed(error_msg)
 
         except APIError:
@@ -764,7 +793,7 @@ class OPNsenseClient:
             )
 
             if not isinstance(response, dict) or response.get("result") != "deleted":
-                error_msg = response.get("message", "Unknown error")
+                error_msg = _api_error_detail(response)
                 self._raise_delete_rule_failed(f"Delete failed: {error_msg}")
 
         except APIError:
@@ -835,9 +864,7 @@ class OPNsenseClient:
             # Handle different response formats for apply operation
             status = apply_resp.get("status", "").strip().lower()
             if status not in ("ok", "success"):
-                error_msg = apply_resp.get(
-                    "message", f"Unknown error (status: {status})"
-                )
+                error_msg = _api_error_detail(apply_resp)
                 self._raise_apply_changes_failed(error_msg)
         except APIError:
             raise
@@ -1482,15 +1509,59 @@ class OPNsenseClient:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _reverse)
 
+    async def _search_all_rows(
+        self,
+        endpoint: str,
+        search: str = "",
+        page_size: int = SEARCH_PAGE_SIZE,
+    ) -> list[dict[str, Any]]:
+        """Page an OPNsense bootgrid search endpoint until every row is in hand.
+
+        A single `rowCount: 100` request silently returned the first 100 rows
+        and the caller reported that as the total, which is data loss with no
+        signal. Termination is on a short page as well as on `total`, so a
+        response that omits or misreports the total still cannot loop.
+        """
+        rows: list[dict[str, Any]] = []
+        current = 1
+        while True:
+            data = await self._make_request(
+                "POST",
+                endpoint,
+                json={
+                    "current": current,
+                    "rowCount": page_size,
+                    "searchPhrase": search,
+                },
+            )
+            if not isinstance(data, dict):
+                break
+            page = list(data.get("rows") or [])
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+            total_raw = data.get("total", data.get("rowCount"))
+            try:
+                total = int(total_raw)
+            except (TypeError, ValueError):
+                total = 0
+            if total and len(rows) >= total:
+                break
+            if current >= SEARCH_MAX_PAGES:
+                logger.warning(
+                    "Stopped paging %s at %d pages (%d rows)",
+                    endpoint,
+                    current,
+                    len(rows),
+                )
+                break
+            current += 1
+        return rows
+
     async def search_host_overrides(self, search: str = "") -> list[dict[str, Any]]:
         """List Unbound DNS host overrides, optionally filtered by hostname/IP/description."""
         try:
-            data = await self._make_request(
-                "POST",
-                ENDPOINTS["unbound"]["search"],
-                json={"current": 1, "rowCount": 100, "searchPhrase": search},
-            )
-            return data.get("rows", []) if isinstance(data, dict) else []
+            return await self._search_all_rows(ENDPOINTS["unbound"]["search"], search)
         except Exception:
             logger.exception("Failed to search host overrides")
             return []
@@ -1545,12 +1616,7 @@ class OPNsenseClient:
     async def search_aliases(self, search: str = "") -> list[dict[str, Any]]:
         """List firewall aliases, optionally filtered."""
         try:
-            data = await self._make_request(
-                "POST",
-                ENDPOINTS["alias"]["search"],
-                json={"current": 1, "rowCount": 100, "searchPhrase": search},
-            )
-            return data.get("rows", []) if isinstance(data, dict) else []
+            return await self._search_all_rows(ENDPOINTS["alias"]["search"], search)
         except Exception:
             logger.exception("Failed to search aliases")
             return []

@@ -190,8 +190,8 @@ class MkfwRuleTool:
                 "applied": False,
                 "status": "success",
                 "note": (
-                    "Rule created but not applied. Use "
-                    "apply_firewall_changes() to activate."
+                    "Rule created but not applied. Call "
+                    "fw_rule action='apply' to activate."
                 ),
             }
 

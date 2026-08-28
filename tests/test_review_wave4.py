@@ -72,6 +72,8 @@ _NOT_TOOLS = frozenset(
         "source_port",
         "destination_net",
         "destination_port",
+        "start_addr",
+        "end_addr",
         "password_hash",
         "secret_key",
         "token_expire_minutes",
@@ -128,7 +130,10 @@ def test_no_document_advertises_a_tool_that_does_not_exist() -> None:
             # (ssh_fw_rule) it exists to catch. Any backticked snake_case name
             # that is not a live tool and not an allowlisted non-tool is a
             # finding; genuine non-tools go in _NOT_TOOLS.
-            if name in known or name in _NOT_TOOLS:
+            # A test function name is never a tool, and documenting which
+            # test enforces what is worth doing. Excluding the class beats
+            # adding each one to _NOT_TOOLS as the ledger grows.
+            if name in known or name in _NOT_TOOLS or name.startswith("test_"):
                 continue
             stale.append(f"{doc.relative_to(REPO)}: {name}")
 

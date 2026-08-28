@@ -13,13 +13,23 @@ Pod=opnsense-mcp.pod
 Image=localhost/opnsense-mcp:<tag>
 ContainerName=opnsense-mcp-app
 Environment=OPNSENSE_MCP_INSTALL_ROOT=/opt/containerdata/opnsense-mcp
+# config_backup action=download writes here. Set in the unit rather than the
+# environment file so the action works on a fresh install without an edit;
+# override it in the environment file if you want backups elsewhere.
+Environment=OPNSENSE_BACKUP_DIR=/opt/containerdata/opnsense-mcp/backups
 
 EnvironmentFile=/opt/containerdata/opnsense-mcp/environment
 Volume=/opt/containerdata/opnsense-mcp:/opt/containerdata/opnsense-mcp:ro,Z
 Volume=/opt/certs/wild:/opt/certs/wild:ro,Z
 
-# SSH keys for packet_capture / set_interface_address (host path must exist).
+# SSH key and known_hosts for packet_capture, flush_dns and
+# set_interface_address. install.sh creates this directory; you supply the
+# contents. An empty directory mounts fine and every SSH tool then fails with
+# a missing key or an unknown host.
 Volume=/opt/containerdata/opnsense-mcp/ssh:/root/.ssh:ro,Z
+
+# Backups need a writable path, and the install root above is mounted ro.
+Volume=/opt/containerdata/opnsense-mcp/backups:/opt/containerdata/opnsense-mcp/backups:rw,Z
 
 [Service]
 Restart=on-failure

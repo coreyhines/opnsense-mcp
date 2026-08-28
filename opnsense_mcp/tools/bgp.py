@@ -369,6 +369,7 @@ class MkBgpNeighborTool(_BgpToolBase):
                 "type": "boolean",
                 "description": "Reconfigure FRR, which restarts it (default false)",
                 "optional": True,
+                "default": False,
             },
         },
         "required": ["address"],
@@ -476,7 +477,11 @@ class ToggleBgpNeighborTool(_BgpToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Neighbour uuid"},
             "enabled": {"type": "boolean", "description": "Target state"},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid", "enabled"],
     }
@@ -524,7 +529,11 @@ class RmBgpNeighborTool(_BgpToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Neighbour uuid"},
             "confirm": {"type": "string", "optional": True},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }
@@ -616,6 +625,7 @@ class SetBgpGlobalTool(_BgpToolBase):
                     "established session (default false)"
                 ),
                 "optional": True,
+                "default": False,
             },
         },
         "required": [],

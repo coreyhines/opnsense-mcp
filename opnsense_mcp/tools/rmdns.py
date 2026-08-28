@@ -68,6 +68,10 @@ class RmdnsTool:
 
             return {
                 "uuid": uuid,
+                # Every delete exposes a `deleted` boolean, so a caller can
+                # assert on one structured field rather than on which keys a
+                # particular delete happens to return.
+                "deleted": True,
                 "applied": True,
                 "status": "success",
             }

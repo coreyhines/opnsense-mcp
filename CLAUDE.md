@@ -136,10 +136,64 @@ script, not from a tool. A probe named `test_*` at the repository root is worse:
 pytest collects it, so a routine test run opens live connections. Keep probes
 out of the collection path.
 
-**Three of these are enforced now, not remembered.**
+**A fixture that uses key names the API does not emit tests nothing.**
+`fw_rules.py` read `source`/`destination` where `searchRule` sends
+`source_net`/`destination_net`, so every rule on the firewall listed as
+any->any. `dhcp_scope.py` read `start`/`rangestart` where dnsmasq range rows
+send `start_addr`/`end_addr`, so the documented `subnet` selector could never
+match. Both suites were green throughout, because each normalizer was fed a
+hand-written fixture in the shape it already expected, and nothing asserted a
+normalized value was ever non-empty. Capture the response, keep the keys it
+really has, and assert on values.
+
+**A group selector eats a member field of the same name.** `GroupedTool` pops
+`action` to choose the member, so every member declaring its own `action` was
+unreachable: created rules were always `pass`, list could not filter, and a
+packet capture could be started but never stopped. Adding a member is where
+this recurs, so it is a test rather than a habit.
+
+**Say whether the operation ran, not what it found.** A shaper audit that found
+problems returned `status: "error"`, which a caller cannot tell from an audit
+that failed to run. Severity goes in the payload.
+
+**A bind mount whose source nothing created mounts empty, and does not fail.**
+The quadlet mounted a host `ssh` directory at `/root/.ssh` and nothing created
+it. Podman creates a missing bind source rather than refusing, so the deploy
+succeeded and handed the container an empty mount; every SSH-backed tool then
+failed one call at a time. `config_backup download` was the same shape: the
+variable was unset and the only mounted path was read-only. Neither is visible
+at deploy time. A mount needs a directory someone created and a test that says
+so.
+
+**Verify the state you report, do not infer it from the call that returned ok.**
+`delete_pipe` returned `applied: true` because `service/reconfigure` returned
+ok. Reconfigure removes the config row without flushing the dummynet pipe, so
+the kernel kept it and one orphan accumulated per delete. An apply reporting
+success is evidence the request was accepted, not that the system reached the
+state.
+
+**Now enforced, not remembered.**
 `.claude/hooks/bash_guard.py` runs as a `PreToolUse` hook on every Bash call. It
 refuses the `;`-chained publish and the bare-cat heredoc, and warns on workspace
 Python calling `get_opnsense_client()`. `tests/test_bash_guard.py` holds the
 falsification cases, including the one where the guard blocked its own commit
-for quoting a pattern it forbids. Everything else on this list is still read
-rather than run.
+for quoting a pattern it forbids.
+
+Eight more run as tests:
+
+| Check | Fails when |
+|---|---|
+| `test_guidance_names_are_real.py` | a source string names an action or offers a `tool()` call the registry does not know |
+| `test_no_member_field_collides_with_the_group_selector` | a member declares `action` without a `FIELD_ALIASES` entry |
+| `test_every_apply_field_declares_its_default` | a tool takes `apply` without saying what omitting it does |
+| `test_fixture_shapes.py` | a normalizer produces empty values from a captured response |
+| `test_every_delete_either_confirms_or_says_why_not` | a delete takes no confirm token and no reason is recorded for it |
+| `test_deploy_runtime_paths.py` | a quadlet mounts a path no install step creates, or backups are unset or read-only |
+| `test_ssh_known_hosts.py` | the host-key check accepts a listed name presenting the wrong key |
+| `test_shaper_kernel_sync.py` | an applied delete reports success while the kernel still holds the pipe |
+
+`benchmark_performance.py --check-shapes` diffs live response keys against the
+captured fixtures. It needs the firewall, so it is a command rather than a test.
+
+Every check here was verified by reintroducing the defect and watching it fail.
+The rest of this list is still read rather than run.

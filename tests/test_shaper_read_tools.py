@@ -175,7 +175,10 @@ async def test_shaper_statistics_baseline_delta(
 async def test_audit_shaper_config(mock_client: MockOPNsenseClient) -> None:
     tool = AuditShaperConfigTool(mock_client)
     resp = await tool.execute({})
-    assert resp["status"] == "warning"
+    # `status` reports that the audit ran; the severity of what it found is
+    # `audit_status` in the payload (issue #23).
+    assert resp["status"] == "success"
+    assert resp["structured"]["audit_status"] == "warning"
     assert resp["structured"]["score"] >= 0
     assert resp["structured"]["finding_count"] >= 1
     assert "Traffic Shaper Audit" in resp["summary"]

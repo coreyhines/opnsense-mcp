@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 from typing import Any
 
@@ -100,6 +101,40 @@ def interface_ipv4_network(
     return None
 
 
+def _range_network(
+    row: dict[str, Any],
+    start: str,
+    requested_subnet: str,
+) -> str:
+    """Network a DHCP range row belongs to, from its own prefix where it has one.
+
+    Prefer the row's `prefix_len`/`subnet_mask` over the requested prefix: a
+    range under a /25 must not answer a /24 request just because the two share
+    a base address. Fall back to the requested prefix for rows carrying neither.
+    """
+    prefixes: list[str] = []
+    prefix_len = str(row.get("prefix_len") or "").strip()
+    if prefix_len.isdigit():
+        prefixes.append(prefix_len)
+    mask = str(row.get("subnet_mask") or "").strip()
+    if mask:
+        try:
+            prefixes.append(str(ipaddress.IPv4Network(f"0.0.0.0/{mask}").prefixlen))
+        except ValueError:
+            pass
+    if not prefixes:
+        parts = requested_subnet.split("/")
+        if len(parts) == 2:
+            prefixes.append(parts[1])
+
+    for prefix in prefixes:
+        try:
+            return normalize_cidr(f"{start}/{prefix}")
+        except ValueError:
+            continue
+    return ""
+
+
 async def resolve_scope_from_selectors(
     make_request: Any,
     *,
@@ -168,13 +203,17 @@ async def resolve_scope_from_selectors(
                 subnet=normalized_subnet,
                 description=str(row.get("description") or "") or None,
             )
-        start = str(row.get("start") or row.get("rangestart") or "").strip()
-        end = str(row.get("end") or row.get("rangeend") or "").strip()
+        # dnsmasq search_range rows carry start_addr/end_addr and prefix_len.
+        # Reading start/rangestart matched nothing on that backend, which made
+        # the documented `subnet` selector unusable against dnsmasq.
+        start = str(
+            row.get("start_addr") or row.get("start") or row.get("rangestart") or ""
+        ).strip()
+        end = str(
+            row.get("end_addr") or row.get("end") or row.get("rangeend") or ""
+        ).strip()
         if start and end:
-            try:
-                candidate = normalize_cidr(f"{start}/{normalized_subnet.split('/')[1]}")
-            except (IndexError, ValueError):
-                candidate = ""
+            candidate = _range_network(row, start, normalized_subnet)
             if candidate and cidr_matches(candidate, normalized_subnet):
                 if not row_interface:
                     msg = f"No interface mapped to subnet {normalized_subnet}"

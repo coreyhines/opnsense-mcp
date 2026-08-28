@@ -30,6 +30,7 @@ class RmDhcpHostTool:
             "apply": {
                 "type": "boolean",
                 "description": "Apply the deletion. Omit/false = dry run.",
+                "default": False,
             },
         },
         "required": ["host"],

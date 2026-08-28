@@ -1,44 +1,40 @@
 {
   "rules": [
     {
-      "id": "1",
-      "sequence": 1,
+      "uuid": "1",
+      "sequence": "1",
       "description": "Allow LAN to WAN",
       "interface": "lan",
       "protocol": "any",
-      "source": {
-        "net": "lan",
-        "port": "any"
-      },
-      "destination": {
-        "net": "wan",
-        "port": "any"
-      },
+      "source_net": "lan",
+      "source_port": "",
+      "destination_net": "wan",
+      "destination_port": "",
       "action": "pass",
-      "enabled": true,
+      "enabled": "1",
       "gateway": "",
       "direction": "out",
-      "ipprotocol": "inet"
+      "ipprotocol": "inet",
+      "log": "0",
+      "quick": "1"
     },
     {
-      "id": "2",
-      "sequence": 2,
+      "uuid": "2",
+      "sequence": "2",
       "description": "Block WAN to LAN",
       "interface": "wan",
       "protocol": "any",
-      "source": {
-        "net": "wan",
-        "port": "any"
-      },
-      "destination": {
-        "net": "lan",
-        "port": "any"
-      },
+      "source_net": "wan",
+      "source_port": "",
+      "destination_net": "lan",
+      "destination_port": "",
       "action": "block",
-      "enabled": true,
+      "enabled": "1",
       "gateway": "",
       "direction": "in",
-      "ipprotocol": "inet"
+      "ipprotocol": "inet",
+      "log": "0",
+      "quick": "1"
     }
   ],
   "count": 2,

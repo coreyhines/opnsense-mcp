@@ -10,6 +10,7 @@ Usage:
     python benchmark_performance.py
     python benchmark_performance.py --output results.json
     python benchmark_performance.py --verbose
+    python benchmark_performance.py --check-shapes
 """
 
 import argparse
@@ -265,6 +266,104 @@ class PerformanceBenchmark:
         print("\n" + "=" * 60)
 
 
+# ---------------------------------------------------------------------------
+# Response-shape drift
+# ---------------------------------------------------------------------------
+#
+# Two normalizers were tested against hand-written fixtures using key names
+# OPNsense does not emit, so the suite stayed green while `fw_rule list`
+# reported every rule as any->any and the DHCP subnet selector matched
+# nothing. Captured fixtures fix the ones we know about; this catches the
+# next rename, which no offline test can see.
+#
+# It lives here rather than in tests/ on purpose: it opens a live connection,
+# and a probe named test_* at the collection path means a routine `pytest`
+# run dials the firewall.
+
+FIXTURE_DIR = Path(__file__).parent / "tests" / "fixtures" / "opnsense-26.7.3"
+
+# fixture file -> (HTTP method, endpoint, request body)
+SHAPE_SOURCES: dict[str, tuple[str, str, dict[str, Any] | None]] = {
+    "filter_searchrule_rows.json": (
+        "POST",
+        "/api/firewall/filter/searchRule",
+        {"current": 1, "rowCount": 5},
+    ),
+    "dnsmasq_search_range_rows.json": (
+        "GET",
+        "/api/dnsmasq/settings/search_range",
+        None,
+    ),
+}
+
+
+def _row_keys(payload: Any) -> set[str]:
+    """Union of the keys across every row of a bootgrid response."""
+    rows = payload.get("rows") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return set()
+    return (
+        set().union(*(set(r) for r in rows if isinstance(r, dict))) if rows else set()
+    )
+
+
+async def check_response_shapes(verbose: bool = False) -> int:
+    """Diff live response keys against the captured fixtures.
+
+    Returns 0 when every fixture still matches the firewall, 1 otherwise. A
+    key the firewall no longer sends is a defect waiting to happen; a key it
+    sends that the fixture lacks means the fixture is stale.
+    """
+    client = get_opnsense_client({})
+    if client is None:
+        print("No OPNsense client available; cannot check response shapes.")
+        return 1
+
+    drifted = 0
+    for filename, (method, endpoint, body) in SHAPE_SOURCES.items():
+        fixture_path = FIXTURE_DIR / filename
+        if not fixture_path.exists():
+            print(f"MISSING  {filename}: no captured fixture to compare against")
+            drifted += 1
+            continue
+
+        expected = _row_keys(json.loads(fixture_path.read_text()))
+        try:
+            live = _row_keys(
+                await client._make_request(method, endpoint, json=body)
+                if body is not None
+                else await client._make_request(method, endpoint)
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"ERROR    {filename}: {endpoint} failed: {exc}")
+            drifted += 1
+            continue
+
+        if not live:
+            print(f"EMPTY    {filename}: {endpoint} returned no rows to compare")
+            continue
+
+        gone = sorted(expected - live)
+        added = sorted(live - expected)
+        if gone:
+            print(
+                f"DRIFT    {filename}: fixture keys the firewall no longer sends: {', '.join(gone)}"
+            )
+            drifted += 1
+        if added:
+            print(
+                f"STALE    {filename}: firewall keys missing from the fixture: {', '.join(added)}"
+            )
+            drifted += 1
+        if not gone and not added:
+            print(f"OK       {filename}: {len(expected)} keys match")
+        elif verbose:
+            print(f"         expected={sorted(expected)}")
+            print(f"         live    ={sorted(live)}")
+
+    return 1 if drifted else 0
+
+
 async def main():
     """Main benchmark function."""
     parser = argparse.ArgumentParser(
@@ -275,8 +374,19 @@ async def main():
     parser.add_argument(
         "--quiet", "-q", action="store_true", help="Quiet output (no summary)"
     )
+    parser.add_argument(
+        "--check-shapes",
+        action="store_true",
+        help=(
+            "Diff live API response keys against the captured fixtures and "
+            "exit; fails when a field is renamed, added or removed upstream"
+        ),
+    )
 
     args = parser.parse_args()
+
+    if args.check_shapes:
+        return await check_response_shapes(verbose=args.verbose)
 
     # Create benchmark instance
     benchmark = PerformanceBenchmark(verbose=args.verbose)

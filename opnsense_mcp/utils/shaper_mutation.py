@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from opnsense_mcp.tools.shaper_settings import (
@@ -35,6 +36,8 @@ from opnsense_mcp.utils.shaper_write_helpers import (
 if TYPE_CHECKING:
     from opnsense_mcp.utils.api import OPNsenseClient
     from opnsense_mcp.utils.mock_api import MockOPNsenseClient
+
+logger = logging.getLogger(__name__)
 
 ClientT = "OPNsenseClient | MockOPNsenseClient"
 
@@ -271,6 +274,75 @@ def target_description_map(
     return result
 
 
+def orphaned_kernel_pipes(
+    statistics: dict[str, Any],
+    config_pipes: list[dict[str, Any]],
+) -> list[str]:
+    """Kernel pipe numbers the running dummynet holds but the config does not.
+
+    `service/reconfigure` removes the config object without flushing the
+    dummynet pipe, so a delete leaves an inert orphan behind and one
+    accumulates per delete. Reporting `applied: true` alone hid that.
+
+    A live pipe in `service/statistics` carries the uuid of its config row.
+    The orphan does not: the row it pointed at is gone, so nothing ties the
+    running pipe back to a uuid. That absence is what identifies it.
+    """
+    known = {
+        str(row.get("uuid", "")) for row in config_pipes if str(row.get("uuid", ""))
+    }
+    orphans: set[str] = set()
+    for item in statistics.get("items") or []:
+        if not isinstance(item, dict) or str(item.get("type", "")) != "pipe":
+            continue
+        uuid = str(item.get("uuid") or "")
+        if uuid and uuid in known:
+            continue
+        number = str(item.get("pipe") or item.get("id") or "")
+        if number:
+            orphans.add(number)
+    return sorted(orphans)
+
+
+async def _kernel_sync_fields(client: ClientT) -> tuple[dict[str, Any], list[str]]:
+    """Compare the running shaper against the config after an apply.
+
+    Returns the structured fields and any hints. A failure to check is not a
+    failure of the mutation, so it reports that it could not verify rather
+    than claiming either state.
+    """
+    try:
+        statistics = await client._make_request(
+            "GET", "/trafficshaper/service/statistics"
+        )
+        pipes = await _search_rows(client, "/trafficshaper/settings/search_pipes")
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not verify shaper kernel state after apply")
+        return {"kernel_in_sync": None}, [
+            "Could not read the running shaper to verify the apply."
+        ]
+
+    orphans = orphaned_kernel_pipes(
+        statistics if isinstance(statistics, dict) else {}, pipes
+    )
+    if not orphans:
+        return {"kernel_in_sync": True}, []
+
+    return (
+        {"kernel_in_sync": False, "orphaned_kernel_pipes": orphans},
+        [
+            f"The config applied, but the running dummynet still holds "
+            f"pipe(s) {', '.join(orphans)}. Removing the config row does not "
+            f"flush the kernel object, and `shaper action='apply'` will not "
+            f"clear it either: that is the same service/reconfigure call that "
+            f"left it behind. Remove it on the firewall with "
+            f"`ipfw pipe {orphans[0]} delete` (repeat per pipe, then confirm "
+            f"with `ipfw pipe show`). A reboot also clears it. The orphan is "
+            f"inert meanwhile: no ipfw rule references it."
+        ],
+    )
+
+
 async def finish_mutation(
     client: ClientT,
     *,
@@ -280,8 +352,14 @@ async def finish_mutation(
     structured: dict[str, Any],
     hints: list[str] | None = None,
     status: str = "success",
+    verify_kernel: bool = False,
 ) -> dict[str, Any]:
-    """Apply reconfigure when requested and return standard tool envelope."""
+    """Apply reconfigure when requested and return standard tool envelope.
+
+    With ``verify_kernel``, an applied change is checked against the running
+    shaper before it is reported as done. A delete used to report
+    ``applied: true`` while the kernel still held the pipe.
+    """
     reconfigure_result: dict[str, Any] | None = None
     if apply:
         reconfigure_result = await reconfigure_shaper(client)
@@ -289,11 +367,20 @@ async def finish_mutation(
     final_status = status
     if apply and merged.get("pending_changes") and not merged.get("applied"):
         final_status = TOOL_STATUS_WARNING
+
+    all_hints = list(hints or [])
+    if verify_kernel and merged.get("applied"):
+        sync_fields, sync_hints = await _kernel_sync_fields(client)
+        merged.update(sync_fields)
+        all_hints.extend(sync_hints)
+        if sync_fields.get("kernel_in_sync") is False:
+            final_status = TOOL_STATUS_WARNING
+
     return build_mutation_response(
         merged,
         summary,
         snapshot_id=snapshot_id,
-        hints=hints,
+        hints=all_hints or None,
         status=final_status,
     )
 

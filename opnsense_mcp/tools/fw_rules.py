@@ -66,12 +66,16 @@ def _map_search_rule_row(rule: dict[str, Any]) -> dict[str, Any]:
         "direction": str(rule.get("direction", "")),
         "ipprotocol": str(rule.get("ipprotocol", "")),
         "protocol": str(rule.get("protocol", "")),
+        # searchRule rows key the nets as source_net/destination_net. Reading
+        # `source`/`destination` here returned "" for every rule, so the whole
+        # ruleset read as any->any. The bare names stay as a fallback for rows
+        # that carry them.
         "source": {
-            "net": str(rule.get("source", "")),
+            "net": str(rule.get("source_net") or rule.get("source") or ""),
             "port": str(rule.get("source_port", "")),
         },
         "destination": {
-            "net": str(rule.get("destination", "")),
+            "net": str(rule.get("destination_net") or rule.get("destination") or ""),
             "port": str(rule.get("destination_port", "")),
         },
         "action": str(rule.get("action", "")),

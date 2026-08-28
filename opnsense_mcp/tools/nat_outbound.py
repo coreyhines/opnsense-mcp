@@ -240,10 +240,16 @@ class MkNatOutboundTool(_NatToolBase):
                 "optional": True,
             },
             "description": {"type": "string", "optional": True},
+            "enabled": {
+                "type": "boolean",
+                "description": "Target state, set explicitly rather than flipped",
+                "optional": True,
+            },
             "apply": {
                 "type": "boolean",
                 "description": "Reload the filter afterwards (default false)",
                 "optional": True,
+                "default": False,
             },
         },
         "required": ["interface", "source_net"],
@@ -289,7 +295,9 @@ class MkNatOutboundTool(_NatToolBase):
                 "target": params.get("target", ""),
                 "staticnatport": "1" if params.get("static_port") else "0",
                 "description": params.get("description", ""),
-                "enabled": "1",
+                # Honored, not hardcoded: a rule asked for disabled used to be
+                # created live and translate traffic on the next apply.
+                "enabled": "0" if params.get("enabled") is False else "1",
             }
             result = await self.client._make_request(
                 "POST", SNAT["add"], call_class="write", json={"rule": payload}
