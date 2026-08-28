@@ -18,7 +18,7 @@ EnvironmentFile=/opt/containerdata/opnsense-mcp/environment
 Volume=/opt/containerdata/opnsense-mcp:/opt/containerdata/opnsense-mcp:ro,Z
 Volume=/opt/certs/wild:/opt/certs/wild:ro,Z
 
-# SSH keys for packet_capture / ssh_fw_rule (host path must exist).
+# SSH keys for packet_capture / set_interface_address (host path must exist).
 Volume=/opt/containerdata/opnsense-mcp/ssh:/root/.ssh:ro,Z
 
 [Service]

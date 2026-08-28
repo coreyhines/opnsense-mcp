@@ -27,7 +27,10 @@ Safety, given this runs PHP as root:
   attempt fails to parse rather than being escaped;
 * the prefix is an int bounded by the parsed address's family;
 * none of those values are interpolated into the PHP. The script is a fixed
-  constant and the values arrive as environment variables;
+  constant and the values arrive as environment variables, named explicitly:
+  ``sudo -E`` would pass the whole SSH environment into a root interpreter, and
+  PHP honours ``PHPRC``, which selects a php.ini, which can set
+  ``auto_prepend_file``;
 * success is confirmed by reading the address back off the interface, because
   `interface_configure()` throws after applying it and the exit code means
   nothing either way.
@@ -77,13 +80,40 @@ echo "done\\n";
 """
 
 
+def _has_exact_address(
+    observed: str, address: ipaddress.IPv4Address | ipaddress.IPv6Address, bits: int
+) -> bool:
+    """Is exactly this address, with exactly this prefix, on the interface?
+
+    A substring test reports success for 198.51.100.1 when the interface carries
+    198.51.100.10, which turned a failed root write into a success. Tokens are
+    compared as parsed networks so neither the address nor the prefix can be
+    satisfied by a coincidence of digits.
+    """
+    want = ipaddress.ip_interface(f"{address}/{bits}")
+    for token in observed.replace(",", " ").split():
+        # The token must carry a prefix of its own. A bare "172.16.99.2" parses
+        # as /32, which would satisfy a /32 request from output that never
+        # stated a prefix — so an ifconfig without CIDR formatting would look
+        # like confirmation instead of failing safe.
+        if "/" not in token:
+            continue
+        try:
+            if ipaddress.ip_interface(token) == want:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 class SetInterfaceAddressTool:
     """Give an assigned interface a static address."""
 
     name = "set_interface_address"
     description = (
-        "Set a static IPv4 or IPv6 address on an assigned interface. Uses SSH, "
-        "because the 26.7 API model has no address field and discards one silently"
+        "Set a static IPv4 or IPv6 address on an assigned interface, enabling "
+        "the interface if it is disabled. Uses SSH, because the 26.7 API model "
+        "has no address field and discards one silently"
     )
     input_schema: dict[str, Any] = {
         "type": "object",
@@ -95,7 +125,10 @@ class SetInterfaceAddressTool:
             "address": {"type": "string", "description": "IPv4 or IPv6 address"},
             "subnet_bits": {
                 "type": "number",
-                "description": "Prefix length; 32 or 128 for a loopback",
+                "description": (
+                    "Prefix length; 32 or 128 for a loopback. 0 is refused: it "
+                    "would claim the whole address space on the interface"
+                ),
             },
             "reason": {
                 "type": "string",
@@ -159,7 +192,11 @@ class SetInterfaceAddressTool:
                     ),
                 }
 
-            # Parsed, not matched. Anything shell-shaped fails here.
+            # Parsed, not matched. Anything shell-shaped fails here — with one
+            # exception that the first version of this docstring got wrong:
+            # ipaddress accepts an arbitrary IPv6 scope id after "%", so
+            # fe80::1%$(reboot) parses cleanly and str() reproduces it. The
+            # value would persist in config.xml and be reapplied on every boot.
             try:
                 address = ipaddress.ip_address(raw_address)
             except ValueError:
@@ -167,16 +204,30 @@ class SetInterfaceAddressTool:
                     "status": "error",
                     "error": f"{raw_address!r} is not an IP address",
                 }
+            if getattr(address, "scope_id", None):
+                return {
+                    "status": "error",
+                    "error": (
+                        f"{raw_address!r} carries an IPv6 scope id, which is not "
+                        f"validated by address parsing and has no place in a "
+                        f"static interface address"
+                    ),
+                }
 
             try:
                 bits = int(params.get("subnet_bits"))
             except (TypeError, ValueError):
                 return {"status": "error", "error": "subnet_bits must be a number"}
             limit = 32 if address.version == 4 else 128
-            if not 0 <= bits <= limit:
+            # A /0 is syntactically fine and operationally never what was meant:
+            # it claims the entire address space on the interface.
+            if not 1 <= bits <= limit:
                 return {
                     "status": "error",
-                    "error": f"subnet_bits must be between 0 and {limit} for IPv{address.version}",
+                    "error": (
+                        f"subnet_bits must be between 1 and {limit} for "
+                        f"IPv{address.version}"
+                    ),
                 }
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to validate the address change")
@@ -216,15 +267,31 @@ class SetInterfaceAddressTool:
                 )
             )
             run = self._run(
-                f"/bin/sh -c {shlex.quote(f'env {env} sudo -E php {shlex.quote(remote)} 2>&1')}"
+                f"/bin/sh -c {shlex.quote(f'sudo /usr/bin/env {env} php {shlex.quote(remote)} 2>&1')}"
             )
 
             # interface_configure() throws after applying the address, so the
             # exit code is not evidence either way. Read the interface instead.
             device = await self._device_for(interface)
-            check = self._run(f"/bin/sh -c {shlex.quote(f'ifconfig {device} 2>&1')}")
+            # -f ...:cidr prints "inet 198.51.100.1/32" rather than a netmask in
+            # hex, so the prefix can be compared rather than ignored.
+            check = self._run(
+                "/bin/sh -c "
+                + shlex.quote(f"ifconfig -f inet:cidr,inet6:cidr {device} 2>&1")
+            )
+            if not check.get("success", True):
+                return {
+                    "status": "unknown",
+                    "interface": interface,
+                    "address": f"{address}/{bits}",
+                    "error": (
+                        f"the write ran but the address could not be read back: "
+                        f"{str(check.get('stderr', ''))[:200]}. The change may "
+                        f"have landed; check before retrying."
+                    ),
+                }
             observed = str(check.get("stdout", "")) + str(check.get("stderr", ""))
-            verified = str(address) in observed
+            verified = _has_exact_address(observed, address, bits)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to set the interface address")
             return {"status": "error", "error": str(exc)}
@@ -236,9 +303,11 @@ class SetInterfaceAddressTool:
             return {
                 "status": "error",
                 "error": (
-                    f"{address} is not on {interface} after the write. "
-                    f"Script output: {str(run.get('stdout', ''))[:200]}"
-                    f"{str(run.get('stderr', ''))[:200]}"
+                    f"{address}/{bits} is not on {interface} after the write; the "
+                    f"prefix is checked as well as the address. Observed: "
+                    f"{observed.strip()[:200]!r}. Script output: "
+                    f"{str(run.get('stdout', ''))[:150]}"
+                    f"{str(run.get('stderr', ''))[:150]}"
                 ),
             }
         return {

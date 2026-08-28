@@ -190,7 +190,7 @@ async def test_an_ipv6_prefix_over_128_is_refused_but_64_is_fine() -> None:
             },
             {"stdout": "OK", "stderr": "", "exit_code": 0},
             {
-                "stdout": "\tinet6 2001:db8::1 prefixlen 64",
+                "stdout": "\tinet6 2001:db8::1/64",
                 "stderr": "",
                 "exit_code": 0,
             },
@@ -222,7 +222,7 @@ async def test_success_is_confirmed_by_reading_back_not_by_the_exit_code() -> No
             },
             {"stdout": "", "stderr": "PHP Fatal error: something", "exit_code": 255},
             {
-                "stdout": "\tinet 172.16.99.2 netmask 0xffffffff",
+                "stdout": "\tinet 172.16.99.2/32",
                 "stderr": "",
                 "exit_code": 0,
             },
@@ -249,7 +249,7 @@ async def test_a_clean_exit_without_the_address_is_a_failure() -> None:
                 "exit_code": 0,
             },
             {"stdout": "OK", "stderr": "", "exit_code": 0},
-            {"stdout": "\tinet6 fe80::1 prefixlen 64", "stderr": "", "exit_code": 0},
+            {"stdout": "\tinet6 fe80::1/64", "stderr": "", "exit_code": 0},
             {"stdout": "", "stderr": "", "exit_code": 0},
         ]
     )

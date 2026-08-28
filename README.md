@@ -93,7 +93,7 @@ Primary tools:
 
 - Discovery: `arp`, `dhcp`, `lldp`
 - Monitoring: `system`, `get_logs`, `packet_capture`
-- Firewall rules: `fw_rules`, `mkfw_rule`, `rmfw_rule`, `ssh_fw_rule`
+- Firewall rules: `fw_rules`, `mkfw_rule`, `set_fw_rule`, `toggle_fw_rule`, `rmfw_rule`
 - Interfaces: `interface_list`
 
 Full reference: [`docs/REFERENCE/FUNCTION_REFERENCE.md`](docs/REFERENCE/FUNCTION_REFERENCE.md)

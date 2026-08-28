@@ -94,3 +94,42 @@ For homelab changes (DHCP, DNS, firewall), **use MCP tools** against the deploye
 - Ruff for linting and formatting (f-strings preferred except where they cause TRY401 issues)
 - pytest (not unittest) for all tests; place tests in `./tests/` with `__init__.py`
 - Do not break existing functionality during cleanup or formatting passes
+
+## Failure modes this project has already paid for
+
+Each of these shipped a defect. They are listed because intending to avoid them
+did not work; the checks did.
+
+**A safety claim needs a falsification test, not a happy-path test.**
+`set_interface_address` documented "parsed by ipaddress, so injection fails to
+parse". Nobody tested the claim, and it was false for IPv6 scope ids
+(`fe80::1%$(reboot)` parses). Its read-back was a substring match, so
+`198.51.100.1` was satisfied by `198.51.100.10`. When a docstring says a thing
+is safe, write the test that tries to break it in that exact way.
+
+**Assert on structured fields, not on message wording.** Four assertions here
+tested phrasing and passed or failed for the wrong reason (`"enable"` is not a
+substring of `"enabling"`). Assert `result["status"]`, `result["applied"]`, the
+absence of a key — not that an error message contains a chosen phrase.
+
+**Cleanup must be gated on the step it undoes.** A `finally` that deleted a
+device regardless of whether the unassign succeeded left an orphaned,
+lock-protected interface on the live firewall. Teardown checks the previous
+step's result before proceeding.
+
+**Never chain a gate with `;`.** `ruff check . ; git commit && git push` pushes
+a lint failure, because the pipeline reports the last command. Use `&&`
+throughout. This pushed broken commits three times in one session.
+
+**Replace a sweep with a test.** Two grep-based reference sweeps missed
+`README.md` at the repository root. `tests/test_review_wave4.py` now walks every
+markdown file and fails on a tool name the registry does not know. When
+removing or renaming something, the deliverable is the test, not the grep.
+
+**Read the error body before concluding an API cannot do something.**
+`del_item` returning 500 was declared undoable; the body said "Interface
+locked, unset lock first before removal". The fix was three commands.
+
+**Probe scripts run against the live firewall and deserve the same care as
+tools.** Every orphan left on the firewall this session came from a throwaway
+script, not from a tool.

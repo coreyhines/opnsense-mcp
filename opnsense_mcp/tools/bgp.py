@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import merge_for_set
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
@@ -90,15 +91,56 @@ class _BgpToolBase:
         )
         return data.get("rows", []) if isinstance(data, dict) else []
 
-    async def _reconfigure(self) -> None:
-        await self.client._make_request(
-            "POST", QUAGGA["reconfigure"], call_class="apply"
-        )
+    async def _apply_if_asked(self, params: dict[str, Any]) -> tuple[bool, str]:
+        """Apply as a separate phase. Returns (applied, error).
+
+        Deliberately not inside the write's try block: a failure here means the
+        write landed and was not applied, which is a different outcome from the
+        write failing, and reporting it as the latter is how a delete came to
+        report failure after removing the record.
+        """
+        if not params.get("apply", False):
+            return False, ""
+        try:
+            await run_apply(self.client, QUAGGA["reconfigure"])
+        except ApplyError as exc:
+            logger.warning("Write succeeded but apply failed: %s", exc)
+            return False, str(exc)
+        return True, ""
 
 
 def _on(value: Any) -> bool:
     """OPNsense writes booleans as "0"/"1" strings."""
     return str(value) in {"1", "True", "true"}
+
+
+def _staging_note(applied: bool, apply_error: str, *, staged: str, done: str) -> str:
+    """Describe what actually happened, not what was requested.
+
+    The previous notes branched only on the caller's arguments, so a tool that
+    had just tried and failed to reconfigure still told the operator to go and
+    reconfigure.
+    """
+    if apply_error:
+        return f"The change was written but not applied: {apply_error}"
+    return done if applied else staged
+
+
+def _mentions_established(summary: Any) -> bool:
+    """Does this bgpsummary response describe an Established session?
+
+    The shape is not documented and is not captured in this repository, so this
+    walks whatever comes back rather than assuming a list. The previous check
+    iterated `response` directly: a dict yielded its keys and a string yielded
+    its characters, so neither ever matched and the guard silently passed.
+    """
+    if isinstance(summary, str):
+        return "establish" in summary.lower()
+    if isinstance(summary, dict):
+        return any(_mentions_established(v) for v in summary.values())
+    if isinstance(summary, (list, tuple)):
+        return any(_mentions_established(v) for v in summary)
+    return False
 
 
 def _selected(field: Any) -> list[str]:
@@ -132,20 +174,32 @@ class BgpStatusTool(_BgpToolBase):
             general = await self.client._make_request("GET", QUAGGA["general"])
             bgp = await self.client._make_request("GET", QUAGGA["bgp"])
             neighbors = await self._neighbors()
+            # These two are the difference between "BGP is down" and "I could
+            # not tell". Swallowing them turned a read timeout on a loaded
+            # firewall into a confident "no sessions", on the one tool an
+            # operator uses to decide whether peering is up.
+            diagnostics_error = None
             try:
                 service = await self.client._make_request(
                     "GET", QUAGGA["service_status"]
                 )
-            except Exception:  # noqa: BLE001 - absent on some builds
-                service = {}
+            except Exception as exc:  # noqa: BLE001
+                service, diagnostics_error = None, f"service status: {exc}"
             try:
                 summary = await self.client._make_request("GET", QUAGGA["summary"])
-            except Exception:  # noqa: BLE001
-                summary = {}
+            except Exception as exc:  # noqa: BLE001
+                summary = None
+                diagnostics_error = (
+                    f"{diagnostics_error}; bgp summary: {exc}"
+                    if diagnostics_error
+                    else f"bgp summary: {exc}"
+                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to read BGP status")
             return {"status": "error", "error": str(exc)}
 
+        service = service if isinstance(service, dict) else None
+        summary = summary if isinstance(summary, dict) else None
         general_node = general.get("general", {}) if isinstance(general, dict) else {}
         bgp_node = bgp.get("bgp", {}) if isinstance(bgp, dict) else {}
         daemons = _selected(general_node.get("daemons"))
@@ -153,9 +207,14 @@ class BgpStatusTool(_BgpToolBase):
         frr_enabled = _on(general_node.get("enabled"))
         bgp_enabled = _on(bgp_node.get("enabled"))
         daemon_selected = "bgp" in daemons
-        running = str(service.get("status", "")) == "running"
+        # None, not False: an unread status is not a stopped service.
+        running = (
+            None if service is None else str(service.get("status", "")) == "running"
+        )
 
         notes = []
+        if diagnostics_error:
+            notes.append(f"Could not read the running state: {diagnostics_error}.")
         if not frr_enabled:
             notes.append("FRR itself is disabled, so nothing is running.")
         elif not daemon_selected:
@@ -173,12 +232,11 @@ class BgpStatusTool(_BgpToolBase):
             "bgp_daemon_selected": daemon_selected,
             "daemons_selected": daemons,
             "running": running,
+            "diagnostics_error": diagnostics_error,
             "as_number": bgp_node.get("asnumber", ""),
             "router_id": bgp_node.get("routerid", ""),
             "neighbor_count": len(neighbors),
-            "sessions": summary.get("response", [])
-            if isinstance(summary, dict)
-            else [],
+            "sessions": summary.get("response", []) if summary is not None else None,
             "note": " ".join(notes) or "FRR is enabled and the bgp daemon is selected.",
         }
 
@@ -340,24 +398,31 @@ class MkBgpNeighborTool(_BgpToolBase):
                 call_class="write",
                 json={"neighbor": payload},
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create BGP neighbour")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = await self._apply_if_asked(params)
+        out = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
             "enabled": bool(params.get("enabled")),
-            "note": (
-                "Staged and disabled. Enable it and reconfigure FRR when the peer "
-                "is ready."
+            "applied": applied,
+            "note": _staging_note(
+                applied,
+                apply_error,
+                staged="Staged and disabled. Enable it and apply when the peer is ready."
                 if not params.get("enabled")
-                else "Enabled. Reconfigure FRR to bring the session up."
+                else "Enabled but not applied. Apply to bring the session up.",
+                done="Applied."
+                if params.get("enabled")
+                else "Applied, and the neighbour is disabled until you enable it.",
             ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ToggleBgpNeighborTool(_BgpToolBase):
@@ -393,12 +458,19 @@ class ToggleBgpNeighborTool(_BgpToolBase):
                 f"{QUAGGA['toggle_neighbor']}/{uuid}/{state}",
                 call_class="write",
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to toggle BGP neighbour")
             return {"status": "error", "error": str(exc)}
-        return {"status": "success", "uuid": uuid, "enabled": bool(params["enabled"])}
+        applied, apply_error = await self._apply_if_asked(params)
+        out = {
+            "status": "success",
+            "uuid": uuid,
+            "enabled": bool(params["enabled"]),
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmBgpNeighborTool(_BgpToolBase):
@@ -441,15 +513,30 @@ class RmBgpNeighborTool(_BgpToolBase):
             }
 
         try:
-            await self.client._make_request(
+            result = await self.client._make_request(
                 "POST", f"{QUAGGA['del_neighbor']}/{uuid}", call_class="write", json={}
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete BGP neighbour")
             return {"status": "error", "error": str(exc)}
-        return {"status": "success", "uuid": uuid, "deleted": True}
+
+        # delBase answers an unknown uuid with {"result": "not found"} at HTTP
+        # 200, which the client does not raise on. rm_gateway and rm_loopback
+        # both check for this; reporting a deletion that did not happen tells
+        # the operator a peer is gone while it is still peering.
+        if isinstance(result, dict) and result.get("result") == "not found":
+            return {
+                "status": "error",
+                "error": (
+                    f"no BGP neighbour with uuid {uuid}; it may already be gone, "
+                    f"or the uuid came from an older listing."
+                ),
+            }
+        applied, apply_error = await self._apply_if_asked(params)
+        out = {"status": "success", "uuid": uuid, "deleted": True, "applied": applied}
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class SetBgpGlobalTool(_BgpToolBase):
@@ -531,12 +618,19 @@ class SetBgpGlobalTool(_BgpToolBase):
             if as_number and as_number != str(bgp.get("asnumber", "")):
                 try:
                     summary = await self.client._make_request("GET", QUAGGA["summary"])
-                except Exception:  # noqa: BLE001
-                    summary = {}
-                sessions = (
-                    summary.get("response", []) if isinstance(summary, dict) else []
-                )
-                if any("establish" in str(s).lower() for s in sessions):
+                except Exception as exc:  # noqa: BLE001
+                    # Failing open defeats the guard. An unreadable session list
+                    # is not evidence that there are no sessions.
+                    return {
+                        "status": "error",
+                        "error": (
+                            f"refusing to change the AS number: could not read "
+                            f"the current sessions to check whether any are "
+                            f"Established ({exc}). Retry, or disable BGP first "
+                            f"if a reset is intended."
+                        ),
+                    }
+                if _mentions_established(summary):
                     return {
                         "status": "error",
                         "error": (
@@ -567,9 +661,15 @@ class SetBgpGlobalTool(_BgpToolBase):
             general_changes: dict[str, Any] = {}
             bgp_changes: dict[str, Any] = {}
 
+            # Disabling BGP must not stop the daemons sharing the service.
+            # Clearing general.enabled stops FRR wholesale, so where others
+            # remain selected the bgp daemon is deselected and FRR left up;
+            # only when bgp is the last one does the service itself stop.
+            others_remain = enabled is False and bool(daemons - {"bgp"})
+
             if enabled is not None:
                 daemons = daemons | {"bgp"} if enabled else daemons - {"bgp"}
-                general_changes["enabled"] = "1" if enabled else "0"
+                general_changes["enabled"] = "1" if (enabled or others_remain) else "0"
                 general_changes["daemons"] = ",".join(sorted(daemons))
                 bgp_changes["enabled"] = "1" if enabled else "0"
             if as_number:
@@ -616,21 +716,31 @@ class SetBgpGlobalTool(_BgpToolBase):
                         ),
                     }
                 done.append(endpoint)
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to set BGP globals")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = await self._apply_if_asked(params)
+        out = {
             "status": "success",
             "enabled": enabled,
             "as_number": effective_as,
             "router_id": router_id or bgp.get("routerid", ""),
             "daemons": sorted(daemons),
-            "note": (
-                "Staged. Reconfigure FRR to act on it."
-                if not params.get("apply")
-                else "Applied; FRR was restarted."
+            "frr_left_running": others_remain,
+            "applied": applied,
+            "note": _staging_note(
+                applied,
+                apply_error,
+                staged=(
+                    f"Staged. BGP disabled; FRR stays up for "
+                    f"{', '.join(sorted(daemons))}. Apply to act on it."
+                    if others_remain
+                    else "Staged. Apply to act on it."
+                ),
+                done="Applied; FRR was restarted.",
             ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out

@@ -86,8 +86,22 @@ async def test_rm_loopback_confirms_before_deleting() -> None:
 
 @pytest.mark.asyncio
 async def test_rm_loopback_deletes_once_confirmed() -> None:
+    """The device resolves and nothing is assigned to it, so the delete runs.
+
+    This previously passed no `device` and asserted success, which encoded the
+    opt-in guard as intended behaviour. The guard now always runs, so the
+    fixtures have to describe an unassigned device.
+    """
     client = _client()
-    calls = _stub(client, {})
+    calls = _stub(
+        client,
+        {
+            "loopback_settings/search_item": {
+                "rows": [{"uuid": LOOPBACK_UUID, "deviceId": "9"}]
+            },
+            "assignment/search_item": {"rows": []},
+        },
+    )
 
     challenge = await RmLoopbackTool(client).execute({"uuid": LOOPBACK_UUID})
     result = await RmLoopbackTool(client).execute(

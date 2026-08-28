@@ -2421,7 +2421,7 @@
     }
   },
   "set_interface_address": {
-    "description": "Set a static IPv4 or IPv6 address on an assigned interface. Uses SSH, because the 26.7 API model has no address field and discards one silently",
+    "description": "Set a static IPv4 or IPv6 address on an assigned interface, enabling the interface if it is disabled. Uses SSH, because the 26.7 API model has no address field and discards one silently",
     "inputSchema": {
       "properties": {
         "address": {
@@ -2438,7 +2438,7 @@
           "type": "string"
         },
         "subnet_bits": {
-          "description": "Prefix length; 32 or 128 for a loopback",
+          "description": "Prefix length; 32 or 128 for a loopback. 0 is refused: it would claim the whole address space on the interface",
           "type": "number"
         }
       },
