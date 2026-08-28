@@ -126,20 +126,30 @@ def _staging_note(applied: bool, apply_error: str, *, staged: str, done: str) ->
     return done if applied else staged
 
 
-def _mentions_established(summary: Any) -> bool:
-    """Does this bgpsummary response describe an Established session?
+def _join_error(existing: str | None, addition: str) -> str:
+    """Accumulate diagnostic errors without losing the earlier one."""
+    return f"{existing}; {addition}" if existing else addition
 
-    The shape is not documented and is not captured in this repository, so this
-    walks whatever comes back rather than assuming a list. The previous check
-    iterated `response` directly: a dict yielded its keys and a string yielded
-    its characters, so neither ever matched and the guard silently passed.
+
+def _has_established_peer(summary: Any) -> bool:
+    """Does this bgpsummary response show a peer in state Established?
+
+    Reads the `state` field on peer objects, wherever they nest, rather than
+    substring-matching the whole document. The document carries a `desc` field
+    that is the caller's own neighbour description, so "peering established 2024"
+    matched, blocking every AS change; and an error string mentioning the word
+    was read as evidence of the thing it failed to determine.
+
+    A peer object is a dict with a `state`. Everything else is walked through to
+    find them.
     """
-    if isinstance(summary, str):
-        return "establish" in summary.lower()
     if isinstance(summary, dict):
-        return any(_mentions_established(v) for v in summary.values())
+        state = summary.get("state")
+        if isinstance(state, str) and state.strip().lower() == "established":
+            return True
+        return any(_has_established_peer(v) for v in summary.values())
     if isinstance(summary, (list, tuple)):
-        return any(_mentions_established(v) for v in summary)
+        return any(_has_established_peer(v) for v in summary)
     return False
 
 
@@ -184,22 +194,35 @@ class BgpStatusTool(_BgpToolBase):
                     "GET", QUAGGA["service_status"]
                 )
             except Exception as exc:  # noqa: BLE001
-                service, diagnostics_error = None, f"service status: {exc}"
+                service = None
+                diagnostics_error = _join_error(
+                    diagnostics_error, f"service status: {exc}"
+                )
             try:
                 summary = await self.client._make_request("GET", QUAGGA["summary"])
             except Exception as exc:  # noqa: BLE001
                 summary = None
-                diagnostics_error = (
-                    f"{diagnostics_error}; bgp summary: {exc}"
-                    if diagnostics_error
-                    else f"bgp summary: {exc}"
+                diagnostics_error = _join_error(
+                    diagnostics_error, f"bgp summary: {exc}"
                 )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to read BGP status")
             return {"status": "error", "error": str(exc)}
 
-        service = service if isinstance(service, dict) else None
-        summary = summary if isinstance(summary, dict) else None
+        # A non-dict response (a string, a captive-portal HTML page) is also
+        # "could not tell", not a stopped service. Coercing to None silently
+        # was the same swallow the excepts above were fixed for.
+        if service is not None and not isinstance(service, dict):
+            diagnostics_error = _join_error(
+                diagnostics_error,
+                f"service status: unexpected {type(service).__name__}",
+            )
+            service = None
+        if summary is not None and not isinstance(summary, dict):
+            diagnostics_error = _join_error(
+                diagnostics_error, f"bgp summary: unexpected {type(summary).__name__}"
+            )
+            summary = None
         general_node = general.get("general", {}) if isinstance(general, dict) else {}
         bgp_node = bgp.get("bgp", {}) if isinstance(bgp, dict) else {}
         daemons = _selected(general_node.get("daemons"))
@@ -214,7 +237,7 @@ class BgpStatusTool(_BgpToolBase):
 
         notes = []
         if diagnostics_error:
-            notes.append(f"Could not read the running state: {diagnostics_error}.")
+            notes.append(f"Some diagnostics could not be read: {diagnostics_error}.")
         if not frr_enabled:
             notes.append("FRR itself is disabled, so nothing is running.")
         elif not daemon_selected:
@@ -630,7 +653,7 @@ class SetBgpGlobalTool(_BgpToolBase):
                             f"if a reset is intended."
                         ),
                     }
-                if _mentions_established(summary):
+                if _has_established_peer(summary):
                     return {
                         "status": "error",
                         "error": (

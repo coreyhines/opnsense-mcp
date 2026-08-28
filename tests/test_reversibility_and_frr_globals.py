@@ -315,13 +315,19 @@ async def test_deleting_an_assigned_loopback_is_refused_with_the_reason() -> Non
     assignment referring to nothing, which is what happened on the live box.
     """
     client = _client()
-    calls = _stub(client, {"assignment/search_item": ASSIGNED_ROWS})
-
-    challenge = await RmLoopbackTool(client).execute(
-        {"uuid": "lo-uuid", "device": "lo1"}
+    calls = _stub(
+        client,
+        {
+            "loopback_settings/search_item": {
+                "rows": [{"uuid": "lo-uuid", "deviceId": "1"}]
+            },
+            "assignment/search_item": ASSIGNED_ROWS,
+        },
     )
+
+    challenge = await RmLoopbackTool(client).execute({"uuid": "lo-uuid"})
     result = await RmLoopbackTool(client).execute(
-        {"uuid": "lo-uuid", "device": "lo1", "confirm": challenge["confirm_token"]}
+        {"uuid": "lo-uuid", "confirm": challenge["confirm_token"]}
     )
 
     assert result["status"] == "error"
@@ -332,13 +338,19 @@ async def test_deleting_an_assigned_loopback_is_refused_with_the_reason() -> Non
 @pytest.mark.asyncio
 async def test_deleting_an_unassigned_loopback_proceeds() -> None:
     client = _client()
-    calls = _stub(client, {"assignment/search_item": {"rows": []}})
-
-    challenge = await RmLoopbackTool(client).execute(
-        {"uuid": "lo-uuid", "device": "lo9"}
+    calls = _stub(
+        client,
+        {
+            "loopback_settings/search_item": {
+                "rows": [{"uuid": "lo-uuid", "deviceId": "9"}]
+            },
+            "assignment/search_item": {"rows": []},
+        },
     )
+
+    challenge = await RmLoopbackTool(client).execute({"uuid": "lo-uuid"})
     result = await RmLoopbackTool(client).execute(
-        {"uuid": "lo-uuid", "device": "lo9", "confirm": challenge["confirm_token"]}
+        {"uuid": "lo-uuid", "confirm": challenge["confirm_token"]}
     )
 
     assert result["deleted"] is True
@@ -357,7 +369,11 @@ async def test_a_loopback_created_with_an_address_says_exactly_what_to_set() -> 
     _stub(client, {})
 
     result = await MkLoopbackTool(client).execute(
-        {"description": "bgp", "address": "172.16.99.2", "subnet_bits": 32}
+        {
+            "description": "bgp",
+            "planned_address": "172.16.99.2",
+            "planned_subnet_bits": 32,
+        }
     )
 
     manual = result["manual_step"]
@@ -374,7 +390,11 @@ async def test_the_address_is_never_posted_since_the_model_would_swallow_it() ->
     calls = _stub(client, {})
 
     await MkLoopbackTool(client).execute(
-        {"description": "bgp", "address": "172.16.99.2", "subnet_bits": 32}
+        {
+            "description": "bgp",
+            "planned_address": "172.16.99.2",
+            "planned_subnet_bits": 32,
+        }
     )
 
     posted = json.dumps([c.get("json") for c in calls])
@@ -388,11 +408,11 @@ async def test_an_address_without_a_prefix_is_refused() -> None:
     _stub(client, {})
 
     result = await MkLoopbackTool(client).execute(
-        {"description": "bgp", "address": "172.16.99.2"}
+        {"description": "bgp", "planned_address": "172.16.99.2"}
     )
 
     assert result["status"] == "error"
-    assert "subnet_bits" in result["error"]
+    assert "planned_subnet_bits" in result["error"]
 
 
 @pytest.mark.asyncio

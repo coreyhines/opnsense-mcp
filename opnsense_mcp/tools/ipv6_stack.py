@@ -567,18 +567,19 @@ class MkLoopbackTool(_V6ToolBase):
         "type": "object",
         "properties": {
             "description": {"type": "string", "description": "Device description"},
-            "address": {
+            "planned_address": {
                 "type": "string",
                 "description": (
-                    "Address this loopback should carry. Not written: OPNsense "
-                    "has no API for per-interface addressing. Returned as the "
-                    "exact step to perform, so the value does not get lost"
+                    "An address you intend this loopback to carry. Not written "
+                    "here — OPNsense has no per-interface addressing API — but "
+                    "echoed back as the exact step to perform. Use "
+                    "set_interface_address to actually write one"
                 ),
                 "optional": True,
             },
-            "subnet_bits": {
+            "planned_subnet_bits": {
                 "type": "number",
-                "description": "Prefix length for `address`, normally 32 or 128",
+                "description": "Prefix length for planned_address, normally 32 or 128",
                 "optional": True,
             },
             "apply": {
@@ -608,15 +609,15 @@ class MkLoopbackTool(_V6ToolBase):
         if not description:
             return {"status": "error", "error": "description is required"}
 
-        address = (params.get("address") or "").strip()
-        subnet_bits = params.get("subnet_bits")
+        address = (params.get("planned_address") or "").strip()
+        subnet_bits = params.get("planned_subnet_bits")
         if address and subnet_bits is None:
             return {
                 "status": "error",
                 "error": (
-                    "subnet_bits is required with address. A loopback given the "
-                    "wrong prefix advertises a subnet it does not own; for a "
-                    "loopback this is normally 32 for IPv4 or 128 for IPv6."
+                    "planned_subnet_bits is required with planned_address. A "
+                    "loopback given the wrong prefix advertises a subnet it does "
+                    "not own; for a loopback this is normally 32 or 128."
                 ),
             }
 
@@ -727,7 +728,10 @@ class RmLoopbackTool(_V6ToolBase):
         )
         for row in rows.get("rows", []) if isinstance(rows, dict) else []:
             if row.get("uuid") == uuid:
-                number = str(row.get("deviceId") or row.get("device") or "").strip()
+                raw = row.get("deviceId")
+                if raw is None:
+                    raw = row.get("device")
+                number = str(raw if raw is not None else "").strip()
                 return f"lo{number}" if number.isdigit() else number
         return ""
 
@@ -771,20 +775,27 @@ class RmLoopbackTool(_V6ToolBase):
             }
 
         try:
-            # Resolve the device from the uuid rather than trusting the caller
-            # to opt in. This guard was previously behind `if device:` on an
-            # optional argument, so omitting one field skipped it entirely and
-            # produced the orphaned, lock-protected assignment it exists to
-            # prevent — which is exactly what happened on the live firewall.
-            device = (params.get("device") or "").strip() or await self._device_name(
-                uuid
-            )
+            # Always resolve from the uuid. A caller-supplied `device` is only a
+            # cross-check: preferring it let a wrong value skip the guard, which
+            # checked assignments against a device nobody was using — the
+            # orphaned, lock-protected assignment this exists to prevent.
+            device = await self._device_name(uuid)
             if not device:
                 return {
                     "status": "error",
                     "error": (
                         f"no loopback device with uuid {uuid}; it may already be "
                         f"gone, or the uuid came from an older listing."
+                    ),
+                }
+            claimed = (params.get("device") or "").strip()
+            if claimed and claimed != device:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"uuid {uuid} is device {device}, not {claimed!r}. Remove "
+                        f"the device argument or correct it; the assignment check "
+                        f"runs against the resolved device either way."
                     ),
                 }
 
@@ -803,12 +814,6 @@ class RmLoopbackTool(_V6ToolBase):
             result = await self.client._make_request(
                 "POST", f"{LOOPBACK['delete']}/{uuid}", call_class="write", json={}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST",
-                    "/api/interfaces/loopback_settings/reconfigure",
-                    call_class="apply",
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete loopback device")
             return {"status": "error", "error": str(exc)}
@@ -821,4 +826,20 @@ class RmLoopbackTool(_V6ToolBase):
                     f"or the uuid came from an older listing."
                 ),
             }
-        return {"status": "success", "uuid": uuid, "deleted": True}
+
+        # Apply as a separate, checked phase — not inside the write's try, where
+        # a reconfigure failure was reported as the delete having failed.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(
+                    self.client, "/api/interfaces/loopback_settings/reconfigure"
+                )
+                applied = True
+            except ApplyError as exc:
+                logger.warning("Loopback deleted but not applied: %s", exc)
+                apply_error = str(exc)
+        out = {"status": "success", "uuid": uuid, "deleted": True, "applied": applied}
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out

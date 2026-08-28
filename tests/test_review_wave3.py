@@ -50,6 +50,14 @@ TRAVERSALS = [
     "/api/x/y/z/..%2f..%2fcore/firmware/poweroff",
     "/api/x/y/z/%2e%2e/%2e%2e/core/firmware/poweroff",
     "/api/x/y/../z",
+    # Mixed encodings the first version enumerated its way around. requests
+    # un-quotes %2e to "." while preparing the URL, so these reach the wire as
+    # real dot segments. Enumerating was the mistake; the guard now decodes.
+    "/api/quagga/bgp/toggleNeighbor/.%2e/.%2e/.%2e/core/firmware/poweroff/1",
+    "/api/quagga/bgp/toggleNeighbor/%2e./%2e./core/firmware/poweroff/1",
+    "/api/x/y/..%5c..%5ccore/firmware/poweroff",
+    "/api/x/y/%2e%2e%2fcore/firmware/poweroff",
+    "/api/x/y/z#/../../core/firmware/poweroff",
 ]
 
 
@@ -154,5 +162,10 @@ async def test_the_root_php_call_does_not_inherit_the_environment() -> None:
     )
 
     run = next((c for c in commands if "php" in c and "b64decode" not in c), "")
-    assert "sudo -E" not in run
-    assert "env" in run
+    # Assert the positive shape, not the absence of one spelling: sudo
+    # --preserve-env would satisfy `"sudo -E" not in run` and `"env" in run`
+    # (inside --preserve-env) while restoring the exact PHPRC path.
+    assert "-E" not in run and "preserve-env" not in run
+    assert "/usr/bin/env" in run
+    for var in ("MCP_IF", "MCP_ADDR", "MCP_BITS", "MCP_FIELD"):
+        assert var in run

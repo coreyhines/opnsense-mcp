@@ -96,7 +96,7 @@ async def test_a_longer_address_does_not_satisfy_a_shorter_one() -> None:
                 "stdout": "",
                 "stderr": "PHP Fatal error",
                 "exit_code": 255,
-                "success": True,
+                "success": False,
             },
             {
                 "stdout": "lo1: flags=8049\n\tinet 198.51.100.10/24",
