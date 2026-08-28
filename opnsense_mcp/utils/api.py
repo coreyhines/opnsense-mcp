@@ -11,6 +11,7 @@ import re
 import socket
 import ssl
 import threading
+import urllib.parse
 from typing import Any
 
 import requests
@@ -229,27 +230,44 @@ class ResponseError(APIError):
 # request simply arrives somewhere else. Guarding here rather than at ~45 call
 # sites is the difference between a rule and a habit: a tool written later
 # cannot forget to call a validator it never saw.
-_UNSAFE_ENDPOINT = re.compile(
-    r"""
-      (^|/)\.\.($|/)        # a dot segment in any position
-    | %2e%2e                 # ... percent-encoded
-    | %2f                    # ... or an encoded separator hiding one
-    | \?                     # a query string smuggled into the path
-    | \#                     # a fragment, which would truncate the path
-    | ^//                    # a protocol-relative path, i.e. another host
-    | [\x00-\x1f]            # control characters, including CR/LF
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
+#
+# The first version enumerated encodings and a review defeated it in one
+# character: requests un-quotes %2e to "." while preparing the URL, so ".%2e/"
+# reached the wire as "../". Enumeration is the wrong shape for this. The guard
+# now decodes first — repeatedly, to catch double-encoding — and then judges the
+# decoded path, so a segment is either a dot segment or it is not, regardless of
+# how it was spelled.
+_ALWAYS_UNSAFE = ("?", "#", "\\")
 
 
 def _reject_unsafe_endpoint(endpoint: str) -> None:
     """Refuse an endpoint that could resolve somewhere other than it reads."""
-    if _UNSAFE_ENDPOINT.search(endpoint):
+    decoded = endpoint
+    for _ in range(5):  # unwrap multiply-encoded forms; 5 is far past any real depth
+        nxt = urllib.parse.unquote(decoded)
+        if nxt == decoded:
+            break
+        decoded = nxt
+
+    reason = None
+    if decoded.startswith("//"):
+        reason = "a protocol-relative path points at another host"
+    elif any(token in decoded for token in _ALWAYS_UNSAFE):
+        reason = "a query string, fragment, or backslash does not belong in an API path"
+    elif any(ord(c) < 0x20 for c in decoded):
+        reason = "a control character does not belong in an API path"
+    else:
+        # A dot segment anywhere, after decoding, means the path resolves
+        # somewhere other than it reads.
+        segments = decoded.replace("\\", "/").split("/")
+        if any(seg in ("..", ".") for seg in segments):
+            reason = "a relative path segment would resolve elsewhere"
+
+    if reason:
         raise RequestError(
-            f"refusing to request {endpoint!r}: the path contains a segment that "
-            f"would resolve elsewhere. Identifiers are interpolated into API "
-            f"paths, so this is rejected before the request is built."
+            f"refusing to request {endpoint!r}: {reason}. Identifiers are "
+            f"interpolated into API paths, so this is rejected before the "
+            f"request is built."
         )
 
 

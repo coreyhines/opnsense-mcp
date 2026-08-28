@@ -91,7 +91,15 @@ def _has_exact_address(
     satisfied by a coincidence of digits.
     """
     want = ipaddress.ip_interface(f"{address}/{bits}")
-    for token in observed.replace(",", " ").split():
+    for raw in observed.replace(",", " ").split():
+        # ifconfig always prints a scope on a link-local (fe80::1%lo0/64), which
+        # does not parse and would fail a write that succeeded. The scope
+        # identifies the interface, not the address, so drop it before compare.
+        token = (
+            raw.split("%", 1)[0] + ("/" + raw.split("/", 1)[1] if "/" in raw else "")
+            if "%" in raw
+            else raw
+        )
         # The token must carry a prefix of its own. A bare "172.16.99.2" parses
         # as /32, which would satisfy a /32 request from output that never
         # stated a prefix — so an ifconfig without CIDR formatting would look

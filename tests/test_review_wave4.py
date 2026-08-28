@@ -35,62 +35,153 @@ def _exposed_names() -> set[str]:
     return names
 
 
-def test_no_document_advertises_a_tool_that_does_not_exist() -> None:
-    """The README listed ssh_fw_rule for a full day after it was removed.
+_NOT_TOOLS = frozenset(
+    {
+        "del_item",
+        "rule_uuid",
+        "snapshot_id",
+        "client_id",
+        "created_at",
+        "local_path",
+        "max_results",
+        "preview_bytes",
+        "row_count",
+        "sort_by",
+        "src_ip",
+        "dst_ip",
+        "src_port",
+        "dst_port",
+        "include_down",
+        "include_raw",
+        "include_rules",
+        "summary_only",
+        "warnings_only",
+        "fetch_all",
+        "no_matches",
+        "partial_success",
+        "bufferbloat_wan",
+        # Config keys, params, device names, env vars — tool-shaped but not
+        # tools. This is where false positives belong now that the check no
+        # longer filters by verb (which blinded it to removed verb families).
+        "api_key",
+        "api_secret",
+        "firewall_host",
+        "verify_ssl",
+        "max_retries",
+        "source_net",
+        "source_port",
+        "destination_net",
+        "destination_port",
+        "password_hash",
+        "secret_key",
+        "token_expire_minutes",
+        "proxy_pass",
+        "package_manager",
+        "ax0_vlan2",
+        "ax0_vlan100",
+    }
+)
 
-    An agent reading that list calls a name the registry raises KeyError on.
+
+def _tracked_docs() -> list:
+    """Only files git tracks. Untracked scratch (tmp_bucket_*.md) is not ours."""
+    import subprocess
+
+    out = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO),
+            "ls-files",
+            "*.md",
+            "*.mdc",
+            "deploy/*.example",
+            "examples/*.example",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    return [REPO / line for line in out.splitlines() if line.strip()]
+
+
+def test_no_document_advertises_a_tool_that_does_not_exist() -> None:
+    """README listed ssh_fw_rule for a day after removal; a first version of
+    this test missed it, its prefix filter a hand-picked list exempting 44 of
+    112 names.
+
+    A tool-shaped name (a live verb prefix plus a noun) in a tracked document,
+    neither a known tool nor an allowlisted non-tool, is a finding.
     """
     known = _exposed_names()
-    # Tool names are snake_case and appear in backticks in these documents.
-    candidates = re.compile(r"`([a-z][a-z0-9_]{4,})`")
+    candidates = re.compile(r"`([a-z][a-z0-9]+(?:_[a-z0-9]+)+)`")
     stale: list[str] = []
 
-    for doc in (REPO / "README.md", *(REPO / "docs").rglob("*.md")):
-        text = doc.read_text()
+    for doc in _tracked_docs():
+        try:
+            text = doc.read_text()
+        except (UnicodeDecodeError, OSError):
+            continue
         for name in candidates.findall(text):
-            # Only judge names that look like this project's tools: a verb we
-            # use, or a name the registry once knew.
-            if name.startswith(("mk_", "rm_", "list_", "set_", "toggle_", "ssh_")):
-                if name not in known:
-                    stale.append(f"{doc.relative_to(REPO)}: {name}")
+            # No verb filter: deriving verbs from surviving tools blinded this
+            # to a fully-removed verb family, which is exactly the removal case
+            # (ssh_fw_rule) it exists to catch. Any backticked snake_case name
+            # that is not a live tool and not an allowlisted non-tool is a
+            # finding; genuine non-tools go in _NOT_TOOLS.
+            if name in known or name in _NOT_TOOLS:
+                continue
+            stale.append(f"{doc.relative_to(REPO)}: {name}")
 
-    assert not stale, "documents reference tools that do not exist: " + ", ".join(stale)
+    assert not stale, (
+        "documents reference names that look like tools but are not registered "
+        "(fix the doc, or add a genuine non-tool to _NOT_TOOLS): "
+        + ", ".join(sorted(set(stale)))
+    )
 
 
 def test_the_group_docstring_states_the_real_counts() -> None:
-    """It said 13 names and 104 operations well after both had moved."""
+    """It said 13 names and 104 operations after both had moved.
+
+    A first version collected every 2-4 digit number and checked the count was
+    somewhere among them, so it passed on a docstring claiming 999 operations
+    behind 42 names. Each number is now bound to its own sentence.
+    """
+    from opnsense_mcp.fastmcp_server import build_shaper_tools
     from opnsense_mcp.utils import tool_groups
+    from opnsense_mcp.utils.mock_api import MockOPNsenseClient
+    from opnsense_mcp.utils.registry import build_tools
+    from opnsense_mcp.utils.tool_groups import build_groups
 
-    exposed_count = len(
-        [
-            n
-            for n in _exposed_names()
-            if n in tool_groups.GROUPS or n in tool_groups.UNGROUPED
-        ]
+    client = MockOPNsenseClient(
+        {"development": {"mock_data_path": str(REPO / "examples" / "mock_data")}}
     )
+    tools = build_tools(client, extra=build_shaper_tools(client))
+    operations = len(tools)
+    names = len(build_groups(tools))
+
     doc = tool_groups.__doc__ or ""
-    numbers = {int(n) for n in re.findall(r"\b(\d{2,4})\b", doc)}
+    gives = re.search(r"instead gives (\d+)", doc)
+    result = re.search(r"Result: (\d+) operations behind (\d+) names", doc)
 
-    assert exposed_count in numbers, (
-        f"the module docstring cites {sorted(numbers)} but the surface is "
-        f"{exposed_count} names"
-    )
+    assert gives and int(gives.group(1)) == names, f"'instead gives' != {names}"
+    assert result, "the docstring lost its 'Result:' summary line"
+    assert int(result.group(1)) == operations, f"operations != {operations}"
+    assert int(result.group(2)) == names, f"names != {names}"
 
 
 def test_the_schema_declares_that_the_interface_gets_enabled() -> None:
     """It sets enable=1 unconditionally, which no description mentioned.
 
-    A model asked to "set an address on opt5" would also bring up an interface
-    an operator had deliberately disabled.
+    Asserted against the description a client sees, via whole words rather than
+    a truncated substring dodging enable/enabling — the rule-2 trick CLAUDE.md
+    forbids.
     """
-    blob = (
-        SetInterfaceAddressTool.description
-        + " "
-        + str(SetInterfaceAddressTool.input_schema)
-    ).lower()
+    words = re.findall(r"[a-z]+", SetInterfaceAddressTool.description.lower())
 
-    # "enabl" rather than "enable": the description says "enabling".
-    assert "enabl" in blob
+    assert any(w.startswith("enabl") for w in words), (
+        "the description must state the interface is enabled: "
+        + SetInterfaceAddressTool.description
+    )
 
 
 def test_a_zero_prefix_is_refused() -> None:
