@@ -176,7 +176,10 @@ class OPNsenseSSHClient:
             )
 
         client = paramiko.SSHClient()
-        apply_paramiko_host_key_policy(client)
+        # Connect to the resolved IP, but let the host-key check also consider
+        # the hostname: a normal `ssh user@firewall` records only the hostname
+        # (CheckHostIP defaults to no), so an IP-keyed lookup never matched it.
+        apply_paramiko_host_key_policy(client, alternates=[self.ssh_host])
         client.connect(
             hostname=resolved_ip,
             username=self.ssh_user,

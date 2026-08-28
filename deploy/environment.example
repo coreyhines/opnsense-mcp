@@ -23,6 +23,15 @@ OPNSENSE_API_SECRET=
 # OPNSENSE_SSH_PORT=22
 # OPNSENSE_SSH_TIMEOUT=15
 # OPNSENSE_SSH_ADDRESS_FAMILY=inet             # inet (IPv4), inet6, or any
+#
+# The SSH tools need both a private key and a known_hosts entry in the
+# directory mounted at /root/.ssh. A normal `ssh user@firewall` records the
+# hostname only, which is what the host-key check looks for.
+
+# Where config_backup action=download writes. The quadlet already sets this to
+# <INSTALL_ROOT>/backups, which is the only writable mount; uncomment to point
+# it elsewhere. Keep it outside the git checkout.
+# OPNSENSE_BACKUP_DIR=/opt/containerdata/opnsense-mcp/backups
 
 MCP_SECRET_KEY=change-me-long-random
 # LOG_LEVEL=INFO
