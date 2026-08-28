@@ -136,10 +136,44 @@ script, not from a tool. A probe named `test_*` at the repository root is worse:
 pytest collects it, so a routine test run opens live connections. Keep probes
 out of the collection path.
 
-**Three of these are enforced now, not remembered.**
+**A fixture that uses key names the API does not emit tests nothing.**
+`fw_rules.py` read `source`/`destination` where `searchRule` sends
+`source_net`/`destination_net`, so every rule on the firewall listed as
+any->any. `dhcp_scope.py` read `start`/`rangestart` where dnsmasq range rows
+send `start_addr`/`end_addr`, so the documented `subnet` selector could never
+match. Both suites were green throughout, because each normalizer was fed a
+hand-written fixture in the shape it already expected, and nothing asserted a
+normalized value was ever non-empty. Capture the response, keep the keys it
+really has, and assert on values.
+
+**A group selector eats a member field of the same name.** `GroupedTool` pops
+`action` to choose the member, so every member declaring its own `action` was
+unreachable: created rules were always `pass`, list could not filter, and a
+packet capture could be started but never stopped. Adding a member is where
+this recurs, so it is a test rather than a habit.
+
+**Say whether the operation ran, not what it found.** A shaper audit that found
+problems returned `status: "error"`, which a caller cannot tell from an audit
+that failed to run. Severity goes in the payload.
+
+**Now enforced, not remembered.**
 `.claude/hooks/bash_guard.py` runs as a `PreToolUse` hook on every Bash call. It
 refuses the `;`-chained publish and the bare-cat heredoc, and warns on workspace
 Python calling `get_opnsense_client()`. `tests/test_bash_guard.py` holds the
 falsification cases, including the one where the guard blocked its own commit
-for quoting a pattern it forbids. Everything else on this list is still read
-rather than run.
+for quoting a pattern it forbids.
+
+Four more run as tests:
+
+| Check | Fails when |
+|---|---|
+| `test_guidance_names_are_real.py` | a source string names an action or offers a `tool()` call the registry does not know |
+| `test_no_member_field_collides_with_the_group_selector` | a member declares `action` without a `FIELD_ALIASES` entry |
+| `test_every_apply_field_declares_its_default` | a tool takes `apply` without saying what omitting it does |
+| `test_fixture_shapes.py` | a normalizer produces empty values from a captured response |
+
+`benchmark_performance.py --check-shapes` diffs live response keys against the
+captured fixtures. It needs the firewall, so it is a command rather than a test.
+
+Every check here was verified by reintroducing the defect and watching it fail.
+The rest of this list is still read rather than run.
