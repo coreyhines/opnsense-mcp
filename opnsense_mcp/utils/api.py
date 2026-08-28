@@ -223,6 +223,36 @@ class ResponseError(APIError):
     """Raised when response parsing fails."""
 
 
+# Every tool builds its endpoint by interpolating an identifier the model
+# supplied. `requests` normalises dot segments before sending, so "../" in one
+# of those is not a server-side traversal to be defended by the server — the
+# request simply arrives somewhere else. Guarding here rather than at ~45 call
+# sites is the difference between a rule and a habit: a tool written later
+# cannot forget to call a validator it never saw.
+_UNSAFE_ENDPOINT = re.compile(
+    r"""
+      (^|/)\.\.($|/)        # a dot segment in any position
+    | %2e%2e                 # ... percent-encoded
+    | %2f                    # ... or an encoded separator hiding one
+    | \?                     # a query string smuggled into the path
+    | \#                     # a fragment, which would truncate the path
+    | ^//                    # a protocol-relative path, i.e. another host
+    | [\x00-\x1f]            # control characters, including CR/LF
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _reject_unsafe_endpoint(endpoint: str) -> None:
+    """Refuse an endpoint that could resolve somewhere other than it reads."""
+    if _UNSAFE_ENDPOINT.search(endpoint):
+        raise RequestError(
+            f"refusing to request {endpoint!r}: the path contains a segment that "
+            f"would resolve elsewhere. Identifiers are interpolated into API "
+            f"paths, so this is rejected before the request is built."
+        )
+
+
 def _http_error_detail(error: requests.exceptions.HTTPError) -> str:
     """Build a message from the response body, not just the status line.
 
@@ -424,6 +454,8 @@ class OPNsenseClient:
         for ``core/backup/download``, which serves XML; parsing every 200 as
         JSON is why that endpoint could not be fetched at all.
         """
+        _reject_unsafe_endpoint(endpoint)
+
         if not endpoint.startswith("/api") and not endpoint.startswith("/core"):
             endpoint = f"/api{endpoint}"
 

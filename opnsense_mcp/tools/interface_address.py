@@ -27,7 +27,10 @@ Safety, given this runs PHP as root:
   attempt fails to parse rather than being escaped;
 * the prefix is an int bounded by the parsed address's family;
 * none of those values are interpolated into the PHP. The script is a fixed
-  constant and the values arrive as environment variables;
+  constant and the values arrive as environment variables, named explicitly:
+  ``sudo -E`` would pass the whole SSH environment into a root interpreter, and
+  PHP honours ``PHPRC``, which selects a php.ini, which can set
+  ``auto_prepend_file``;
 * success is confirmed by reading the address back off the interface, because
   `interface_configure()` throws after applying it and the exit code means
   nothing either way.
@@ -255,7 +258,7 @@ class SetInterfaceAddressTool:
                 )
             )
             run = self._run(
-                f"/bin/sh -c {shlex.quote(f'env {env} sudo -E php {shlex.quote(remote)} 2>&1')}"
+                f"/bin/sh -c {shlex.quote(f'sudo /usr/bin/env {env} php {shlex.quote(remote)} 2>&1')}"
             )
 
             # interface_configure() throws after applying the address, so the
