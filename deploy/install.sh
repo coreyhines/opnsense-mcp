@@ -336,21 +336,24 @@ if [[ "$RUNTIME" == "podman" ]]; then
   POD_NAME="${OPNSENSE_MCP_POD_NAME}"
   POD_QUADLET_FILE="opnsense-mcp.pod"
   POD_SVC="opnsense-mcp-pod.service"
-  readonly QUADLET_DIR=/etc/containers/systemd
-  readonly LEGACY_QUADLET_SUBDIR=/etc/containers/systemd/opnsense-mcp
+  readonly QUADLET_DIR=/etc/containers/systemd/opnsense-mcp
+  readonly LEGACY_QUADLET_FLAT_DIR=/etc/containers/systemd
   mkdir -p "${QUADLET_DIR}"
   readonly MCP_QUADLET_BASENAME=opnsense-mcp-app
   readonly CADDY_QUADLET_BASENAME=opnsense-mcp-caddy
   MCP_APP_SVC="${MCP_QUADLET_BASENAME}.service"
   CADDY_SVC="${CADDY_QUADLET_BASENAME}.service"
-  rm -f "${LEGACY_QUADLET_SUBDIR}/opnsense-mcp.container" \
-    "${LEGACY_QUADLET_SUBDIR}/caddy-opnsense-mcp.container" \
-    "${LEGACY_QUADLET_SUBDIR}/opnsense-mcp.pod" \
-    "${LEGACY_QUADLET_SUBDIR}/opnsense-mcp-pod.pod" \
-    "${LEGACY_QUADLET_SUBDIR}/${POD_NAME}.pod" \
-    "${LEGACY_QUADLET_SUBDIR}/${MCP_QUADLET_BASENAME}.container" \
-    "${LEGACY_QUADLET_SUBDIR}/${CADDY_QUADLET_BASENAME}.container"
-  rmdir "${LEGACY_QUADLET_SUBDIR}" 2>/dev/null || true
+  # Quadlets live in a per-service directory, as every other service on these
+  # hosts does. Flat siblings in the parent are the previous layout; remove
+  # them so quadlet does not generate a second, stale unit under the same
+  # name. Never rmdir the parent: it is shared with every other service.
+  rm -f "${LEGACY_QUADLET_FLAT_DIR}/opnsense-mcp.container" \
+    "${LEGACY_QUADLET_FLAT_DIR}/caddy-opnsense-mcp.container" \
+    "${LEGACY_QUADLET_FLAT_DIR}/opnsense-mcp.pod" \
+    "${LEGACY_QUADLET_FLAT_DIR}/opnsense-mcp-pod.pod" \
+    "${LEGACY_QUADLET_FLAT_DIR}/${POD_NAME}.pod" \
+    "${LEGACY_QUADLET_FLAT_DIR}/${MCP_QUADLET_BASENAME}.container" \
+    "${LEGACY_QUADLET_FLAT_DIR}/${CADDY_QUADLET_BASENAME}.container"
   rm -f "${QUADLET_DIR}/opnsense-mcp.container" "${QUADLET_DIR}/caddy-opnsense-mcp.container" \
     "${QUADLET_DIR}/opnsense-mcp-pod.pod"
   echo "Quadlet: dir=${QUADLET_DIR} file=${POD_QUADLET_FILE} PodName=${POD_NAME} systemd=${POD_SVC} MCP=${OPNSENSE_MCP_CONTAINER_NAME} Caddy=${OPNSENSE_MCP_CADDY_CONTAINER_NAME} Image=${IMAGE_REPO}:${IMAGE_TAG} CaddyImage=${CADDY_IMAGE} Network=${OPNSENSE_MCP_NETWORK:-} IP=${OPNSENSE_MCP_IP:-} IP6=${OPNSENSE_MCP_IP6:-} DNS=${OPNSENSE_MCP_DNS:-} TLS=${OPNSENSE_MCP_TLS_CERTS}" >&2
@@ -410,7 +413,7 @@ echo "Install finished (${RUNTIME})." >&2
 echo "  Env:         ${INSTALL_ROOT}/environment" >&2
 echo "  Caddyfile:   ${CADDYFILE_HOST}" >&2
 if [[ "$RUNTIME" == "podman" ]]; then
-  echo "  Quadlets:    /etc/containers/systemd/ (${POD_QUADLET_FILE:-opnsense-mcp.pod}, ${MCP_QUADLET_BASENAME:-opnsense-mcp-app}.container, ${CADDY_QUADLET_BASENAME:-opnsense-mcp-caddy}.container)" >&2
+  echo "  Quadlets:    /etc/containers/systemd/opnsense-mcp/ (${POD_QUADLET_FILE:-opnsense-mcp.pod}, ${MCP_QUADLET_BASENAME:-opnsense-mcp-app}.container, ${CADDY_QUADLET_BASENAME:-opnsense-mcp-caddy}.container)" >&2
   echo "  Image:       ${IMAGE_REPO}:${IMAGE_TAG}" >&2
 fi
 echo "Edit credentials and Caddy hostname/TLS paths if you have not already." >&2

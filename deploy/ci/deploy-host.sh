@@ -4,7 +4,14 @@ set -euo pipefail
 
 IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-}"
 IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-${CI_COMMIT_SHORT_SHA:-}}"
-QUADLET_APP="/etc/containers/systemd/opnsense-mcp-app.container"
+QUADLET_DIR="/etc/containers/systemd/opnsense-mcp"
+QUADLET_APP="${QUADLET_DIR}/opnsense-mcp-app.container"
+# A host installed before the per-service directory layout still has the file
+# flat in the parent. Patch whichever one is actually there, and say which.
+if [[ ! -f "${QUADLET_APP}" && -f "/etc/containers/systemd/opnsense-mcp-app.container" ]]; then
+  QUADLET_APP="/etc/containers/systemd/opnsense-mcp-app.container"
+  echo "note: patching legacy flat quadlet ${QUADLET_APP}; run install.sh to migrate" >&2
+fi
 INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
 
 if [[ -z "${IMAGE_REPO}" ]]; then
