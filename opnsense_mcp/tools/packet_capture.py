@@ -707,7 +707,7 @@ class PacketCaptureTool2:
                         "suggested_solutions": issues["solutions"],
                         "auto_correction_attempts": corrections["corrections_applied"],
                         "auto_correction_errors": corrections["errors"],
-                        "guidance": "Please manually fix the issues above, then try again. You can also use action='diagnose' for detailed diagnostics.",
+                        "guidance": "Please manually fix the issues above, then try again.",
                     }
 
             # Test SSH connection first

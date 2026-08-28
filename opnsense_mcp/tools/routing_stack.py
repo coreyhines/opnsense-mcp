@@ -522,6 +522,11 @@ class MkRouteTool(_RoutingToolBase):
                 "description": "Gateway name, from list_gateways",
             },
             "description": {"type": "string", "optional": True},
+            "enabled": {
+                "type": "boolean",
+                "description": "Target state, set explicitly rather than flipped",
+                "optional": True,
+            },
             "apply": {
                 "type": "boolean",
                 "description": "Reconfigure routes afterwards (default false)",
@@ -560,11 +565,14 @@ class MkRouteTool(_RoutingToolBase):
                     }
 
             # The model has `enabled`, not `disabled`, despite the docs.
+            # `enabled` is honored here: hardcoding "1" meant a route asked for
+            # disabled was created live and went into effect on the next apply.
+            enabled = params.get("enabled")
             payload = {
                 "network": network,
                 "gateway": gateway,
                 "descr": params.get("description", ""),
-                "enabled": "1",
+                "enabled": "0" if enabled is False else "1",
             }
             result = await self.client._make_request(
                 "POST", ROUTE["add"], call_class="write", json={"route": payload}

@@ -29,6 +29,12 @@ from opnsense_mcp.utils.mvc_merge import merge_for_set
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 logger = logging.getLogger(__name__)
+
+# Bootgrid search pagination. The page size is a transport detail; callers get
+# every row. The page cap only bounds a server that keeps returning full pages
+# without ever reaching its own reported total.
+SEARCH_PAGE_SIZE = 500
+SEARCH_MAX_PAGES = 100
 _MAC_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.IGNORECASE)
 
 
@@ -1482,15 +1488,59 @@ class OPNsenseClient:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _reverse)
 
+    async def _search_all_rows(
+        self,
+        endpoint: str,
+        search: str = "",
+        page_size: int = SEARCH_PAGE_SIZE,
+    ) -> list[dict[str, Any]]:
+        """Page an OPNsense bootgrid search endpoint until every row is in hand.
+
+        A single `rowCount: 100` request silently returned the first 100 rows
+        and the caller reported that as the total, which is data loss with no
+        signal. Termination is on a short page as well as on `total`, so a
+        response that omits or misreports the total still cannot loop.
+        """
+        rows: list[dict[str, Any]] = []
+        current = 1
+        while True:
+            data = await self._make_request(
+                "POST",
+                endpoint,
+                json={
+                    "current": current,
+                    "rowCount": page_size,
+                    "searchPhrase": search,
+                },
+            )
+            if not isinstance(data, dict):
+                break
+            page = list(data.get("rows") or [])
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+            total_raw = data.get("total", data.get("rowCount"))
+            try:
+                total = int(total_raw)
+            except (TypeError, ValueError):
+                total = 0
+            if total and len(rows) >= total:
+                break
+            if current >= SEARCH_MAX_PAGES:
+                logger.warning(
+                    "Stopped paging %s at %d pages (%d rows)",
+                    endpoint,
+                    current,
+                    len(rows),
+                )
+                break
+            current += 1
+        return rows
+
     async def search_host_overrides(self, search: str = "") -> list[dict[str, Any]]:
         """List Unbound DNS host overrides, optionally filtered by hostname/IP/description."""
         try:
-            data = await self._make_request(
-                "POST",
-                ENDPOINTS["unbound"]["search"],
-                json={"current": 1, "rowCount": 100, "searchPhrase": search},
-            )
-            return data.get("rows", []) if isinstance(data, dict) else []
+            return await self._search_all_rows(ENDPOINTS["unbound"]["search"], search)
         except Exception:
             logger.exception("Failed to search host overrides")
             return []
@@ -1545,12 +1595,7 @@ class OPNsenseClient:
     async def search_aliases(self, search: str = "") -> list[dict[str, Any]]:
         """List firewall aliases, optionally filtered."""
         try:
-            data = await self._make_request(
-                "POST",
-                ENDPOINTS["alias"]["search"],
-                json={"current": 1, "rowCount": 100, "searchPhrase": search},
-            )
-            return data.get("rows", []) if isinstance(data, dict) else []
+            return await self._search_all_rows(ENDPOINTS["alias"]["search"], search)
         except Exception:
             logger.exception("Failed to search aliases")
             return []

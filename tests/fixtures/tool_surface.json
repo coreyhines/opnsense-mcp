@@ -130,6 +130,14 @@
       "type": "object"
     }
   },
+  "apply_fw_changes": {
+    "description": "Apply staged firewall filter changes, loading every rule written with apply=false into the running ruleset",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
   "apply_shaper": {
     "description": "Apply pending traffic shaper configuration via service/reconfigure",
     "inputSchema": {
@@ -1228,6 +1236,11 @@
           "optional": true,
           "type": "string"
         },
+        "enabled": {
+          "description": "Target state, set explicitly rather than flipped",
+          "optional": true,
+          "type": "boolean"
+        },
         "interface": {
           "description": "Outgoing interface, usually wan",
           "type": "string"
@@ -1305,6 +1318,11 @@
         "description": {
           "optional": true,
           "type": "string"
+        },
+        "enabled": {
+          "description": "Target state, set explicitly rather than flipped",
+          "optional": true,
+          "type": "boolean"
         },
         "gateway": {
           "description": "Gateway name, from list_gateways",

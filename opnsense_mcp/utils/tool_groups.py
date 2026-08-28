@@ -25,7 +25,7 @@ The floor is lower than it should be for a reason worth knowing: MCP gives
 every tool a complete schema with no cross-tool reference, so `apply` is stored
 13 times no matter how canonical its definition is.
 
-Result: 112 operations behind 14 names.
+Result: 113 operations behind 14 names.
 """
 
 from __future__ import annotations
@@ -83,6 +83,7 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "delete": "rmfw_rule",
             "list_groups": "list_fw_groups",
             "set_group": "set_fw_group",
+            "apply": "apply_fw_changes",
         },
     ),
     "dhcp": (
@@ -222,6 +223,31 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
 UNGROUPED: frozenset[str] = frozenset({"arp", "system"})
 
 
+# tool name -> {the tool's own field: the name the group advertises}
+#
+# A group consumes `action` to choose the member, so a member with its own
+# `action` field can never be given one. That silently made three documented
+# parameters unreachable: every rule created through `fw_rule` came out `pass`,
+# `list` could not filter by action, and a packet capture could be started but
+# neither stopped nor fetched.
+#
+# Renaming the selector would have been cleaner on paper and broken every
+# caller, document and test that says `action=<operation>`. Aliasing the few
+# colliding member fields costs one indirection here and nothing at the call
+# site. `test_tool_groups_have_no_unaliased_collisions` fails if a new member
+# introduces a collision without an entry.
+FIELD_ALIASES: dict[str, dict[str, str]] = {
+    # The rule's own pass/block/reject value, and the filter over it.
+    "mkfw_rule": {"action": "rule_action"},
+    "set_fw_rule": {"action": "rule_action"},
+    "fw_rules": {"action": "rule_action"},
+    # A log filter, not a rule field: kept distinct from rule_action.
+    "get_logs": {"action": "log_action"},
+    # start / stop / fetch.
+    "packet_capture": {"action": "capture_action"},
+}
+
+
 def build_groups(tools: dict[str, Any]) -> dict[str, Any]:
     """Return the exposed surface: grouped tools plus the ungrouped ones.
 
@@ -244,7 +270,10 @@ def build_groups(tools: dict[str, Any]) -> dict[str, Any]:
             tool_name for tool_name in members.values() if tool_name in tools
         )
         exposed[group_name] = GroupedTool(
-            name=group_name, description=description, members=resolved
+            name=group_name,
+            description=description,
+            members=resolved,
+            field_aliases=FIELD_ALIASES,
         )
 
     for tool_name, tool in tools.items():

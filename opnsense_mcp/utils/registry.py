@@ -24,6 +24,7 @@ from opnsense_mcp.tools.alias_write import (
     ToggleAliasTool,
 )
 from opnsense_mcp.tools.aliases import AliasesTool
+from opnsense_mcp.tools.apply_fw_changes import ApplyFwChangesTool
 from opnsense_mcp.tools.arp import ARPTool
 from opnsense_mcp.tools.bgp import (
     BgpStatusTool,
@@ -136,6 +137,7 @@ class Tool(Protocol):
 # built separately and passed in (see `build_tools`).
 TOOL_CLASSES: tuple[type, ...] = (
     AliasesTool,
+    ApplyFwChangesTool,
     ApplyUlaTool,
     BgpStatusTool,
     ARPTool,
