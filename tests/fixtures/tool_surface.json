@@ -2083,6 +2083,11 @@
           "description": "Whether to apply changes immediately",
           "type": "boolean"
         },
+        "confirm": {
+          "description": "Token returned by the previous call, to confirm.",
+          "optional": true,
+          "type": "string"
+        },
         "rule_uuid": {
           "description": "UUID of the rule to delete",
           "type": "string"

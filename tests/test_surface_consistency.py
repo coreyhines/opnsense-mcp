@@ -341,3 +341,159 @@ def test_a_named_alias_source_survives_normalization() -> None:
     )
 
     assert rule["source"] == "lan_hosts"
+
+
+# --- fw_rule.delete requires a confirm token --------------------------------
+#
+# 14 of 18 deletes already do. fw_rule.delete was the least protected of the
+# four that did not: one call, one argument, and `apply` defaulting to true,
+# so a single call removed a rule and reloaded the filter. A removed filter
+# rule can change what traffic is permitted, and the caller may not know what
+# the rule contained.
+
+
+class _DeleteSpy:
+    """Client stub recording whether the delete and apply actually happened."""
+
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+        self.applied = 0
+
+    async def delete_firewall_rule(self, uuid: str) -> dict[str, Any]:
+        self.deleted.append(uuid)
+        return {"result": "success"}
+
+    async def apply_firewall_changes(self) -> dict[str, Any]:
+        self.applied += 1
+        return {"result": "success"}
+
+
+@pytest.mark.asyncio
+async def test_fw_rule_delete_without_a_token_deletes_nothing() -> None:
+    """The first call must issue a token and leave the ruleset untouched."""
+    from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+
+    spy = _DeleteSpy()
+    result = await RmfwRuleTool(spy).execute({"rule_uuid": "rule-1"})
+
+    assert result["status"] == "confirmation_required"
+    assert result["confirm_token"]
+    assert result.get("deleted") is not True
+    assert spy.deleted == []
+    assert spy.applied == 0
+
+
+@pytest.mark.asyncio
+async def test_fw_rule_delete_proceeds_with_the_issued_token() -> None:
+    """The second call, carrying the token, deletes and applies."""
+    from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+
+    spy = _DeleteSpy()
+    tool = RmfwRuleTool(spy)
+    token = (await tool.execute({"rule_uuid": "rule-1"}))["confirm_token"]
+
+    result = await tool.execute({"rule_uuid": "rule-1", "confirm": token})
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+    assert result["applied"] is True
+    assert spy.deleted == ["rule-1"]
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_token_deletes_nothing() -> None:
+    """A guessed or stale token must not be accepted."""
+    from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+
+    spy = _DeleteSpy()
+    tool = RmfwRuleTool(spy)
+    await tool.execute({"rule_uuid": "rule-1"})
+
+    result = await tool.execute({"rule_uuid": "rule-1", "confirm": "0000000000000000"})
+
+    assert result["status"] == "confirmation_required"
+    assert spy.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_a_token_for_one_rule_does_not_delete_another() -> None:
+    """Tokens are keyed on the uuid, so they cannot be transplanted."""
+    from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+
+    spy = _DeleteSpy()
+    tool = RmfwRuleTool(spy)
+    token = (await tool.execute({"rule_uuid": "rule-1"}))["confirm_token"]
+
+    result = await tool.execute({"rule_uuid": "rule-2", "confirm": token})
+
+    assert result["status"] == "confirmation_required"
+    assert spy.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_a_token_is_single_use() -> None:
+    """Replaying a token must not delete a recreated rule of the same uuid."""
+    from opnsense_mcp.tools.rmfw_rule import RmfwRuleTool
+
+    spy = _DeleteSpy()
+    tool = RmfwRuleTool(spy)
+    token = (await tool.execute({"rule_uuid": "rule-1"}))["confirm_token"]
+    await tool.execute({"rule_uuid": "rule-1", "confirm": token})
+
+    result = await tool.execute({"rule_uuid": "rule-1", "confirm": token})
+
+    assert result["status"] == "confirmation_required"
+    assert spy.deleted == ["rule-1"]
+
+
+# Deletes that deliberately take no confirmation token, with the reason each
+# one is safe without it. A new delete is not allowed to land unconfirmed by
+# omission: it has to be argued for here.
+DELETES_WITHOUT_CONFIRM = {
+    # `apply` defaults false, so the write is opt-in; an unconfirmed call is
+    # a dry run that reports what it would remove.
+    "rm_dhcp_host": "dry-run by default",
+    # A lease is ephemeral state, not configuration. The client re-requests
+    # one immediately, so there is nothing to recover.
+    "dhcp_lease_delete": "a lease is ephemeral",
+    # A name-to-address mapping, recreated from the uuid and address the
+    # caller just listed. Cheap to undo, unlike a filter rule.
+    "rmdns": "trivially recreated",
+}
+
+
+def test_every_delete_either_confirms_or_says_why_not() -> None:
+    """A destructive tool must take a confirm token or be listed with a reason.
+
+    fw_rule.delete was unconfirmed by omission rather than by decision: one
+    call, one argument, `apply` defaulting to true. This makes the next such
+    tool a choice someone has to write down.
+    """
+    from opnsense_mcp.fastmcp_server import build_shaper_tools
+    from opnsense_mcp.utils.mock_api import MockOPNsenseClient
+    from opnsense_mcp.utils.registry import build_tools
+    from opnsense_mcp.utils.tool_groups import GROUPS
+
+    client = MockOPNsenseClient(
+        {"development": {"mock_data_path": "examples/mock_data"}}
+    )
+    tools = build_tools(client, extra=build_shaper_tools(client))
+
+    unprotected: list[str] = []
+    for _description, members in GROUPS.values():
+        for action, tool_name in members.items():
+            if "delete" not in action and not action.startswith("rm"):
+                continue
+            tool = tools.get(tool_name)
+            if tool is None:
+                continue
+            props = (getattr(tool, "input_schema", {}) or {}).get("properties") or {}
+            if "confirm" in props or tool_name in DELETES_WITHOUT_CONFIRM:
+                continue
+            unprotected.append(tool_name)
+
+    assert not unprotected, (
+        "these deletes take no confirm token; add one, or add the tool to "
+        "DELETES_WITHOUT_CONFIRM with the reason it is safe without: "
+        + ", ".join(sorted(unprotected))
+    )

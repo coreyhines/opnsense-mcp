@@ -1,4 +1,9 @@
-"""Tests for firewall rule deletion tool."""
+"""Tests for firewall rule deletion tool.
+
+Deleting a rule takes a confirmation token, so each test here issues one with
+a first call and then deletes with a second. What they assert is unchanged:
+the result=success handling and the apply flag.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +22,10 @@ async def test_rmfw_rule_success_after_result_not_success_key() -> None:
     client.apply_firewall_changes = AsyncMock(return_value={"result": "applied"})
 
     tool = RmfwRuleTool(client)
-    result = await tool.execute({"rule_uuid": "abc-123", "apply": True})
+    token = (await tool.execute({"rule_uuid": "abc-123"}))["confirm_token"]
+    result = await tool.execute(
+        {"rule_uuid": "abc-123", "apply": True, "confirm": token}
+    )
 
     assert result["status"] == "success"
     assert result["deleted"] is True
@@ -33,7 +41,10 @@ async def test_rmfw_rule_delete_without_apply() -> None:
     client.apply_firewall_changes = AsyncMock()
 
     tool = RmfwRuleTool(client)
-    result = await tool.execute({"rule_uuid": "abc-123", "apply": False})
+    token = (await tool.execute({"rule_uuid": "abc-123"}))["confirm_token"]
+    result = await tool.execute(
+        {"rule_uuid": "abc-123", "apply": False, "confirm": token}
+    )
 
     assert result["status"] == "success"
     assert result["deleted"] is True

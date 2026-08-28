@@ -1,9 +1,20 @@
-"""Firewall rule deletion tool for OPNsense."""
+"""Firewall rule deletion tool for OPNsense.
+
+Deleting a filter rule takes a confirmation token, as fourteen of the other
+deletes already do. This was the least protected of the four that did not: one
+call, one argument, and `apply` defaulting to true, so a single call removed a
+rule and reloaded the filter. A removed rule can change what traffic is
+permitted, and the caller may not know what the rule contained.
+"""
 
 import logging
 from typing import Any
 
 from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.shaper_write_helpers import (
+    issue_delete_confirm_token,
+    validate_delete_confirm_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +36,11 @@ class RmfwRuleTool:
                 "description": "Whether to apply changes immediately",
                 "default": True,
             },
+            "confirm": {
+                "type": "string",
+                "description": "Token returned by the previous call, to confirm.",
+                "optional": True,
+            },
         },
         "required": ["rule_uuid"],
     }
@@ -43,8 +59,14 @@ class RmfwRuleTool:
         """
         Delete a firewall rule and optionally apply changes.
 
+        Two calls: the first returns `status: "confirmation_required"` with a
+        single-use `confirm_token`, deleting nothing; the second repeats the
+        call carrying that token. The token is keyed on the rule uuid and
+        expires, so it cannot be transplanted to another rule or replayed.
+
         Args:
-            params: Rule deletion parameters including rule_uuid and apply flag.
+            params: rule_uuid, an optional apply flag, and confirm on the
+                second call.
 
         Returns:
             Dictionary containing rule deletion results.
@@ -56,11 +78,23 @@ class RmfwRuleTool:
         if not self.client:
             return {"status": "error", "error": "No client available"}
 
+        confirm = str(params.get("confirm") or "")
         rule_uuid = params.get("rule_uuid")
         if not rule_uuid:
             return {
                 "status": "error",
                 "error": "rule_uuid is required for rule deletion",
+            }
+
+        # Checked before anything is sent, so an unconfirmed call cannot
+        # delete and cannot reload the filter.
+        if not validate_delete_confirm_token("fw_rule", str(rule_uuid), confirm):
+            token = issue_delete_confirm_token("fw_rule", str(rule_uuid))
+            return {
+                "status": "confirmation_required",
+                "rule_uuid": rule_uuid,
+                "confirm_token": token["token"],
+                "message": token["message"],
             }
 
         try:
