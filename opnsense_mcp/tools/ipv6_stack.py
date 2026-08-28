@@ -74,6 +74,29 @@ class _V6ToolBase:
         return data.get("rows", []) if isinstance(data, dict) else []
 
 
+class _TruncatedListingError(Exception):
+    """A search returned fewer rows than it claims exist."""
+
+
+def _refuse_if_truncated(rows: Any, what: str) -> None:
+    """Raise when a search page does not cover the whole result set.
+
+    A guard that reads a truncated listing as the whole truth is worse than one
+    that refuses: it would silently miss the row that matters — a device past
+    the cap read as "not found", or an assignment holder never seen, orphaning
+    the interface the guard exists to protect.
+    """
+    if not isinstance(rows, dict):
+        return
+    total = rows.get("total")
+    returned = len(rows.get("rows", []))
+    if isinstance(total, int) and total > returned:
+        raise _TruncatedListingError(
+            f"the {what} listing is truncated ({returned} of {total}); refusing "
+            f"rather than acting on a partial view"
+        )
+
+
 def _parse_v6_network(value: str, label: str) -> tuple[Any, str | None]:
     """Return the parsed network, or an error message explaining the refusal."""
     try:
@@ -722,10 +745,16 @@ class RmLoopbackTool(_V6ToolBase):
     }
 
     async def _device_name(self, uuid: str) -> str:
-        """Map a loopback uuid to its device name, e.g. lo1."""
+        """Map a loopback uuid to its device name, e.g. lo1.
+
+        Raises when the listing is truncated: past the row cap the device might
+        not be in the page, and a false "not found" would refuse a legitimate
+        delete — while on the assignment side a missed holder would orphan one.
+        """
         rows = await self.client._make_request(
-            "POST", LOOPBACK["search"], json={"current": 1, "rowCount": 500}
+            "POST", LOOPBACK["search"], json={"current": 1, "rowCount": 5000}
         )
+        _refuse_if_truncated(rows, "loopback devices")
         for row in rows.get("rows", []) if isinstance(rows, dict) else []:
             if row.get("uuid") == uuid:
                 raw = row.get("deviceId")
@@ -740,8 +769,9 @@ class RmLoopbackTool(_V6ToolBase):
         rows = await self.client._make_request(
             "POST",
             "/api/interfaces/assignment/search_item",
-            json={"current": 1, "rowCount": 500},
+            json={"current": 1, "rowCount": 5000},
         )
+        _refuse_if_truncated(rows, "interface assignments")
         return [
             r.get("uuid", "")
             for r in (rows.get("rows", []) if isinstance(rows, dict) else [])
@@ -779,7 +809,10 @@ class RmLoopbackTool(_V6ToolBase):
             # cross-check: preferring it let a wrong value skip the guard, which
             # checked assignments against a device nobody was using — the
             # orphaned, lock-protected assignment this exists to prevent.
-            device = await self._device_name(uuid)
+            try:
+                device = await self._device_name(uuid)
+            except _TruncatedListingError as exc:
+                return {"status": "error", "error": str(exc)}
             if not device:
                 return {
                     "status": "error",
@@ -799,7 +832,10 @@ class RmLoopbackTool(_V6ToolBase):
                     ),
                 }
 
-            holders = await self._assignments_using(device)
+            try:
+                holders = await self._assignments_using(device)
+            except _TruncatedListingError as exc:
+                return {"status": "error", "error": str(exc)}
             if holders:
                 return {
                     "status": "error",

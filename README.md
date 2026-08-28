@@ -119,6 +119,21 @@ Five PRs landed recently. See [`docs/FEATURES_UPDATE.md`](docs/FEATURES_UPDATE.m
 
 First 10 users get feedback incorporated into the tool. If you find bugs or have ideas, file an issue or discussion.
 
+## Where to look first when reviewing
+
+`scripts/risk_map.py` ranks source files by defect likelihood from git history —
+churn times fix density — so a review reads the risky files first and can stop
+early. It finds no bugs; it finds where they concentrate.
+
+```
+python3 scripts/risk_map.py --top 15
+```
+
+CI runs it on every pull request alongside a complexity report (`radon`) and a
+security-pattern pass (`bandit`) in the advisory **Insights** workflow, which
+never blocks a merge. Thresholds that gate the build come later, once the
+numbers are trusted.
+
 ## Documentation Map
 
 - Start here: [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)

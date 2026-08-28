@@ -1,0 +1,52 @@
+name: Insights
+
+# Advisory only — nothing here blocks a merge. It prints where defects are
+# likely to be, so an expensive review reads the risky code first and can stop
+# early. The gates (fail-the-build thresholds) come later, once the numbers are
+# trusted; today these are a map, not a fence.
+#
+# Three signals, cheapest first:
+#   - risk map: git churn x fix density, the strongest and free
+#   - complexity: radon, hotspots worth reading before the rest
+#   - security patterns: bandit, which already caught a /tmp issue this project
+#     shipped because it was a dev tool and not in CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  risk:
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
+    container:
+      image: docker.io/library/python:3.12-bookworm
+    steps:
+      - name: Install git and node
+        run: apt-get update && apt-get install -y --no-install-recommends git nodejs
+      - uses: https://data.forgejo.org/actions/checkout@v6
+        with:
+          # The risk map reads the whole history; a shallow clone would blind it.
+          fetch-depth: 0
+
+      - name: Defect-risk map
+        run: |
+          echo "::group::Where defects concentrate (churn x fix density)"
+          python3 scripts/risk_map.py --top 15
+          echo "::endgroup::"
+
+      - name: Complexity hotspots
+        run: |
+          pip install --quiet radon
+          echo "::group::Functions ranked C or worse (complexity)"
+          # Non-blocking: report only. -nc shows C and below.
+          radon cc opnsense_mcp -nc -s || true
+          echo "::endgroup::"
+
+      - name: Security patterns (advisory)
+        run: |
+          pip install --quiet bandit
+          echo "::group::Bandit findings"
+          # -ll: only medium+ severity, to keep the signal readable. Never fails
+          # the job — this is the advisory pass, and security.yml is the gate.
+          bandit -r opnsense_mcp scripts -ll || true
+          echo "::endgroup::"
