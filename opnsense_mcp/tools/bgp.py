@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import merge_for_set
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
@@ -90,15 +91,39 @@ class _BgpToolBase:
         )
         return data.get("rows", []) if isinstance(data, dict) else []
 
-    async def _reconfigure(self) -> None:
-        await self.client._make_request(
-            "POST", QUAGGA["reconfigure"], call_class="apply"
-        )
+    async def _apply_if_asked(self, params: dict[str, Any]) -> tuple[bool, str]:
+        """Apply as a separate phase. Returns (applied, error).
+
+        Deliberately not inside the write's try block: a failure here means the
+        write landed and was not applied, which is a different outcome from the
+        write failing, and reporting it as the latter is how a delete came to
+        report failure after removing the record.
+        """
+        if not params.get("apply", False):
+            return False, ""
+        try:
+            await run_apply(self.client, QUAGGA["reconfigure"])
+        except ApplyError as exc:
+            logger.warning("Write succeeded but apply failed: %s", exc)
+            return False, str(exc)
+        return True, ""
 
 
 def _on(value: Any) -> bool:
     """OPNsense writes booleans as "0"/"1" strings."""
     return str(value) in {"1", "True", "true"}
+
+
+def _staging_note(applied: bool, apply_error: str, *, staged: str, done: str) -> str:
+    """Describe what actually happened, not what was requested.
+
+    The previous notes branched only on the caller's arguments, so a tool that
+    had just tried and failed to reconfigure still told the operator to go and
+    reconfigure.
+    """
+    if apply_error:
+        return f"The change was written but not applied: {apply_error}"
+    return done if applied else staged
 
 
 def _mentions_established(summary: Any) -> bool:
@@ -373,24 +398,31 @@ class MkBgpNeighborTool(_BgpToolBase):
                 call_class="write",
                 json={"neighbor": payload},
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create BGP neighbour")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = await self._apply_if_asked(params)
+        out = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
             "enabled": bool(params.get("enabled")),
-            "note": (
-                "Staged and disabled. Enable it and reconfigure FRR when the peer "
-                "is ready."
+            "applied": applied,
+            "note": _staging_note(
+                applied,
+                apply_error,
+                staged="Staged and disabled. Enable it and apply when the peer is ready."
                 if not params.get("enabled")
-                else "Enabled. Reconfigure FRR to bring the session up."
+                else "Enabled but not applied. Apply to bring the session up.",
+                done="Applied."
+                if params.get("enabled")
+                else "Applied, and the neighbour is disabled until you enable it.",
             ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ToggleBgpNeighborTool(_BgpToolBase):
@@ -426,12 +458,19 @@ class ToggleBgpNeighborTool(_BgpToolBase):
                 f"{QUAGGA['toggle_neighbor']}/{uuid}/{state}",
                 call_class="write",
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to toggle BGP neighbour")
             return {"status": "error", "error": str(exc)}
-        return {"status": "success", "uuid": uuid, "enabled": bool(params["enabled"])}
+        applied, apply_error = await self._apply_if_asked(params)
+        out = {
+            "status": "success",
+            "uuid": uuid,
+            "enabled": bool(params["enabled"]),
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmBgpNeighborTool(_BgpToolBase):
@@ -477,8 +516,6 @@ class RmBgpNeighborTool(_BgpToolBase):
             result = await self.client._make_request(
                 "POST", f"{QUAGGA['del_neighbor']}/{uuid}", call_class="write", json={}
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete BGP neighbour")
             return {"status": "error", "error": str(exc)}
@@ -495,7 +532,11 @@ class RmBgpNeighborTool(_BgpToolBase):
                     f"or the uuid came from an older listing."
                 ),
             }
-        return {"status": "success", "uuid": uuid, "deleted": True}
+        applied, apply_error = await self._apply_if_asked(params)
+        out = {"status": "success", "uuid": uuid, "deleted": True, "applied": applied}
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class SetBgpGlobalTool(_BgpToolBase):
@@ -675,26 +716,31 @@ class SetBgpGlobalTool(_BgpToolBase):
                         ),
                     }
                 done.append(endpoint)
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to set BGP globals")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = await self._apply_if_asked(params)
+        out = {
             "status": "success",
             "enabled": enabled,
             "as_number": effective_as,
             "router_id": router_id or bgp.get("routerid", ""),
             "daemons": sorted(daemons),
             "frr_left_running": others_remain,
-            "note": (
-                (
-                    f"BGP disabled; FRR left running for {', '.join(sorted(daemons))}."
+            "applied": applied,
+            "note": _staging_note(
+                applied,
+                apply_error,
+                staged=(
+                    f"Staged. BGP disabled; FRR stays up for "
+                    f"{', '.join(sorted(daemons))}. Apply to act on it."
                     if others_remain
-                    else "Staged. Reconfigure FRR to act on it."
-                )
-                if not params.get("apply")
-                else "Applied; FRR was restarted."
+                    else "Staged. Apply to act on it."
+                ),
+                done="Applied; FRR was restarted.",
             ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out

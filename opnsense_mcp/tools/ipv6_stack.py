@@ -21,6 +21,7 @@ import ipaddress
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
     validate_delete_confirm_token,
@@ -626,23 +627,34 @@ class MkLoopbackTool(_V6ToolBase):
                 call_class="write",
                 json={"loopback": {"description": description}},
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST",
-                    "/api/interfaces/loopback_settings/reconfigure",
-                    call_class="apply",
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create loopback")
             return {"status": "error", "error": str(exc)}
 
-        applied = bool(params.get("apply", False))
+        # Applied as a separate phase, and checked. The note previously claimed
+        # the device was "instantiated" from the caller's argument alone,
+        # without looking at what reconfigure answered.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(
+                    self.client, "/api/interfaces/loopback_settings/reconfigure"
+                )
+                applied = True
+            except ApplyError as exc:
+                logger.warning("Loopback created but not instantiated: %s", exc)
+                apply_error = str(exc)
+
         out: dict[str, Any] = {
             "status": "success",
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
             "applied": applied,
             "note": (
-                "Device created and instantiated. Assigning it is possible with "
+                f"Device created but not instantiated: {apply_error}. It will "
+                f"not appear as assignable until the loopback configuration is "
+                f"reconfigured."
+                if apply_error
+                else "Device created and instantiated. Assigning it is possible with "
                 "the page-interfaces-assignnetworkports privilege; addressing it "
                 "is not, since the assignment model has no address field and "
                 "accepts one silently. Use a virtual IP on an assigned interface "
