@@ -7,8 +7,8 @@ set -euo pipefail
 readonly INSTALL_ROOT="${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}"
 readonly SRC_DIR="${INSTALL_ROOT}/src"
 readonly POD_NAME="${OPNSENSE_MCP_POD_NAME:-opnsense-mcp-pod}"
-readonly QUADLET_DIR=/etc/containers/systemd
-readonly LEGACY_QUADLET_SUBDIR=/etc/containers/systemd/opnsense-mcp
+readonly QUADLET_DIR=/etc/containers/systemd/opnsense-mcp
+readonly LEGACY_QUADLET_FLAT_DIR=/etc/containers/systemd
 PURGE_ENV=0
 RUNTIME="${OPNSENSE_MCP_RUNTIME:-podman}"
 
@@ -42,7 +42,7 @@ if [[ "$RUNTIME" == "podman" ]]; then
   systemctl disable --now "pod-${POD_NAME}.service" 2>/dev/null || true
   systemctl disable --now pod-opnsense-mcp.service 2>/dev/null || true
   systemctl disable --now opnsense-mcp-pod-pod.service 2>/dev/null || true
-  for _qd in "${QUADLET_DIR}" "${LEGACY_QUADLET_SUBDIR}"; do
+  for _qd in "${QUADLET_DIR}" "${LEGACY_QUADLET_FLAT_DIR}"; do
     rm -f "${_qd}/opnsense-mcp-caddy.container"
     rm -f "${_qd}/caddy-opnsense-mcp.container"
     rm -f "${_qd}/opnsense-mcp-app.container"
@@ -51,7 +51,9 @@ if [[ "$RUNTIME" == "podman" ]]; then
     rm -f "${_qd}/opnsense-mcp-pod.pod"
     rm -f "${_qd}/${POD_NAME}.pod"
   done
-  rmdir "${LEGACY_QUADLET_SUBDIR}" 2>/dev/null || true
+  # Only the per-service directory. The parent is shared with every other
+  # service on the host and must never be removed.
+  rmdir "${QUADLET_DIR}" 2>/dev/null || true
   systemctl daemon-reload
   podman rmi localhost/opnsense-mcp:latest 2>/dev/null || true
   podman rmi "${IMAGE_REPO:-localhost/opnsense-mcp}:latest" 2>/dev/null || true

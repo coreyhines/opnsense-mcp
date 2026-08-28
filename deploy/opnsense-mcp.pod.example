@@ -1,7 +1,7 @@
 # Podman quadlet: shared pod for MCP + Caddy.
 # Quadlet appends "-pod" to the stem for the unit name: opnsense-mcp.pod → opnsense-mcp-pod.service.
 # PodName= sets the Podman pod name independently (default opnsense-mcp-pod).
-# Install to /etc/containers/systemd/opnsense-mcp.pod
+# Install to /etc/containers/systemd/opnsense-mcp/opnsense-mcp.pod
 
 [Unit]
 Description=OPNsense MCP pod (Caddy + MCP)
