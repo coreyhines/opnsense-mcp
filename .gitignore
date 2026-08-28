@@ -60,3 +60,6 @@ scripts/render_readme_demo_gif_agg.sh
 # Real site identifiers, consumed by scripts/sanitize_site_identifiers.py.
 # Must never be committed: it is the mapping the sanitiser exists to apply.
 .site-identifiers.json
+
+# Claude Code: project settings are shared; local overrides are personal
+.claude/settings.local.json

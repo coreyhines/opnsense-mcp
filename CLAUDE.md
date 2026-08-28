@@ -132,4 +132,14 @@ locked, unset lock first before removal". The fix was three commands.
 
 **Probe scripts run against the live firewall and deserve the same care as
 tools.** Every orphan left on the firewall this session came from a throwaway
-script, not from a tool.
+script, not from a tool. A probe named `test_*` at the repository root is worse:
+pytest collects it, so a routine test run opens live connections. Keep probes
+out of the collection path.
+
+**Three of these are enforced now, not remembered.**
+`.claude/hooks/bash_guard.py` runs as a `PreToolUse` hook on every Bash call. It
+refuses the `;`-chained publish and the bare-cat heredoc, and warns on workspace
+Python calling `get_opnsense_client()`. `tests/test_bash_guard.py` holds the
+falsification cases, including the one where the guard blocked its own commit
+for quoting a pattern it forbids. Everything else on this list is still read
+rather than run.
