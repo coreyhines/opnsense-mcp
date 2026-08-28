@@ -18,7 +18,11 @@ from opnsense_mcp.utils.shaper_audit_rules import (
     format_audit_summary,
     run_audit,
 )
-from opnsense_mcp.utils.shaper_types import TOOL_STATUS_ERROR, make_tool_response
+from opnsense_mcp.utils.shaper_types import (
+    TOOL_STATUS_ERROR,
+    TOOL_STATUS_SUCCESS,
+    make_tool_response,
+)
 
 if TYPE_CHECKING:
     from opnsense_mcp.utils.api import OPNsenseClient
@@ -114,15 +118,20 @@ class AuditShaperConfigTool:
             }
             for f in audit.findings
         ]
+        # `status` says whether the audit ran. What it found is severity, and
+        # severity belongs in the payload: reporting findings as status='error'
+        # left a caller unable to tell a failed audit from a working one that
+        # found problems, which is the one question status exists to answer.
         structured = {
             "score": audit.score,
+            "audit_status": audit.status,
             "findings": findings,
             "finding_count": len(findings),
         }
         hints = [f.message for f in audit.findings]
 
         return make_tool_response(
-            status=audit.status,
+            status=TOOL_STATUS_SUCCESS,
             structured=structured,
             summary=format_audit_summary(audit),
             hints=hints,
@@ -169,7 +178,6 @@ class ExplainShaperConfigTool:
             queues = await search_shaper_queues(self.client)
             rules = await search_shaper_rules(self.client)
             audit = None
-            status = "success"
             hints: list[str] = []
             if include_audit:
                 statistics = await fetch_shaper_statistics(self.client)
@@ -179,7 +187,6 @@ class ExplainShaperConfigTool:
                     rules=rules,
                     statistics=statistics,
                 )
-                status = audit.status
                 hints = [f.message for f in audit.findings]
 
             narrative = build_explanation(
@@ -209,7 +216,7 @@ class ExplainShaperConfigTool:
         summary = f"**Traffic Shaper Explained**\n\n{narrative}"
 
         return make_tool_response(
-            status=status,
+            status=TOOL_STATUS_SUCCESS,
             structured=structured,
             summary=summary,
             hints=hints,

@@ -50,6 +50,7 @@ class MoveDhcpHostTool:
             "apply": {
                 "type": "boolean",
                 "description": "Apply the change. Omit/false = dry run.",
+                "default": False,
             },
         },
         "required": ["host"],

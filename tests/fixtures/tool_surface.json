@@ -945,6 +945,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": true,
           "description": "Reconfigure aliases afterwards (default true)",
           "optional": true,
           "type": "boolean"
@@ -983,6 +984,7 @@
           "type": "string"
         },
         "apply": {
+          "default": false,
           "description": "Reconfigure FRR, which restarts it (default false)",
           "optional": true,
           "type": "boolean"
@@ -1050,6 +1052,7 @@
       ],
       "properties": {
         "apply": {
+          "default": false,
           "description": "Apply the change. Omit/false = dry run.",
           "type": "boolean"
         },
@@ -1097,6 +1100,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reconfigure dnsmasq afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -1144,6 +1148,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reconfigure routing afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -1193,6 +1198,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reconfigure interfaces afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -1223,6 +1229,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reload the filter afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -1272,6 +1279,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reload the filter afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -1311,6 +1319,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reconfigure routes afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -1360,6 +1369,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reconfigure interfaces afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -1404,6 +1414,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reconfigure VLAN devices afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -1557,6 +1568,7 @@
       ],
       "properties": {
         "apply": {
+          "default": false,
           "description": "Apply the change. Omit/false = dry run.",
           "type": "boolean"
         },
@@ -1781,6 +1793,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": true,
           "description": "Reconfigure aliases afterwards (default true)",
           "optional": true,
           "type": "boolean"
@@ -1806,6 +1819,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -1829,6 +1843,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Apply the deletion. Omit/false = dry run.",
           "type": "boolean"
         },
@@ -1848,6 +1863,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -1871,6 +1887,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -1894,6 +1911,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -1917,6 +1935,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -1983,6 +2002,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -2079,6 +2099,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": true,
           "description": "Reconfigure aliases afterwards (default true)",
           "optional": true,
           "type": "boolean"
@@ -2112,6 +2133,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reconfigure FRR, which restarts it and drops every established session (default false)",
           "optional": true,
           "type": "boolean"
@@ -2141,6 +2163,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -2184,6 +2207,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -2273,6 +2297,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reload the group configuration (default false)",
           "optional": true,
           "type": "boolean"
@@ -2310,6 +2335,7 @@
           "type": "string"
         },
         "apply": {
+          "default": true,
           "description": "Apply changes immediately (default: true)",
           "optional": true,
           "type": "boolean"
@@ -2410,6 +2436,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": true,
           "description": "Reconfigure Unbound afterwards (default true)",
           "optional": true,
           "type": "boolean"
@@ -2473,6 +2500,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "description": "Reconfigure radvd afterwards (default false)",
           "optional": true,
           "type": "boolean"
@@ -2657,6 +2685,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": true,
           "description": "Reconfigure aliases afterwards (default true)",
           "optional": true,
           "type": "boolean"
@@ -2682,6 +2711,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -2738,6 +2768,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": true,
           "description": "Apply changes immediately (default: true)",
           "optional": true,
           "type": "boolean"
@@ -2763,6 +2794,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -2827,6 +2859,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": false,
           "optional": true,
           "type": "boolean"
         },
@@ -2869,6 +2902,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": true,
           "type": "boolean"
         },
         "uuid": {
@@ -2886,6 +2920,7 @@
     "inputSchema": {
       "properties": {
         "apply": {
+          "default": true,
           "type": "boolean"
         },
         "uuid": {

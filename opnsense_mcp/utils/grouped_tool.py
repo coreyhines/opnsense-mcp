@@ -168,6 +168,15 @@ class GroupedTool:
                         field: spec.get("description", "")
                         for field, spec in sorted(props.items())
                     },
+                    # Defaults differ per action -- `apply` most consequentially,
+                    # since it decides whether a change goes live. One shared
+                    # sentence in the grouped schema cannot carry that, so help
+                    # reports each action's own.
+                    "defaults": {
+                        field: spec["default"]
+                        for field, spec in sorted(props.items())
+                        if "default" in spec
+                    },
                 }
             )
         return {

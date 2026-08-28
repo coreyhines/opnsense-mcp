@@ -249,6 +249,7 @@ class MkNatOutboundTool(_NatToolBase):
                 "type": "boolean",
                 "description": "Reload the filter afterwards (default false)",
                 "optional": True,
+                "default": False,
             },
         },
         "required": ["interface", "source_net"],

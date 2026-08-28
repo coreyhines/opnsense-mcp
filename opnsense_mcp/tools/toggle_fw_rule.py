@@ -28,6 +28,7 @@ class ToggleFwRuleTool:
                 "type": "boolean",
                 "description": "Apply changes immediately (default: true)",
                 "optional": True,
+                "default": True,
             },
         },
         "required": ["rule_uuid", "enabled"],

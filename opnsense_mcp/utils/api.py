@@ -35,6 +35,42 @@ logger = logging.getLogger(__name__)
 # without ever reaching its own reported total.
 SEARCH_PAGE_SIZE = 500
 SEARCH_MAX_PAGES = 100
+
+
+def _api_error_detail(payload: Any) -> str:
+    """The most specific thing a failed OPNsense response body can tell us.
+
+    Order: an explicit `message`, then `validations` field by field, then the
+    body itself. The body fallback matters: `del_item` returning 500 was once
+    declared undoable because the caller only saw "Unknown API error", while
+    the body said "Interface locked, unset lock first before removal".
+    Discarding the body is what turns a three-command fix into a wrong answer.
+    """
+    if not isinstance(payload, dict):
+        return str(payload) if payload else "Unknown API error"
+
+    message = payload.get("message")
+    if message:
+        return str(message)
+
+    validations = payload.get("validations")
+    if validations:
+        try:
+            return json.dumps(validations, sort_keys=True)
+        except (TypeError, ValueError):
+            return str(validations)
+
+    # Nothing named; hand back what the firewall actually said, minus the
+    # `result: failed` marker that carries no information of its own.
+    rest = {k: v for k, v in payload.items() if k != "result"}
+    if rest:
+        try:
+            return json.dumps(rest, sort_keys=True)
+        except (TypeError, ValueError):
+            return str(rest)
+    return "Unknown API error"
+
+
 _MAC_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.IGNORECASE)
 
 
@@ -505,20 +541,7 @@ class OPNsenseClient:
                         isinstance(json_data, dict)
                         and json_data.get("result") == "failed"
                     ):
-                        error_msg = json_data.get("message")
-                        if not error_msg:
-                            vals = json_data.get("validations")
-                            if vals:
-                                try:
-                                    error_msg = json.dumps(
-                                        vals,
-                                        sort_keys=True,
-                                    )
-                                except (TypeError, ValueError):
-                                    error_msg = str(vals)
-                        if not error_msg:
-                            error_msg = "Unknown API error"
-                        raise RequestError(f"API error: {error_msg}")
+                        raise RequestError(f"API error: {_api_error_detail(json_data)}")
                     return json_data
 
                 response.raise_for_status()
@@ -700,7 +723,7 @@ class OPNsenseClient:
 
             # Check for successful creation
             if response.get("result") != "saved" or "uuid" not in response:
-                error_msg = response.get("message", "Unknown error")
+                error_msg = _api_error_detail(response)
                 self._raise_create_rule_failed(error_msg)
 
             # Get the rule UUID
@@ -747,7 +770,7 @@ class OPNsenseClient:
             )
 
             if response.get("result") != "saved":
-                error_msg = response.get("message", "Unknown error")
+                error_msg = _api_error_detail(response)
                 self._raise_update_rule_failed(error_msg)
 
         except APIError:
@@ -770,7 +793,7 @@ class OPNsenseClient:
             )
 
             if not isinstance(response, dict) or response.get("result") != "deleted":
-                error_msg = response.get("message", "Unknown error")
+                error_msg = _api_error_detail(response)
                 self._raise_delete_rule_failed(f"Delete failed: {error_msg}")
 
         except APIError:
@@ -841,9 +864,7 @@ class OPNsenseClient:
             # Handle different response formats for apply operation
             status = apply_resp.get("status", "").strip().lower()
             if status not in ("ok", "success"):
-                error_msg = apply_resp.get(
-                    "message", f"Unknown error (status: {status})"
-                )
+                error_msg = _api_error_detail(apply_resp)
                 self._raise_apply_changes_failed(error_msg)
         except APIError:
             raise

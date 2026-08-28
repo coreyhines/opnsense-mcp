@@ -700,7 +700,10 @@ class DnsmasqProvider:
         return {
             "status": "success",
             "backend": self.name,
-            "planned": planned,
+            # `moved`, not `planned`: the change happened. create_host reports
+            # `created` and delete_host reports `deleted`; `planned` is the
+            # dry-run label and meant the opposite of what occurred here.
+            "moved": planned,
             "renewal_note": (
                 "Reservation updated. Client keeps its old address until it "
                 "renews or reboots. IPv6 applies only to stateful-DHCPv6 clients."

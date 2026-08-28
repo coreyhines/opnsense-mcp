@@ -21,6 +21,7 @@ from opnsense_mcp.utils.shaper_serialize import (
     serialize_pipe_api_post,
 )
 from opnsense_mcp.utils.shaper_types import (
+    TOOL_STATUS_CONFIRMATION_REQUIRED,
     TOOL_STATUS_ERROR,
     TOOL_STATUS_SUCCESS,
     TOOL_STATUS_WARNING,
@@ -550,9 +551,8 @@ class DeleteShaperPipeTool:
         if not validate_delete_confirm_token("pipe", uuid, str(confirm or "")):
             token_info = issue_delete_confirm_token("pipe", uuid)
             return make_tool_response(
-                status=TOOL_STATUS_ERROR,
+                status=TOOL_STATUS_CONFIRMATION_REQUIRED,
                 structured={
-                    "error": "confirmation_required",
                     "confirm_token": token_info["token"],
                 },
                 summary=f"**Confirmation required.** {token_info['message']}",

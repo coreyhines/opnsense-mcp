@@ -112,6 +112,7 @@ class SetFwGroupTool(_GroupToolBase):
                 "type": "boolean",
                 "description": "Reload the group configuration (default false)",
                 "optional": True,
+                "default": False,
             },
         },
         "required": ["uuid", "members"],

@@ -147,6 +147,7 @@ class MkDhcpRangeTool(_DnsmasqToolBase):
                 "type": "boolean",
                 "description": "Reconfigure dnsmasq afterwards (default false)",
                 "optional": True,
+                "default": False,
             },
         },
         "required": ["interface", "start_addr", "end_addr"],
@@ -224,7 +225,11 @@ class SetDhcpRangeTool(_DnsmasqToolBase):
             "lease_time": {"type": "string", "optional": True},
             "domain": {"type": "string", "optional": True},
             "description": {"type": "string", "optional": True},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }
@@ -292,7 +297,11 @@ class RmDhcpRangeTool(_DnsmasqToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Range uuid"},
             "confirm": {"type": "string", "optional": True},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }
@@ -389,7 +398,11 @@ class SetDhcpRouterOptionTool(_DnsmasqToolBase):
                 "description": "Send the option even when the client did not ask",
                 "optional": True,
             },
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["router"],
     }
@@ -493,7 +506,11 @@ class RmDhcpOptionTool(_DnsmasqToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Option uuid"},
             "confirm": {"type": "string", "optional": True},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }

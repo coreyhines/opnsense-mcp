@@ -19,7 +19,10 @@ from typing import Any
 SHARED_FIELDS: dict[str, dict[str, Any]] = {
     "apply": {
         "type": "boolean",
-        "description": "Apply now rather than leaving the change staged.",
+        "description": (
+            "Apply now rather than leaving the change staged. The default "
+            "differs by action; action='help' reports each one."
+        ),
     },
     "uuid": {
         "type": "string",

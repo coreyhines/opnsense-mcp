@@ -159,6 +159,7 @@ class MkVlanTool(_RoutingToolBase):
                 "type": "boolean",
                 "description": "Reconfigure VLAN devices afterwards (default false)",
                 "optional": True,
+                "default": False,
             },
         },
         "required": ["parent", "tag"],
@@ -342,6 +343,7 @@ class MkGatewayTool(_RoutingToolBase):
                 "type": "boolean",
                 "description": "Reconfigure routing afterwards (default false)",
                 "optional": True,
+                "default": False,
             },
         },
         "required": ["name", "interface", "gateway"],
@@ -422,7 +424,11 @@ class ToggleGatewayTool(_RoutingToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Gateway uuid"},
             "enabled": {"type": "boolean", "description": "Target state"},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid", "enabled"],
     }
@@ -531,6 +537,7 @@ class MkRouteTool(_RoutingToolBase):
                 "type": "boolean",
                 "description": "Reconfigure routes afterwards (default false)",
                 "optional": True,
+                "default": False,
             },
         },
         "required": ["network", "gateway"],
@@ -603,7 +610,11 @@ class ToggleRouteTool(_RoutingToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Route uuid"},
             "enabled": {"type": "boolean", "description": "Target state"},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid", "enabled"],
     }
@@ -659,7 +670,11 @@ class RmRouteTool(_RoutingToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Route uuid"},
             "confirm": {"type": "string", "optional": True},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }
@@ -702,7 +717,11 @@ class RmGatewayTool(_RoutingToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Gateway uuid"},
             "confirm": {"type": "string", "optional": True},
-            "apply": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }

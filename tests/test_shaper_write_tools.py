@@ -28,7 +28,11 @@ from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 from opnsense_mcp.utils.shaper_mutation import capture_pre_mutation_snapshot
 from opnsense_mcp.utils.shaper_snapshot_store import clear_snapshots, get_snapshot
-from opnsense_mcp.utils.shaper_types import TOOL_STATUS_SUCCESS, TOOL_STATUS_WARNING
+from opnsense_mcp.utils.shaper_types import (
+    TOOL_STATUS_CONFIRMATION_REQUIRED,
+    TOOL_STATUS_SUCCESS,
+    TOOL_STATUS_WARNING,
+)
 
 DOWNLOAD_PIPE = "e93038e5-5422-4557-b0f2-082c4cb0ddf4"
 DOWNLOAD_QUEUE = "84c6c7d8-09a6-40d6-b2b7-2c1485c9d6e3"
@@ -85,7 +89,7 @@ async def test_delete_shaper_pipe_requires_confirm(
 ) -> None:
     tool = DeleteShaperPipeTool(mock_client)
     resp = await tool.execute({"uuid": DOWNLOAD_PIPE})
-    assert resp["status"] == "error"
+    assert resp["status"] == TOOL_STATUS_CONFIRMATION_REQUIRED
     token = resp["structured"]["confirm_token"]
     resp2 = await tool.execute(
         {"uuid": DOWNLOAD_PIPE, "confirm": token, "apply": False}
@@ -207,7 +211,7 @@ async def test_delete_shaper_queue_requires_confirm(
 ) -> None:
     tool = DeleteShaperQueueTool(mock_client)
     resp = await tool.execute({"uuid": DOWNLOAD_QUEUE})
-    assert resp["status"] == "error"
+    assert resp["status"] == TOOL_STATUS_CONFIRMATION_REQUIRED
     token = resp["structured"]["confirm_token"]
     resp2 = await tool.execute(
         {"uuid": DOWNLOAD_QUEUE, "confirm": token, "apply": False}
@@ -221,7 +225,7 @@ async def test_delete_shaper_rule_requires_confirm(
 ) -> None:
     tool = DeleteShaperRuleTool(mock_client)
     resp = await tool.execute({"uuid": DOWNLOAD_RULE})
-    assert resp["status"] == "error"
+    assert resp["status"] == TOOL_STATUS_CONFIRMATION_REQUIRED
     token = resp["structured"]["confirm_token"]
     resp2 = await tool.execute(
         {"uuid": DOWNLOAD_RULE, "confirm": token, "apply": False}

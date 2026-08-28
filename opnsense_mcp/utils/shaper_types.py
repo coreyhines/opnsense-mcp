@@ -17,16 +17,33 @@ TOOL_STATUS_SUCCESS = "success"
 TOOL_STATUS_ERROR = "error"
 TOOL_STATUS_WARNING = "warning"
 TOOL_STATUS_CRITICAL = "critical"
+# Every other group signals a needed confirmation in `status`. The shaper
+# delete tools signalled it as an error carrying `structured.error =
+# "confirmation_required"`, so one surface had two ways to say the same thing.
+TOOL_STATUS_CONFIRMATION_REQUIRED = "confirmation_required"
 
-_VALID_STATUSES: frozenset[str] = frozenset(
-    {TOOL_STATUS_SUCCESS, TOOL_STATUS_ERROR, TOOL_STATUS_WARNING, TOOL_STATUS_CRITICAL}
+# What an audit or an interpretation can conclude: a severity. These stay four,
+# because no audit result is ever "confirmation_required".
+_SEVERITY_STATUSES: frozenset[str] = frozenset(
+    {
+        TOOL_STATUS_SUCCESS,
+        TOOL_STATUS_ERROR,
+        TOOL_STATUS_WARNING,
+        TOOL_STATUS_CRITICAL,
+    }
 )
+
+# What a tool response may set. Wider than the severities, because a response
+# also has to be able to say "I need a confirmation token first".
+_VALID_STATUSES: frozenset[str] = _SEVERITY_STATUSES | {
+    TOOL_STATUS_CONFIRMATION_REQUIRED
+}
 
 AUDIT_FINDING_SEVERITIES: frozenset[str] = frozenset({"error", "warning", "info"})
 
-AUDIT_RESULT_STATUSES: frozenset[str] = _VALID_STATUSES
+AUDIT_RESULT_STATUSES: frozenset[str] = _SEVERITY_STATUSES
 
-INTERPRETATION_VERDICTS: frozenset[str] = _VALID_STATUSES
+INTERPRETATION_VERDICTS: frozenset[str] = _SEVERITY_STATUSES
 
 # ---------------------------------------------------------------------------
 # Scheduler constants
