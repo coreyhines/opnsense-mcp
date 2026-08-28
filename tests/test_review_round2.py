@@ -250,3 +250,70 @@ def test_the_doc_drift_test_catches_a_fully_removed_verb_family() -> None:
         if n not in known and n not in _NOT_TOOLS
     ]
     assert "ssh_fw_rule" in flagged
+
+
+# --- deferred items from the review rounds ---------------------------------
+
+
+def test_the_as_guard_matches_the_real_captured_bgpsummary() -> None:
+    """Pinned against a response captured from the live firewall, not an
+    imagined shape — the three earlier tests each assumed a different one."""
+    import json
+    import pathlib
+
+    from opnsense_mcp.tools.bgp import _any_established
+
+    fixture = (
+        pathlib.Path(__file__).resolve().parent
+        / "fixtures"
+        / "opnsense-26.7.2"
+        / "bgpsummary_established.json"
+    )
+    real = json.loads(fixture.read_text())
+
+    # The captured session was Established, so the guard must see it.
+    assert _any_established(real) is True
+
+
+def test_run_apply_does_not_relabel_a_programming_error_as_apply_miss() -> None:
+    """A bug in the apply path (AttributeError/TypeError) must surface as itself,
+    not be downgraded to a benign-looking "apply did not happen"."""
+    import asyncio
+
+    from opnsense_mcp.utils.apply import run_apply
+
+    client, _ = _client()
+
+    async def boom(*a: Any, **k: Any) -> Any:
+        raise AttributeError("real bug: 'NoneType' has no attribute 'get'")
+
+    client._make_request = boom
+
+    with pytest.raises(AttributeError):
+        asyncio.run(run_apply(client, "/api/x/service/reconfigure"))
+
+
+@pytest.mark.asyncio
+async def test_device_resolution_refuses_when_the_listing_is_truncated() -> None:
+    """rowCount caps the search; if total exceeds the rows returned, the device
+    might be past the cap and _device_name would wrongly say "not found",
+    or _assignments_using would miss a holder and orphan the assignment."""
+    from opnsense_mcp.tools.ipv6_stack import RmLoopbackTool
+
+    client, _ = _client(
+        {
+            "loopback_settings/search_item": {
+                "rows": [{"uuid": "other", "deviceId": "2"}],
+                "total": 9000,
+            }
+        }
+    )
+    tool = RmLoopbackTool(client)
+
+    challenge = await tool.execute({"uuid": "lo-uuid"})
+    result = await tool.execute(
+        {"uuid": "lo-uuid", "confirm": challenge["confirm_token"]}
+    )
+
+    assert result["status"] == "error"
+    assert "truncat" in result["error"].lower() or "too many" in result["error"].lower()

@@ -21,6 +21,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.api import ConnectionError, RequestError, ResponseError
+
 logger = logging.getLogger(__name__)
 
 # What a healthy reconfigure answers with. OPNsense is inconsistent about
@@ -41,7 +43,11 @@ async def run_apply(client: Any, endpoint: str) -> dict[str, Any]:
     """
     try:
         response = await client._make_request("POST", endpoint, call_class="apply")
-    except Exception as exc:  # noqa: BLE001
+    except (RequestError, ResponseError, ConnectionError, TimeoutError) as exc:
+        # Only genuine transport/API failures become "the apply did not happen".
+        # A programming error (AttributeError, TypeError) is a bug in this code
+        # and must surface as itself with its traceback, not be downgraded to a
+        # benign-looking apply miss.
         raise ApplyError(f"{endpoint} did not complete: {exc}") from exc
 
     status = ""
