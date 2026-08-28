@@ -708,6 +708,30 @@ class RmLoopbackTool(_V6ToolBase):
         "required": ["uuid"],
     }
 
+    async def _device_name(self, uuid: str) -> str:
+        """Map a loopback uuid to its device name, e.g. lo1."""
+        rows = await self.client._make_request(
+            "POST", LOOPBACK["search"], json={"current": 1, "rowCount": 500}
+        )
+        for row in rows.get("rows", []) if isinstance(rows, dict) else []:
+            if row.get("uuid") == uuid:
+                number = str(row.get("deviceId") or row.get("device") or "").strip()
+                return f"lo{number}" if number.isdigit() else number
+        return ""
+
+    async def _assignments_using(self, device: str) -> list[str]:
+        """Which assigned interfaces point at this device."""
+        rows = await self.client._make_request(
+            "POST",
+            "/api/interfaces/assignment/search_item",
+            json={"current": 1, "rowCount": 500},
+        )
+        return [
+            r.get("uuid", "")
+            for r in (rows.get("rows", []) if isinstance(rows, dict) else [])
+            if r.get("if") == device
+        ]
+
     async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Delete once confirmed.
 
@@ -734,29 +758,35 @@ class RmLoopbackTool(_V6ToolBase):
                 "message": token["message"],
             }
 
-        device = (params.get("device") or "").strip()
         try:
-            if device:
-                # Deleting the device out from under an assignment leaves the
-                # assignment pointing at nothing, and the assignment can then
-                # only be removed by unlocking it first. Refuse instead.
-                assigned = await self.client._make_request(
-                    "POST",
-                    "/api/interfaces/assignment/search_item",
-                    json={"current": 1, "rowCount": 500},
-                )
-                rows = assigned.get("rows", []) if isinstance(assigned, dict) else []
-                holders = [r.get("uuid", "") for r in rows if r.get("if") == device]
-                if holders:
-                    return {
-                        "status": "error",
-                        "error": (
-                            f"{device} is still assigned to {', '.join(holders)}. "
-                            f"Deleting it would leave that assignment pointing at "
-                            f"nothing. Unassign first: the interface is locked, so "
-                            f"clear its lock before removing it."
-                        ),
-                    }
+            # Resolve the device from the uuid rather than trusting the caller
+            # to opt in. This guard was previously behind `if device:` on an
+            # optional argument, so omitting one field skipped it entirely and
+            # produced the orphaned, lock-protected assignment it exists to
+            # prevent — which is exactly what happened on the live firewall.
+            device = (params.get("device") or "").strip() or await self._device_name(
+                uuid
+            )
+            if not device:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"no loopback device with uuid {uuid}; it may already be "
+                        f"gone, or the uuid came from an older listing."
+                    ),
+                }
+
+            holders = await self._assignments_using(device)
+            if holders:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"{device} is still assigned to {', '.join(holders)}. "
+                        f"Deleting it would leave that assignment pointing at "
+                        f"nothing. Unassign first: the interface is locked, so "
+                        f"clear its lock before removing it."
+                    ),
+                }
 
             result = await self.client._make_request(
                 "POST", f"{LOOPBACK['delete']}/{uuid}", call_class="write", json={}

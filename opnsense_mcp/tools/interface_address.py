@@ -77,6 +77,32 @@ echo "done\\n";
 """
 
 
+def _has_exact_address(
+    observed: str, address: ipaddress.IPv4Address | ipaddress.IPv6Address, bits: int
+) -> bool:
+    """Is exactly this address, with exactly this prefix, on the interface?
+
+    A substring test reports success for 198.51.100.1 when the interface carries
+    198.51.100.10, which turned a failed root write into a success. Tokens are
+    compared as parsed networks so neither the address nor the prefix can be
+    satisfied by a coincidence of digits.
+    """
+    want = ipaddress.ip_interface(f"{address}/{bits}")
+    for token in observed.replace(",", " ").split():
+        # The token must carry a prefix of its own. A bare "172.16.99.2" parses
+        # as /32, which would satisfy a /32 request from output that never
+        # stated a prefix — so an ifconfig without CIDR formatting would look
+        # like confirmation instead of failing safe.
+        if "/" not in token:
+            continue
+        try:
+            if ipaddress.ip_interface(token) == want:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 class SetInterfaceAddressTool:
     """Give an assigned interface a static address."""
 
@@ -159,13 +185,26 @@ class SetInterfaceAddressTool:
                     ),
                 }
 
-            # Parsed, not matched. Anything shell-shaped fails here.
+            # Parsed, not matched. Anything shell-shaped fails here — with one
+            # exception that the first version of this docstring got wrong:
+            # ipaddress accepts an arbitrary IPv6 scope id after "%", so
+            # fe80::1%$(reboot) parses cleanly and str() reproduces it. The
+            # value would persist in config.xml and be reapplied on every boot.
             try:
                 address = ipaddress.ip_address(raw_address)
             except ValueError:
                 return {
                     "status": "error",
                     "error": f"{raw_address!r} is not an IP address",
+                }
+            if getattr(address, "scope_id", None):
+                return {
+                    "status": "error",
+                    "error": (
+                        f"{raw_address!r} carries an IPv6 scope id, which is not "
+                        f"validated by address parsing and has no place in a "
+                        f"static interface address"
+                    ),
                 }
 
             try:
@@ -222,9 +261,25 @@ class SetInterfaceAddressTool:
             # interface_configure() throws after applying the address, so the
             # exit code is not evidence either way. Read the interface instead.
             device = await self._device_for(interface)
-            check = self._run(f"/bin/sh -c {shlex.quote(f'ifconfig {device} 2>&1')}")
+            # -f ...:cidr prints "inet 198.51.100.1/32" rather than a netmask in
+            # hex, so the prefix can be compared rather than ignored.
+            check = self._run(
+                "/bin/sh -c "
+                + shlex.quote(f"ifconfig -f inet:cidr,inet6:cidr {device} 2>&1")
+            )
+            if not check.get("success", True):
+                return {
+                    "status": "unknown",
+                    "interface": interface,
+                    "address": f"{address}/{bits}",
+                    "error": (
+                        f"the write ran but the address could not be read back: "
+                        f"{str(check.get('stderr', ''))[:200]}. The change may "
+                        f"have landed; check before retrying."
+                    ),
+                }
             observed = str(check.get("stdout", "")) + str(check.get("stderr", ""))
-            verified = str(address) in observed
+            verified = _has_exact_address(observed, address, bits)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to set the interface address")
             return {"status": "error", "error": str(exc)}
@@ -236,9 +291,11 @@ class SetInterfaceAddressTool:
             return {
                 "status": "error",
                 "error": (
-                    f"{address} is not on {interface} after the write. "
-                    f"Script output: {str(run.get('stdout', ''))[:200]}"
-                    f"{str(run.get('stderr', ''))[:200]}"
+                    f"{address}/{bits} is not on {interface} after the write; the "
+                    f"prefix is checked as well as the address. Observed: "
+                    f"{observed.strip()[:200]!r}. Script output: "
+                    f"{str(run.get('stdout', ''))[:150]}"
+                    f"{str(run.get('stderr', ''))[:150]}"
                 ),
             }
         return {
