@@ -95,6 +95,34 @@ For homelab changes (DHCP, DNS, firewall), **use MCP tools** against the deploye
 - pytest (not unittest) for all tests; place tests in `./tests/` with `__init__.py`
 - Do not break existing functionality during cleanup or formatting passes
 
+## Writing: commits, PRs, and replies
+
+Short. The user has asked twice; assume the ask stands.
+
+**Commits.** Subject under 60 chars. Body at most 3-4 lines, and only when the
+change is not self-evident: say what was wrong, not what the code now does.
+No section headings, no tables, no bullet lists, no restating the diff. If the
+reasoning needs more room, it belongs in a code comment next to the thing.
+
+**PR bodies.** Lead with what broke. Skip the tour.
+
+**Replies.** Answer, then stop. Cut in this order:
+- preamble ("Here's what I found", "Let me explain") and sign-offs
+- restating what was just asked
+- tables with two rows
+- narrating tool calls the user can see
+- summarising work already summarised
+
+**Banned constructions**, because they appear constantly and add nothing:
+- "X isn't just Y, it's Z" and other negative parallelism
+- "the thing is", "worth noting", "it's worth flagging"
+- opening a paragraph with "Importantly" or "Critically"
+- bolding a phrase for emphasis mid-sentence
+- em dashes as dramatic pauses; use a comma or a full stop
+- closing with a rhetorical flourish about what the work "really" means
+
+Findings do not need selling. State the defect, the evidence, the fix.
+
 ## Failure modes this project has already paid for
 
 Each of these shipped a defect. They are listed because intending to avoid them
