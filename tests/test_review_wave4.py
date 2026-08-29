@@ -74,6 +74,17 @@ _NOT_TOOLS = frozenset(
         "destination_port",
         "start_addr",
         "end_addr",
+        # Schema fields, response keys, module names and one API endpoint
+        # segment, from the ipv6-toolset-fixes bucket plan. Tool-shaped but
+        # not tools: `get_entry` is a radvd endpoint, `input_schema` and
+        # `tool_groups` are code, and the rest are fields on existing tools.
+        "dry_run",
+        "get_entry",
+        "input_schema",
+        "mcp_server",
+        "runtime_paths",
+        "subnet_bits",
+        "tool_groups",
         # dnsmasq range fields (buckets B1/B2, issue #27) and the endpoints
         # that carry them. Field names, not tools.
         "constructor",
