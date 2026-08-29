@@ -314,20 +314,33 @@ class MkNptRuleTool(_V6ToolBase):
             result = await self.client._make_request(
                 "POST", NPT["add"], call_class="write", json={"rule": payload}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", "/api/firewall/filter/apply", call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create NPT rule")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, "/api/firewall/filter/apply")
+                applied = True
+            except ApplyError as exc:
+                logger.warning("NPT rule created but filter reload failed: %s", exc)
+                apply_error = str(exc)
+
+        out = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged. Run the apply step to load it.",
+            "applied": applied,
+            "note": (
+                "Rule created and loaded into the packet filter."
+                if applied
+                else "Staged. Run the apply step to load it."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ToggleNptRuleTool(_V6ToolBase):
@@ -536,22 +549,33 @@ class MkVipTool(_V6ToolBase):
             result = await self.client._make_request(
                 "POST", VIP["add"], call_class="write", json={"vip": payload}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST",
-                    "/api/interfaces/vip_settings/reconfigure",
-                    call_class="apply",
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create VIP")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, "/api/interfaces/vip_settings/reconfigure")
+                applied = True
+            except ApplyError as exc:
+                logger.warning("VIP created but interfaces not reconfigured: %s", exc)
+                apply_error = str(exc)
+
+        out = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged. Reconfigure interfaces to bring it up.",
+            "applied": applied,
+            "note": (
+                "VIP created and interfaces reconfigured."
+                if applied
+                else "Staged. Reconfigure interfaces to bring it up."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmVipTool(_V6ToolBase):

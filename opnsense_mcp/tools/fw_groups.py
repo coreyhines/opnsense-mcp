@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import merge_for_set
 
 logger = logging.getLogger(__name__)
@@ -165,18 +166,31 @@ class SetFwGroupTool(_GroupToolBase):
                 call_class="write",
                 json={"group": payload},
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", GROUP["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to update firewall group")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, GROUP["reconfigure"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning("Firewall group updated but not reconfigured: %s", exc)
+                apply_error = str(exc)
+
+        out = {
             "status": "success",
             "uuid": uuid,
             "ifname": node.get("ifname", ""),
             "members": members,
-            "note": "Staged. Reload the group configuration to apply it.",
+            "applied": applied,
+            "note": (
+                "Firewall group updated and reconfigured."
+                if applied
+                else "Staged. Reload the group configuration to apply it."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
