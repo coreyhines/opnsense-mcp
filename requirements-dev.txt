@@ -4,15 +4,15 @@
 # fails when they disagree.
 # black is deliberately absent: ruff format is the formatter, and
 # two formatters with different opinions fight over the same files.
-pytest>=7.0.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.0.0
-pytest-mock>=3.10.0
-ruff>=0.11.0
-mypy>=1.15.0
-pre-commit>=3.0.0
+pytest>=9.1.1
+pytest-asyncio>=1.4.0
+pytest-cov>=7.1.0
+pytest-mock>=3.15.1
+ruff>=0.16.5
+mypy>=2.3.1
+pre-commit>=4.6.2
 detect-secrets>=1.5.0
-bandit>=1.7.0
-radon>=6.0.0
-diff-cover>=9.0.0
-jsonschema>=4.20.0
+bandit>=1.9.4
+radon>=6.0.1
+diff-cover>=10.5.1
+jsonschema>=4.26.0

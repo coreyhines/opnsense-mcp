@@ -1,24 +1,18 @@
-# Keep in sync with pyproject.toml [project.dependencies].
-# Explicit pins ensure Glama and similar hosts that materialize .venv from this
-# file still get the full set when editable/pyproject resolution is skipped or
-# partial.
-fastapi>=0.100.0
-uvicorn>=0.24.0
-ruamel.yaml>=0.17.0
-pydantic>=2.0.0,<2.14  # pin back: the fastmcp beta otherwise drags a pydantic beta in
-pydantic-settings>=2.14.2
-requests>=2.31.0
-python-multipart>=0.0.30
-typing-extensions>=4.0.0
+# Runtime dependencies. The image installs from this file, so it must
+# match [project].dependencies in pyproject.toml; a test fails when they
+# drift. Floors are the versions actually tested, not historical minimums.
+fastapi>=0.141.1
+uvicorn>=0.52.4
+ruamel.yaml>=0.19.1
+pydantic>=2.13.5
+requests>=2.34.2
+python-multipart>=0.0.32
+typing-extensions>=4.16.0
 passlib[bcrypt]>=1.7.4
-python-dotenv>=1.0.0
-# fastmcp 4 is the first line depending on mcp>=2.0, the first SDK
-# implementing MCP 2026-07-28. Still a beta; PEP 440 lets an explicit
-# prerelease specifier install one. Keep in step with pyproject.
+python-dotenv>=1.2.3
 fastmcp>=4.0.0b5,<5
-pyyaml>=6.0.0
-paramiko>=3.0.0
-idna>=3.15
-starlette>=1.0.1
-
--e .
+pyyaml>=6.0.3
+paramiko>=5.0.0
+idna>=3.19
+starlette>=1.6.0
+pydantic-settings>=2.15.0

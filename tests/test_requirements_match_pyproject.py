@@ -32,20 +32,39 @@ def _specifier(text: str, package: str) -> str | None:
     return match.group("spec").strip().rstrip(",").strip() if match else None
 
 
-def test_the_deployed_pins_match_the_developed_ones() -> None:
-    """requirements.txt is what production gets; it must not lag pyproject."""
-    pyproject = PYPROJECT.read_text()
-    requirements = REQUIREMENTS.read_text()
+def _runtime_deps() -> dict[str, str]:
+    """[project].dependencies from pyproject."""
+    import tomllib
 
-    for package in PINNED_IN_BOTH:
-        developed = _specifier(pyproject, package)
-        deployed = _specifier(requirements, package)
-        assert developed, f"{package} not pinned in pyproject.toml"
-        assert deployed, f"{package} not pinned in requirements.txt"
-        assert developed == deployed, (
-            f"{package} is {developed} in pyproject.toml but {deployed} in "
-            f"requirements.txt; the image installs the latter"
-        )
+    data = tomllib.loads(PYPROJECT.read_text())
+    return _pins("\n".join(data["project"]["dependencies"]))
+
+
+def test_the_deployed_pins_match_the_developed_ones() -> None:
+    """requirements.txt is what production gets; it must not lag pyproject.
+
+    Every runtime dependency is compared, not a chosen few: the first version
+    of this test watched only fastmcp, which would not have noticed any other
+    package drifting between the two files.
+    """
+    developed = _runtime_deps()
+    deployed = _pins(REQUIREMENTS.read_text())
+
+    only_pyproject = sorted(set(developed) - set(deployed))
+    only_requirements = sorted(set(deployed) - set(developed))
+    assert not only_pyproject, (
+        f"in pyproject but not requirements.txt, so the image will not install "
+        f"them: {only_pyproject}"
+    )
+    assert not only_requirements, (
+        f"in requirements.txt but not pyproject: {only_requirements}"
+    )
+
+    differing = sorted(k for k in developed if developed[k] != deployed[k])
+    assert not differing, (
+        f"pins differ between pyproject and requirements.txt; the image "
+        f"installs the latter: {differing}"
+    )
 
 
 def test_a_prerelease_pin_is_explicit_enough_for_pip() -> None:
