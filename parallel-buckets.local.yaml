@@ -1,0 +1,21 @@
+product: opnsense-mcp
+models:
+  catalog: .cursor/parallel-buckets/model-catalog.json
+  configured_at: '2026-08-29'
+  choices:
+    cursor:
+      default: auto
+      sonnet: sonnet
+      opus: opus
+    claude:
+      sonnet: sonnet
+      opus: opus
+    codex:
+      default: gpt-5.6-sol
+    ollama_local:
+      standard: qwen3.8:27b-mxfp8
+      fast: qwen3.8:27b-mlx
+    ollama_workstation:
+      standard: qwen3:32b
+    ollama_cloud:
+      standard: glm-5.3:cloud
