@@ -11,6 +11,13 @@ Two properties matter beyond CRUD working:
 * `set_alias` must read, merge and write the whole node. A partial POST to an
   MVC model blanks the fields it omits, which is the same defect `set_fw_rule`
   had.
+* A refused reconfigure answers at HTTP 200 with `{"status": "failed"}`, so
+  nothing here treats a completed POST as an applied change, and an apply
+  failure is never reported as the write having failed.
+
+The traffic shaper's shared apply phase (`utils/shaper_mutation`) is the
+third site of that second defect; its falsification tests live in this file
+because this bucket owns only these two test files.
 """
 
 from __future__ import annotations
@@ -26,7 +33,12 @@ from opnsense_mcp.tools.alias_write import (
     SetAliasTool,
     ToggleAliasTool,
 )
-from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.api import OPNsenseClient, RequestError
+from opnsense_mcp.utils.shaper_mutation import finish_mutation
+from opnsense_mcp.utils.shaper_types import (
+    TOOL_STATUS_SUCCESS,
+    TOOL_STATUS_WARNING,
+)
 
 ALIAS_UUID = "9d6dbe4b-cb2a-4908-b379-876a94a39fd9"
 
@@ -307,13 +319,17 @@ async def test_delete_rejects_a_wrong_token() -> None:
 async def test_writes_reconfigure_by_default() -> None:
     """Alias reconfigure is cheap and not an interface rebuild, so it applies."""
     client = _client()
-    calls = _stub(client, {"searchItem": {"rows": [], "total": 0}})
+    calls = _stub(
+        client,
+        {"searchItem": {"rows": [], "total": 0}, "reconfigure": {"status": "ok"}},
+    )
 
-    await MkAliasTool(client).execute(
+    result = await MkAliasTool(client).execute(
         {"name": "A", "type": "host", "content": ["1.1.1.1"]}
     )
 
     assert [c for c in calls if "reconfigure" in c["endpoint"]]
+    assert result["applied"] is True
 
 
 @pytest.mark.asyncio
@@ -321,8 +337,244 @@ async def test_apply_false_stages_without_reconfiguring() -> None:
     client = _client()
     calls = _stub(client, {"searchItem": {"rows": [], "total": 0}})
 
-    await MkAliasTool(client).execute(
+    result = await MkAliasTool(client).execute(
         {"name": "A", "type": "host", "content": ["1.1.1.1"], "apply": False}
     )
 
     assert not [c for c in calls if "reconfigure" in c["endpoint"]]
+    assert result["applied"] is False
+    assert "apply_error" not in result
+
+
+# --- what the reconfigure answered ------------------------------------------
+#
+# OPNsense answers a reconfigure with a {"status": ...} document even when
+# configd refuses, at HTTP 200. A completed POST therefore never meant the
+# change was live, and an apply failure caught by the write's exception
+# handler was told as the write having failed. Every write now reports
+# `applied`, and a refused reload is reported beside it rather than through
+# the write's error path.
+
+
+@pytest.mark.asyncio
+async def test_mk_alias_reports_applied_when_the_reconfigure_answers_ok() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {"searchItem": {"rows": [], "total": 0}, "reconfigure": {"status": "ok"}},
+    )
+
+    result = await MkAliasTool(client).execute(
+        {"name": "A", "type": "host", "content": ["1.1.1.1"]}
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+    assert "apply_error" not in result
+    assert [c for c in calls if "reconfigure" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_mk_alias_keeps_the_write_when_the_reconfigure_refuses() -> None:
+    """{"status": "failed"} at HTTP 200 is a refused apply, not a failed write."""
+    client = _client()
+    calls = _stub(
+        client,
+        {"searchItem": {"rows": [], "total": 0}, "reconfigure": {"status": "failed"}},
+    )
+
+    result = await MkAliasTool(client).execute(
+        {"name": "A", "type": "host", "content": ["1.1.1.1"]}
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is True
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "addItem" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_set_alias_keeps_the_write_when_the_reconfigure_refuses() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "getItem": GET_ITEM,
+            "searchItem": SEARCH_ROWS,
+            "reconfigure": {"status": "failed"},
+        },
+    )
+
+    result = await SetAliasTool(client).execute({"uuid": ALIAS_UUID, "enabled": False})
+
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "setItem" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_toggle_alias_keeps_the_write_when_the_reconfigure_refuses() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {"searchItem": SEARCH_ROWS, "reconfigure": {"status": "failed"}},
+    )
+
+    result = await ToggleAliasTool(client).execute(
+        {"uuid": ALIAS_UUID, "enabled": False}
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "toggleItem" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_delete_alias_stays_deleted_when_the_reconfigure_refuses() -> None:
+    """The record is gone; reporting the delete as failed invites a retry."""
+    client = _client()
+    calls = _stub(
+        client,
+        {"searchItem": SEARCH_ROWS, "reconfigure": {"status": "failed"}},
+    )
+    tool = RmAliasTool(client)
+    challenge = await tool.execute({"uuid": ALIAS_UUID})
+
+    result = await tool.execute(
+        {"uuid": ALIAS_UUID, "confirm": challenge["confirm_token"]}
+    )
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "delItem" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_delete_alias_survives_a_reconfigure_that_cannot_be_asked() -> None:
+    """An apply that cannot even be requested is still not a failed write."""
+    client = _client()
+
+    async def refuse(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "reconfigure" in endpoint:
+            raise RequestError("connection refused")
+        return {"result": "saved"}
+
+    client._make_request = AsyncMock(side_effect=refuse)
+    tool = RmAliasTool(client)
+    challenge = await tool.execute({"uuid": ALIAS_UUID})
+
+    result = await tool.execute(
+        {"uuid": ALIAS_UUID, "confirm": challenge["confirm_token"]}
+    )
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+    assert result["applied"] is False
+    assert result["apply_error"]
+
+
+# --- the third site: the shaper's shared apply phase -------------------------
+#
+# utils/shaper_mutation.finish_mutation is the apply phase every shaper write
+# tool returns through. It had the same defect: nothing read what the
+# reconfigure answered, and an apply that could not even be asked escaped to
+# the caller as an exception. Its status stays at the shaper's established
+# "warning" for a staged change rather than plain success.
+
+
+@pytest.mark.asyncio
+async def test_shaper_mutation_reports_applied_when_reconfigure_answers_ok() -> None:
+    client = _client()
+    calls = _stub(client, {"reconfigure": {"status": "ok"}})
+
+    resp = await finish_mutation(
+        client,
+        snapshot_id="snap-1",
+        apply=True,
+        summary="**Deleted pipe** `x`.",
+        structured={"uuid": "x", "deleted": True},
+    )
+
+    assert resp["status"] == TOOL_STATUS_SUCCESS
+    assert resp["structured"]["applied"] is True
+    assert "apply_error" not in resp["structured"]
+    assert [c for c in calls if "reconfigure" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_shaper_mutation_keeps_the_write_when_the_reconfigure_refuses() -> None:
+    """The pipe is gone from the config whatever the reload answered."""
+    client = _client()
+    calls = _stub(client, {"reconfigure": {"status": "failed"}})
+
+    resp = await finish_mutation(
+        client,
+        snapshot_id="snap-1",
+        apply=True,
+        summary="**Deleted pipe** `x`.",
+        structured={"uuid": "x", "deleted": True},
+    )
+
+    assert resp["status"] == TOOL_STATUS_WARNING
+    assert resp["structured"]["deleted"] is True
+    assert resp["structured"]["applied"] is False
+    assert resp["structured"]["pending_changes"] is True
+    assert resp["structured"]["apply_error"]
+    assert [c for c in calls if "reconfigure" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_shaper_reconfigure_still_refuses_a_document_carrying_an_error() -> None:
+    """`status: ok` alongside an error key was refused before; it stays so.
+
+    Reading the status is the new check; this pins that it did not replace
+    the check the shaper already made.
+    """
+    client = _client()
+    _stub(client, {"reconfigure": {"status": "ok", "error": "configd died mid-reload"}})
+
+    resp = await finish_mutation(
+        client,
+        snapshot_id="snap-1",
+        apply=True,
+        summary="**Deleted pipe** `x`.",
+        structured={"uuid": "x"},
+    )
+
+    assert resp["structured"]["applied"] is False
+    assert resp["structured"]["apply_error"]
+
+
+@pytest.mark.asyncio
+async def test_shaper_mutation_does_not_raise_when_reconfigure_cannot_be_asked() -> (
+    None
+):
+    """An apply failure escaping as an exception reported a finished delete
+    as a failed one.
+    """
+    client = _client()
+
+    async def refuse(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "reconfigure" in endpoint:
+            raise RequestError("connection refused")
+        return {"status": "ok"}
+
+    client._make_request = AsyncMock(side_effect=refuse)
+
+    resp = await finish_mutation(
+        client,
+        snapshot_id="snap-1",
+        apply=True,
+        summary="**Deleted pipe** `x`.",
+        structured={"uuid": "x", "deleted": True},
+    )
+
+    assert resp["status"] == TOOL_STATUS_WARNING
+    assert resp["structured"]["deleted"] is True
+    assert resp["structured"]["applied"] is False
+    assert resp["structured"]["apply_error"]

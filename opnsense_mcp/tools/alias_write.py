@@ -7,6 +7,13 @@ adds the write side, which the routing work needs for its source groups.
 Updates read the whole node, merge the caller's changes and write it back.
 A partial POST to an MVC model blanks every field it omits, which is how
 `set_fw_rule` silently widened rules before it was fixed.
+
+The reload that makes a write live is a phase of its own. OPNsense answers a
+reconfigure with a `{"status": ...}` document even when configd refuses, at
+HTTP 200, so a completed POST never meant the change was live: every write
+reports `applied`, a refused reload is reported rather than swallowed, and an
+apply failure is never caught by the write's handler and told as the write
+having failed.
 """
 
 from __future__ import annotations
@@ -14,6 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import flatten_mvc_node
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
@@ -79,7 +87,12 @@ def _safe_summary(row: dict[str, Any]) -> dict[str, Any]:
 
 
 class _AliasToolBase:
-    """Shared lookup, apply and error handling."""
+    """Shared lookup, apply and error handling.
+
+    `_reconfigure` raises :class:`ApplyError` unless the reload reported
+    success, so each tool can report a refused apply itself instead of it
+    being caught by the write's exception handler first.
+    """
 
     def __init__(self, client: Any) -> None:
         """Store the OPNsense client."""
@@ -100,9 +113,12 @@ class _AliasToolBase:
         return None
 
     async def _reconfigure(self) -> None:
-        await self.client._make_request(
-            "POST", ENDPOINTS["reconfigure"], call_class="apply"
-        )
+        """Reload the filter's alias tables, or raise :class:`ApplyError`.
+
+        The raw POST returns whatever document arrived, and a configd
+        refusal arrives at HTTP 200 looking exactly like a completed reload.
+        """
+        await run_apply(self.client, ENDPOINTS["reconfigure"])
 
 
 class MkAliasTool(_AliasToolBase):
@@ -178,18 +194,31 @@ class MkAliasTool(_AliasToolBase):
             result = await self.client._make_request(
                 "POST", ENDPOINTS["add"], call_class="write", json={"alias": payload}
             )
-            if params.get("apply", True):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001 - surfaced to the caller
             logger.exception("Failed to create alias")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        # Applied as its own phase. Caught by the write's handler, a refused
+        # reload reported an alias that exists as one that does not.
+        applied, apply_error = False, ""
+        if params.get("apply", True):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("Alias %s written but not applied: %s", alias_name, exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
             "name": alias_name,
+            "applied": applied,
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class SetAliasTool(_AliasToolBase):
@@ -265,13 +294,21 @@ class SetAliasTool(_AliasToolBase):
                 call_class="write",
                 json={"alias": payload},
             )
-            if params.get("apply", True):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to update alias")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        # A refused reload leaves the update staged, not unwritten.
+        applied, apply_error = False, ""
+        if params.get("apply", True):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("Alias %s updated but not applied: %s", uuid, exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "name": payload.get("name", ""),
@@ -280,7 +317,11 @@ class SetAliasTool(_AliasToolBase):
                 for key in ("content", "description", "enabled")
                 if params.get(key) is not None
             ),
+            "applied": applied,
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ToggleAliasTool(_AliasToolBase):
@@ -333,13 +374,28 @@ class ToggleAliasTool(_AliasToolBase):
                 f"{ENDPOINTS['toggle']}/{uuid}/{state}",
                 call_class="write",
             )
-            if params.get("apply", True):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to toggle alias")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "uuid": uuid, "enabled": bool(params["enabled"])}
+        applied, apply_error = False, ""
+        if params.get("apply", True):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("Alias %s toggled but not applied: %s", uuid, exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "enabled": bool(params["enabled"]),
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmAliasTool(_AliasToolBase):
@@ -371,6 +427,9 @@ class RmAliasTool(_AliasToolBase):
 
         Rules that reference a deleted alias stop matching what the operator
         expects, so the two-step applies here as it does for shaper deletes.
+        A reload that refuses leaves the alias deleted but the running filter
+        unchanged; that is reported as `applied: false`, not as a failed
+        delete.
         """
         params = params or {}
         if not self.client:
@@ -394,10 +453,28 @@ class RmAliasTool(_AliasToolBase):
             await self.client._make_request(
                 "POST", f"{ENDPOINTS['delete']}/{uuid}", call_class="write", json={}
             )
-            if params.get("apply", True):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete alias")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "uuid": uuid, "deleted": True}
+        # A delete whose reload refused is the worst place to blur the two
+        # phases: the record is already gone, and reporting the delete as
+        # failed invites a retry against something that no longer exists.
+        applied, apply_error = False, ""
+        if params.get("apply", True):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("Alias %s deleted but not applied: %s", uuid, exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out

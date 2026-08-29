@@ -13,6 +13,12 @@ guessed:
   are separate enums: 3 is `router` in v4 and `option_ia_na` in v6, so putting
   a v4 number in `option6` yields a valid request that configures something
   else.
+
+Writes here stage by default. When a caller does ask for the reload, it is a
+phase of its own: OPNsense answers a reconfigure with a `{"status": ...}`
+document even when configd refuses, at HTTP 200, so every write reports
+`applied` and a refused reload is reported as such — never as the write
+having failed.
 """
 
 from __future__ import annotations
@@ -20,7 +26,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from opnsense_mcp.utils.mvc_merge import is_enum_field, merge_for_set, selected_keys
+from opnsense_mcp.utils.apply import ApplyError, run_apply
+from opnsense_mcp.utils.mvc_merge import (
+    is_enum_field,
+    merge_for_set,
+    selected_keys,
+)
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
     validate_delete_confirm_token,
@@ -177,7 +188,11 @@ def _v6_schema_fields() -> dict[str, Any]:
 
 
 class _DnsmasqToolBase:
-    """Shared client handling and row access."""
+    """Shared client handling, row access, and the reconfigure helper.
+
+    `_reconfigure` raises :class:`ApplyError` unless the reload reported
+    success, so callers report a refused apply instead of a failed write.
+    """
 
     def __init__(self, client: Any) -> None:
         """Store the OPNsense client."""
@@ -193,9 +208,13 @@ class _DnsmasqToolBase:
         return data.get("rows", []) if isinstance(data, dict) else []
 
     async def _reconfigure(self) -> None:
-        await self.client._make_request(
-            "POST", DNSMASQ["reconfigure"], call_class="apply"
-        )
+        """Reload dnsmasq, or raise :class:`ApplyError`.
+
+        A configd refusal answers at HTTP 200 with a `{"status": ...}`
+        document, so the raw POST cannot tell a reloaded service from an
+        unchanged one.
+        """
+        await run_apply(self.client, DNSMASQ["reconfigure"])
 
 
 def _flat_value(value: Any) -> Any:
@@ -371,18 +390,38 @@ class MkDhcpRangeTool(_DnsmasqToolBase):
                 call_class="write",
                 json={"range": payload},
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create DHCP range")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        # The reload is a separate phase: one that refuses leaves the range
+        # staged, which is not the same as the create having failed.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("DHCP range staged but not applied: %s", exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged. Reconfigure dnsmasq to serve it.",
+            "applied": applied,
+            "note": (
+                "Staged; the reconfigure did not complete, so dnsmasq is not "
+                "serving it yet."
+                if apply_error
+                else "Applied; dnsmasq reloaded with the range."
+                if applied
+                else "Staged. Reconfigure dnsmasq to serve it."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class SetDhcpRangeTool(_DnsmasqToolBase):
@@ -453,13 +492,28 @@ class SetDhcpRangeTool(_DnsmasqToolBase):
                 call_class="write",
                 json={"range": payload},
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to update DHCP range")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "uuid": uuid, "changed": sorted(changes)}
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("DHCP range %s updated but not applied: %s", uuid, exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "changed": sorted(changes),
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmDhcpRangeTool(_DnsmasqToolBase):
@@ -509,12 +563,31 @@ class RmDhcpRangeTool(_DnsmasqToolBase):
             await self.client._make_request(
                 "POST", f"{DNSMASQ['del_range']}/{uuid}", call_class="write", json={}
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete DHCP range")
             return {"status": "error", "error": str(exc)}
-        return {"status": "success", "uuid": uuid, "deleted": True}
+
+        # A refused reload must not read as a failed delete: the range is
+        # gone from the config, and a retry would only fetch a new confirm
+        # token for a record that no longer exists.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("DHCP range %s deleted but not applied: %s", uuid, exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ListDhcpOptionsTool(_DnsmasqToolBase):
@@ -654,21 +727,38 @@ class SetDhcpRouterOptionTool(_DnsmasqToolBase):
                 )
                 uuid = result.get("uuid", "") if isinstance(result, dict) else ""
                 created = True
-
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to set the DHCP router option")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("Router option staged but not applied: %s", exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "created": created,
             "router": router,
             "scope": interface or f"tag:{tag}",
-            "note": "Staged. Reconfigure dnsmasq to serve it.",
+            "applied": applied,
+            "note": (
+                "Staged; the reconfigure did not complete, so dnsmasq is not "
+                "serving it yet."
+                if apply_error
+                else "Applied; dnsmasq reloaded with the option."
+                if applied
+                else "Staged. Reconfigure dnsmasq to serve it."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmDhcpOptionTool(_DnsmasqToolBase):
@@ -695,7 +785,9 @@ class RmDhcpOptionTool(_DnsmasqToolBase):
 
         Exists so set_dhcp_router_option is reversible. Removing option 3
         strips a subnet's default gateway, and clients keep working until
-        their leases renew, so the damage surfaces long after the change.
+        their leases renew, so the damage surfaces long after the change. A
+        reload that refuses leaves the option deleted but dnsmasq still
+        handing it out; that is reported as `applied: false`.
         """
         params = params or {}
         if not self.client:
@@ -719,9 +811,27 @@ class RmDhcpOptionTool(_DnsmasqToolBase):
             await self.client._make_request(
                 "POST", f"{DNSMASQ['del_option']}/{uuid}", call_class="write", json={}
             )
-            if params.get("apply", False):
-                await self._reconfigure()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete DHCP option")
             return {"status": "error", "error": str(exc)}
-        return {"status": "success", "uuid": uuid, "deleted": True}
+
+        # Same separation as the range delete: the option is gone from the
+        # config whatever the reload answered.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await self._reconfigure()
+                applied = True
+            except ApplyError as exc:
+                logger.warning("DHCP option %s deleted but not applied: %s", uuid, exc)
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out

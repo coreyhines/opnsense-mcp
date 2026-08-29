@@ -15,6 +15,7 @@ import ipaddress
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import flatten_mvc_node
 from opnsense_mcp.utils.ra_daemon import (
     DAEMON_BOTH,
@@ -222,7 +223,7 @@ class SetRouterAdvertTool(_UlaToolBase):
         try:
             # Fetch the radvd entry to get its interface
             current = await self.client._make_request("GET", f"{RADVD['get']}/{uuid}")
-            node = current.get("entry") if isinstance(current, dict) else None
+            node = current.get("entries") if isinstance(current, dict) else None
             if not isinstance(node, dict):
                 return {"status": "error", "error": f"radvd entry {uuid} not found"}
 
@@ -337,16 +338,25 @@ class SetRouterAdvertTool(_UlaToolBase):
                 call_class="write",
                 json={"entry": payload},
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", RADVD["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to update radvd entry")
             return {"status": "error", "error": str(exc)}
 
+        # The apply is its own phase. Inside the write's try, a reload failure
+        # was reported as the write having failed.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, RADVD["reconfigure"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning("radvd entry written but not applied: %s", exc)
+                apply_error = str(exc)
+
         return {
             "status": "success",
+            "applied": applied,
+            **({"apply_error": apply_error} if apply_error else {}),
             "uuid": uuid,
             "interface": iface,
             "daemon": DAEMON_RADVD,
@@ -427,16 +437,23 @@ class SetHostOverrideTool(_UlaToolBase):
                 call_class="write",
                 json={"host": payload},
             )
-            if params.get("apply", True):
-                await self.client._make_request(
-                    "POST", UNBOUND["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to update host override")
             return {"status": "error", "error": str(exc)}
 
+        applied, apply_error = False, ""
+        if params.get("apply", True):
+            try:
+                await run_apply(self.client, UNBOUND["reconfigure"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning("host override written but not applied: %s", exc)
+                apply_error = str(exc)
+
         return {
             "status": "success",
+            "applied": applied,
+            **({"apply_error": apply_error} if apply_error else {}),
             "uuid": uuid,
             "hostname": payload.get("hostname", ""),
             "rr": payload.get("rr", ""),
@@ -486,6 +503,16 @@ class PlanDnsUlaTool(_UlaToolBase):
 
         if gua.version != 6 or ula.version != 6:
             return {"status": "error", "error": "both prefixes must be IPv6"}
+        if gua == ula:
+            return {
+                "status": "error",
+                "error": (
+                    f"gua_prefix and ula_prefix are both {gua}. Every record "
+                    f"would be planned to move onto the address it already "
+                    f"holds, which apply_dns_plan cannot distinguish from a "
+                    f"completed move: it would delete each name's only answer."
+                ),
+            }
         if gua.prefixlen != ula.prefixlen:
             return {
                 "status": "error",
@@ -573,6 +600,59 @@ class ApplyUlaTool(_UlaToolBase):
         "required": [],
     }
 
+    @staticmethod
+    def _ra_signature(
+        verdicts: dict[str, RaVerdict],
+        radvd_rows: list[dict[str, Any]],
+        dnsmasq_rows: list[dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        """Snapshot the serving daemon's own fields for each serving interface.
+
+        A reconfigure cannot change *which* daemon serves — that is decided by
+        `enabled`, `constructor` and `ra_mode`, none of which a reconfigure
+        writes. It can only fail to apply the fields the daemon actually reads
+        (`mode`, lifetimes, `DeprecatePrefix` for radvd; `constructor`/`ra_mode`
+        for dnsmasq). Comparing the classified daemon before and after — as
+        this used to — compares a value a reconfigure cannot move, so it always
+        passes. Comparing these fields can actually catch a divergence.
+        """
+        radvd_by_iface = {
+            str(row.get("interface") or "").strip(): row
+            for row in radvd_rows
+            if str(row.get("interface") or "").strip()
+        }
+        dnsmasq_by_iface: dict[str, dict[str, Any]] = {}
+        for row in dnsmasq_rows:
+            iface = str(row.get("interface") or row.get("constructor") or "").strip()
+            if iface:
+                dnsmasq_by_iface[iface] = row
+
+        signature: dict[str, dict[str, Any]] = {}
+        for iface, verdict in verdicts.items():
+            fields: dict[str, Any] = {}
+            if verdict.daemon in (DAEMON_RADVD, DAEMON_BOTH):
+                row = radvd_by_iface.get(iface, {})
+                fields.update(
+                    {
+                        "radvd_enabled": row.get("enabled"),
+                        "radvd_mode": row.get("mode"),
+                        "AdvPreferredLifetime": row.get("AdvPreferredLifetime"),
+                        "AdvValidLifetime": row.get("AdvValidLifetime"),
+                        "DeprecatePrefix": row.get("DeprecatePrefix"),
+                    }
+                )
+            if verdict.daemon in (DAEMON_DNSMASQ, DAEMON_BOTH):
+                row = dnsmasq_by_iface.get(iface, {})
+                fields.update(
+                    {
+                        "dnsmasq_constructor": row.get("constructor"),
+                        "dnsmasq_ra_mode": row.get("ra_mode"),
+                    }
+                )
+            if fields:
+                signature[iface] = fields
+        return signature
+
     async def _apply_ra_domain(self) -> dict[str, Any]:
         """Apply the RA domain by reconfiguring the serving daemon(s).
 
@@ -581,7 +661,12 @@ class ApplyUlaTool(_UlaToolBase):
         - ``verified``: whether post-apply read confirmed the state
         - ``error``: error message if something went wrong (optional)
         """
-        verdicts_before = await self._classify_interfaces()
+        radvd_rows_before = await self._fetch_radvd_rows()
+        dnsmasq_rows_before = await self._fetch_dnsmasq_range_rows()
+        interface_states_before = await self._fetch_interface_states()
+        verdicts_before = classify_ra_daemons(
+            radvd_rows_before, dnsmasq_rows_before, interface_states_before
+        )
 
         # Determine which daemons serve across any interface
         needs_radvd = any(
@@ -599,45 +684,81 @@ class ApplyUlaTool(_UlaToolBase):
                 "note": "No RA daemon serving on any interface; nothing to reconfigure.",
             }
 
+        signature_before = self._ra_signature(
+            verdicts_before, radvd_rows_before, dnsmasq_rows_before
+        )
+
         reconfigured: list[str] = []
 
         # Reconfigure in order: radvd then dnsmasq (order matters less here,
         # but consistent ordering aids debugging)
+        # run_apply reads what the reconfigure answered. A service controller
+        # returns {"status": ...} and the client raises only on
+        # {"result": "failed"}, so a configd refusal arrives as HTTP 200.
+        apply_errors: list[str] = []
         if needs_radvd:
-            await self.client._make_request(
-                "POST", RADVD["reconfigure"], call_class="apply"
-            )
-            reconfigured.append(DAEMON_RADVD)
+            try:
+                await run_apply(self.client, RADVD["reconfigure"])
+                reconfigured.append(DAEMON_RADVD)
+            except ApplyError as exc:
+                apply_errors.append(str(exc))
 
         if needs_dnsmasq:
-            await self.client._make_request(
-                "POST", DNSMASQ["reconfigure"], call_class="apply"
-            )
-            reconfigured.append(DAEMON_DNSMASQ)
+            try:
+                await run_apply(self.client, DNSMASQ["reconfigure"])
+                reconfigured.append(DAEMON_DNSMASQ)
+            except ApplyError as exc:
+                apply_errors.append(str(exc))
 
-        # Verify: re-read and confirm the serving state
-        verdicts_after = await self._classify_interfaces()
+        # Verify: re-read the serving daemon's own fields and compare against
+        # what was staged before the reconfigure. Reconfigure cannot change
+        # which daemon serves, so that comparison alone would always pass;
+        # this compares the fields a reconfigure could actually fail to apply.
+        radvd_rows_after = await self._fetch_radvd_rows()
+        dnsmasq_rows_after = await self._fetch_dnsmasq_range_rows()
+        interface_states_after = await self._fetch_interface_states()
+        verdicts_after = classify_ra_daemons(
+            radvd_rows_after, dnsmasq_rows_after, interface_states_after
+        )
+        signature_after = self._ra_signature(
+            verdicts_after, radvd_rows_after, dnsmasq_rows_after
+        )
 
-        # The apply is verified if the daemon classification is unchanged
-        # (we reconfigured what was serving, not changed what serves).
-        # A more sophisticated check would compare specific fields, but the
-        # point is to detect when reconfigure returned ok but nothing happened.
-        verified = True
-        mismatches: list[str] = []
-        for iface, before in verdicts_before.items():
-            after = verdicts_after.get(iface)
-            if after is None or after.daemon != before.daemon:
-                verified = False
-                mismatches.append(
-                    f"{iface}: was {before.daemon}, now "
-                    f"{after.daemon if after else 'unknown'}"
-                )
+        # This comparison does NOT verify the reload. Both snapshots come from
+        # search_entry and search_range, which read the configuration store,
+        # and a reconfigure applies config to a running daemon without writing
+        # config rows -- so before and after are equal on every healthy run.
+        # An earlier version compared the classified daemon and always passed;
+        # replacing it with more fields from the same source kept that
+        # property. What it does catch is a concurrent change to the config
+        # between the two reads, which is worth reporting under its own name.
+        drifted: list[str] = []
+        for iface, before_fields in signature_before.items():
+            after_fields = signature_after.get(iface)
+            if after_fields != before_fields:
+                drifted.append(f"{iface}: was {before_fields}, now {after_fields}")
+
+        # What is actually established: every serving daemon was asked to
+        # reload and answered with success. Whether the advertisement on the
+        # wire changed is not observable through this API, so it is not
+        # claimed. rdisc6 or ndp -I on a client is the check that would settle
+        # it, and it is a console step.
+        verified = not apply_errors and not drifted
+        mismatches = drifted
 
         result: dict[str, Any] = {
             "daemons_reconfigured": reconfigured,
             "verified": verified,
+            # Named so a caller cannot read `verified` as more than it is.
+            "verified_scope": (
+                "every serving daemon accepted the reload; the advertisement "
+                "on the wire is not observable through this API"
+            ),
         }
+        if apply_errors:
+            result["apply_errors"] = apply_errors
         if mismatches:
+            result["config_drift"] = mismatches
             result["mismatches"] = mismatches
         return result
 
@@ -649,8 +770,10 @@ class ApplyUlaTool(_UlaToolBase):
         attempting a rollback that could leave the box in a third state.
 
         The ``ra`` domain routes to the daemon(s) actually serving RA and
-        verifies that the reconfigure took effect. If verification fails,
-        ``applied`` is ``False`` for that domain.
+        checks that each accepted the reload. It does not confirm the
+        advertisement changed on the wire: nothing in this API exposes that,
+        and ``verified_scope`` in the result says so rather than letting
+        ``verified`` imply it.
         """
         params = params or {}
         if not self.client:
@@ -713,23 +836,25 @@ class ApplyUlaTool(_UlaToolBase):
                             ),
                         }
                 else:
-                    await self.client._make_request(
-                        "POST", _DOMAIN_ENDPOINTS[domain], call_class="apply"
-                    )
+                    await run_apply(self.client, _DOMAIN_ENDPOINTS[domain])
             except Exception as exc:  # noqa: BLE001
                 logger.exception("apply_ula failed at %s", domain)
                 remaining = ordered[ordered.index(domain) + 1 :]
                 result: dict[str, Any] = {
                     "status": "partial_failure",
                     "dry_run": False,
-                    "applied": True,
+                    # Not hard-coded True: when the first domain fails, `done`
+                    # is empty and nothing was applied at all. Reporting a
+                    # blanket True there describes a run that did not happen.
+                    "applied": bool(done),
                     "done": done,
                     "failed": domain,
                     "remaining": remaining,
                     "error": str(exc),
                     "recovery": (
-                        "Earlier domains stayed applied. Nothing was rolled back. "
-                        "Fix the cause and re-run with the remaining domains."
+                        f"{'Earlier domains stayed applied. ' if done else ''}"
+                        "Nothing was rolled back. Fix the cause and re-run with "
+                        "the remaining domains."
                     ),
                 }
                 if ra_result:

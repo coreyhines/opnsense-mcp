@@ -230,6 +230,32 @@ async def test_npt_stages_without_applying_by_default() -> None:
 
 
 @pytest.mark.asyncio
+async def test_npt_apply_status_failed_keeps_successful_write_visible() -> None:
+    client = _client()
+    _stub(
+        client,
+        {
+            "search_rule": {"rows": [], "total": 0},
+            "filter/apply": {"status": "failed", "message": "pf reload refused"},
+        },
+    )
+
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "trackif": "lan",
+            "apply": True,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is True
+    assert result["applied"] is False
+    assert "apply_error" in result
+
+
+@pytest.mark.asyncio
 async def test_npt_toggle_takes_an_explicit_state() -> None:
     client = _client()
     calls = _stub(client, {"search_rule": NPT_ROWS})
@@ -335,6 +361,86 @@ async def test_vip_delete_needs_confirmation() -> None:
     assert first["status"] == "confirmation_required"
 
 
+@pytest.mark.asyncio
+async def test_vip_refuses_unparseable_subnet_before_any_request() -> None:
+    """Garbage in `subnet` must not reach the VIP API (D3)."""
+    client = _client()
+    calls = _stub(client, {"search_item": {"rows": [], "total": 0}})
+
+    result = await MkVipTool(client).execute(
+        {"interface": "lan", "subnet": "not-an-address", "subnet_bits": 64}
+    )
+
+    assert result["status"] == "error"
+    assert "error" in result
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_vip_refuses_subnet_bits_outside_address_family() -> None:
+    """IPv6 /129 and IPv4 /64 are both impossible; neither may issue a request."""
+    client = _client()
+    calls = _stub(client, {"search_item": {"rows": [], "total": 0}})
+
+    v6 = await MkVipTool(client).execute(
+        {"interface": "lan", "subnet": "fd0b:b022:1e5:2::1", "subnet_bits": 129}
+    )
+    v4 = await MkVipTool(client).execute(
+        {"interface": "lan", "subnet": "192.0.2.1", "subnet_bits": 64}
+    )
+
+    assert v6["status"] == "error"
+    assert v4["status"] == "error"
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_vip_accepts_valid_ipv4_and_ipv6_addresses() -> None:
+    """Family-aware bounds still allow a real /64 ULA and a real /24 IPv4 alias."""
+    client = _client()
+    calls = _stub(client, {"search_item": {"rows": [], "total": 0}})
+
+    v6 = await MkVipTool(client).execute(
+        {"interface": "lan", "subnet": "fd0b:b022:1e5:2::1", "subnet_bits": 64}
+    )
+    v4 = await MkVipTool(client).execute(
+        {"interface": "lan", "subnet": "192.0.2.1", "subnet_bits": 24}
+    )
+
+    assert v6["status"] == "success"
+    assert v4["status"] == "success"
+    assert len([c for c in calls if "add_item" in c["endpoint"]]) == 2
+
+
+@pytest.mark.asyncio
+async def test_vip_apply_status_failed_keeps_successful_write_visible() -> None:
+    client = _client()
+    _stub(
+        client,
+        {
+            "search_item": {"rows": [], "total": 0},
+            "reconfigure": {
+                "status": "failed",
+                "message": "interface reconfigure refused",
+            },
+        },
+    )
+
+    result = await MkVipTool(client).execute(
+        {
+            "interface": "lan",
+            "subnet": "fd0b:b022:1e5:2::1",
+            "subnet_bits": 64,
+            "apply": True,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is True
+    assert result["applied"] is False
+    assert "apply_error" in result
+
+
 # --- loopback --------------------------------------------------------------
 
 
@@ -400,6 +506,16 @@ async def test_loopback_refuses_track_interface_addressing_with_manual_steps() -
     }
     assert result["manual_steps"]
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_loopback_schema_declares_track6_refusal_fields() -> None:
+    """The track6 refusal is unreachable over MCP unless these keys are advertised (D4)."""
+    props = MkLoopbackTool.input_schema["properties"]
+
+    for field in ("ipaddrv6", "track6-interface", "track6-prefix-id"):
+        assert field in props
+        assert field not in (MkLoopbackTool.input_schema.get("required") or [])
 
 
 @pytest.mark.asyncio

@@ -543,7 +543,11 @@ class DeleteShaperRuleTool:
     description = "Delete a rule (confirm token required)"
     input_schema: dict[str, Any] = {
         "type": "object",
-        "properties": {"uuid": {"type": "string"}, "confirm": {"type": "string"}},
+        "properties": {
+            "uuid": {"type": "string"},
+            "confirm": {"type": "string"},
+            "apply": {"type": "boolean", "default": True},
+        },
         "required": ["uuid"],
     }
 

@@ -74,6 +74,31 @@ _NOT_TOOLS = frozenset(
         "destination_port",
         "start_addr",
         "end_addr",
+        # Schema fields, response keys, module names and one API endpoint
+        # segment, from the ipv6-toolset-fixes bucket plan. Tool-shaped but
+        # not tools: `get_entry` is a radvd endpoint, `input_schema` and
+        # `tool_groups` are code, and the rest are fields on existing tools.
+        # Module and helper names from the apply-repo-wide bucket plan. Every
+        # one is a file or function in this repo, none is a tool. Fourth time a
+        # planning document has tripped this check: prose about the codebase is
+        # full of snake_case that is not a tool name.
+        "alias_write",
+        "dhcp_ranges",
+        "fw_groups",
+        "ipv6_stack",
+        "routing_stack",
+        "run_apply",
+        "shaper_mutation",
+        "ula_dns_apply",
+        "ula_migration",
+        "dry_run",
+        "get_entry",
+        "search_item",
+        "input_schema",
+        "mcp_server",
+        "runtime_paths",
+        "subnet_bits",
+        "tool_groups",
         # dnsmasq range fields (buckets B1/B2, issue #27) and the endpoints
         # that carry them. Field names, not tools.
         "constructor",

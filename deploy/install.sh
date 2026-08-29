@@ -254,8 +254,14 @@ write_opnsense_mcp_quadlet() {
     printf '%s\n' "ContainerName=${OPNSENSE_MCP_CONTAINER_NAME}"
     printf '%s\n' "Environment=OPNSENSE_MCP_INSTALL_ROOT=${INSTALL_ROOT}"
     printf '%s\n' "EnvironmentFile=${INSTALL_ROOT}/environment"
+    printf '%s\n' "Environment=OPNSENSE_BACKUP_DIR=${INSTALL_ROOT}/backups"
     printf '%s\n' "Volume=${INSTALL_ROOT}:${INSTALL_ROOT}:ro,Z"
     printf '%s\n' "Volume=${OPNSENSE_MCP_TLS_CERTS}:/opt/certs/wild:ro,Z"
+    # The install root is mounted ro, so backups need their own rw mount, and
+    # the SSH key directory needs mounting at all: without it every SSH-backed
+    # tool fails one call at a time against an empty /root/.ssh.
+    printf '%s\n' "Volume=${INSTALL_ROOT}/ssh:/root/.ssh:ro,Z"
+    printf '%s\n' "Volume=${INSTALL_ROOT}/backups:${INSTALL_ROOT}/backups:rw,Z"
     printf '%s\n' ''
     printf '%s\n' '[Service]'
     printf '%s\n' 'Restart=on-failure'
@@ -402,18 +408,31 @@ if [[ "$RUNTIME" == "podman" ]]; then
     echo "warning: ${POD_SVC} not loaded after daemon-reload (LoadState=${_pod_load_state})." >&2
     echo "  Install podman + quadlet support (often package podman-quadlet); check: podman --version (4.4+), journal for quadlet." >&2
   fi
+  # `systemctl start` on an already-active unit is a no-op, and daemon-reload
+  # does not restart running services. So a re-run that rewrites the quadlet --
+  # which is the case this script is re-run for -- used to print "Install
+  # finished" while the container kept running with the previous image and the
+  # previous mount set. The files were idempotent; the running state was not.
   enable_or_start_quadlet() {
     local cfile=$1
     local sname=$2
+    local verb=start
+    if systemctl is-active --quiet "${sname}"; then
+      verb=restart
+    fi
     if systemctl enable "${cfile}" 2>/dev/null; then
-      systemctl start "${sname}" || true
-    elif systemctl enable --now "${sname}" 2>/dev/null; then
+      systemctl "${verb}" "${sname}" || true
+    elif [[ "${verb}" == "start" ]] && systemctl enable --now "${sname}" 2>/dev/null; then
       :
     else
-      echo "warning: systemctl enable failed for ${sname}; starting without enable (quadlet)." >&2
-      systemctl start "${sname}" || true
+      echo "warning: systemctl enable failed for ${sname}; ${verb}ing without enable (quadlet)." >&2
+      systemctl "${verb}" "${sname}" || true
     fi
   }
+
+  # Restarting the pod tears down the containers sharing its namespace, so the
+  # members must come back after it and in dependency order. Doing the app
+  # first leaves it requiring a pod that is about to be replaced.
   enable_or_start_quadlet "${QUADLET_DIR}/${POD_QUADLET_FILE}" "${POD_SVC}"
   enable_or_start_quadlet "${QUADLET_DIR}/${MCP_QUADLET_BASENAME}.container" "${MCP_APP_SVC}"
   enable_or_start_quadlet "${QUADLET_DIR}/${CADDY_QUADLET_BASENAME}.container" "${CADDY_SVC}"

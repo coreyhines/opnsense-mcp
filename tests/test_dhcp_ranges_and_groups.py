@@ -13,6 +13,11 @@ guessed:
   option numbers are separate enums. Option 3 is `router` in v4 and
   `option_ia_na` in v6, so writing a v4 option number into `option6` produces a
   valid request that means something else entirely.
+
+Writes here stage by default. When a caller does ask for the reload, a
+configd refusal answers at HTTP 200 with `{"status": "failed"}`, so the
+result reports `applied` and never tells an apply failure as the write
+having failed.
 """
 
 from __future__ import annotations
@@ -32,7 +37,7 @@ from opnsense_mcp.tools.dhcp_ranges import (
     SetDhcpRouterOptionTool,
 )
 from opnsense_mcp.tools.fw_groups import ListFwGroupsTool, SetFwGroupTool
-from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.api import OPNsenseClient, RequestError
 from opnsense_mcp.utils.dhcp_providers.dnsmasq import DnsmasqProvider
 
 RANGE_UUID = "range-1234"
@@ -642,3 +647,190 @@ async def test_set_group_preserves_description_and_sequence() -> None:
     payload = next(c for c in calls if "set_item" in c["endpoint"])["json"]["group"]
     assert payload["descr"] == "lab networks"
     assert payload["sequence"] == "0"
+
+
+# --- what the reconfigure answered -------------------------------------------
+#
+# A configd refusal arrives at HTTP 200 as {"status": "failed"}, so a
+# completed write never meant the change was live, and an apply failure
+# caught by the write's exception handler was told as the write having
+# failed. These write tools stage by default; these tests pass apply=true.
+
+
+@pytest.mark.asyncio
+async def test_created_range_reports_applied_when_reconfigure_answers_ok() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {"search_range": {"rows": [], "total": 0}, "reconfigure": {"status": "ok"}},
+    )
+
+    result = await MkDhcpRangeTool(client).execute(
+        {
+            "interface": "opt3",
+            "start_addr": "172.20.3.100",
+            "end_addr": "172.20.3.200",
+            "apply": True,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+    assert "apply_error" not in result
+    assert [c for c in calls if "reconfigure" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_range_staged_without_apply_reports_applied_false() -> None:
+    client = _client()
+    calls = _stub(client, {"search_range": {"rows": [], "total": 0}})
+
+    result = await MkDhcpRangeTool(client).execute(
+        {"interface": "opt3", "start_addr": "172.20.3.100", "end_addr": "172.20.3.200"}
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    assert "apply_error" not in result
+    assert not [c for c in calls if "reconfigure" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_created_range_is_staged_not_failed_when_reconfigure_refuses() -> None:
+    """{"status": "failed"} at HTTP 200 is a refused apply, not a failed write."""
+    client = _client()
+    calls = _stub(
+        client,
+        {"search_range": {"rows": [], "total": 0}, "reconfigure": {"status": "failed"}},
+    )
+
+    result = await MkDhcpRangeTool(client).execute(
+        {
+            "interface": "opt3",
+            "start_addr": "172.20.3.100",
+            "end_addr": "172.20.3.200",
+            "apply": True,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is True
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "add_range" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_updated_range_is_staged_not_failed_when_reconfigure_refuses() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "get_range": {"range": dict(RANGE_ROWS["rows"][0])},
+            "search_range": RANGE_ROWS,
+            "reconfigure": {"status": "failed"},
+        },
+    )
+
+    result = await SetDhcpRangeTool(client).execute(
+        {"uuid": RANGE_UUID, "lease_time": "3600", "apply": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "set_range" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_deleted_range_stays_deleted_when_reconfigure_refuses() -> None:
+    """The range is gone from the config; reporting the delete as failed
+    invites a retry against a record that no longer exists.
+    """
+    client = _client()
+    calls = _stub(
+        client,
+        {"search_range": RANGE_ROWS, "reconfigure": {"status": "failed"}},
+    )
+    tool = RmDhcpRangeTool(client)
+    challenge = await tool.execute({"uuid": RANGE_UUID})
+
+    result = await tool.execute(
+        {"uuid": RANGE_UUID, "confirm": challenge["confirm_token"], "apply": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "del_range" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_deleted_range_survives_a_reconfigure_that_cannot_be_asked() -> None:
+    """An apply that cannot even be requested is still not a failed write."""
+    client = _client()
+
+    async def refuse(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "reconfigure" in endpoint:
+            raise RequestError("connection refused")
+        return {"result": "saved"}
+
+    client._make_request = AsyncMock(side_effect=refuse)
+    tool = RmDhcpRangeTool(client)
+    challenge = await tool.execute({"uuid": RANGE_UUID})
+
+    result = await tool.execute(
+        {"uuid": RANGE_UUID, "confirm": challenge["confirm_token"], "apply": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+    assert result["applied"] is False
+    assert result["apply_error"]
+
+
+@pytest.mark.asyncio
+async def test_router_option_is_staged_not_failed_when_reconfigure_refuses() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "search_option": {"rows": [], "total": 0},
+            "reconfigure": {"status": "failed"},
+        },
+    )
+
+    result = await SetDhcpRouterOptionTool(client).execute(
+        {"interface": "opt3", "router": "172.20.3.1", "apply": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is True
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "add_option" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_deleted_option_stays_deleted_when_reconfigure_refuses() -> None:
+    """Option 3 outlives its config row in the running service; the delete
+    still happened, whatever the reload answered.
+    """
+    client = _client()
+    calls = _stub(
+        client,
+        {"search_option": OPTION_ROWS, "reconfigure": {"status": "failed"}},
+    )
+    tool = RmDhcpOptionTool(client)
+    challenge = await tool.execute({"uuid": "opt-1"})
+
+    result = await tool.execute(
+        {"uuid": "opt-1", "confirm": challenge["confirm_token"], "apply": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+    assert result["applied"] is False
+    assert result["apply_error"]
+    assert [c for c in calls if "del_option" in c["endpoint"]]

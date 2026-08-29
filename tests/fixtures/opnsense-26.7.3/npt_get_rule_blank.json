@@ -1,0 +1,158 @@
+{
+  "rule": {
+    "enabled": "1",
+    "log": "0",
+    "sequence": "100",
+    "sort_order": "",
+    "prio_group": "",
+    "interface": {
+      "opt1": {
+        "value": "720xpmgmt",
+        "selected": 0
+      },
+      "cams": {
+        "value": "cams",
+        "selected": 0
+      },
+      "labNets": {
+        "value": "labNets",
+        "selected": 0
+      },
+      "opt11": {
+        "value": "MGMT_LAN",
+        "selected": 0
+      },
+      "noguests": {
+        "value": "noguests",
+        "selected": 0
+      },
+      "openvpn": {
+        "value": "OpenVPN (Group)",
+        "selected": 0
+      },
+      "trustedNets": {
+        "value": "trustedNets",
+        "selected": 0
+      },
+      "unTrustedNets": {
+        "value": "unTrustedNets",
+        "selected": 0
+      },
+      "opt2": {
+        "value": "VLAN2wired",
+        "selected": 0
+      },
+      "opt3": {
+        "value": "VLAN3LAB",
+        "selected": 0
+      },
+      "opt6": {
+        "value": "VLAN4guest_wifi",
+        "selected": 0
+      },
+      "opt4": {
+        "value": "VLAN5LAB",
+        "selected": 0
+      },
+      "opt10": {
+        "value": "VLAN5_ax0_igb3",
+        "selected": 0
+      },
+      "opt7": {
+        "value": "VLAN6SolarDMZ",
+        "selected": 0
+      },
+      "opt8": {
+        "value": "VLAN7cam",
+        "selected": 0
+      },
+      "opt13": {
+        "value": "VLAN10Podman",
+        "selected": 0
+      },
+      "opt5": {
+        "value": "VLAN81wifi",
+        "selected": 0
+      },
+      "wan": {
+        "value": "WAN",
+        "selected": 0
+      },
+      "opt9": {
+        "value": "wg0",
+        "selected": 0
+      },
+      "wireguard": {
+        "value": "WireGuard (Group)",
+        "selected": 0
+      }
+    },
+    "source_net": "",
+    "destination_net": "",
+    "trackif": {
+      "": {
+        "value": "None",
+        "selected": 1
+      },
+      "opt1": {
+        "value": "720xpmgmt",
+        "selected": 0
+      },
+      "opt11": {
+        "value": "MGMT_LAN",
+        "selected": 0
+      },
+      "opt2": {
+        "value": "VLAN2wired",
+        "selected": 0
+      },
+      "opt3": {
+        "value": "VLAN3LAB",
+        "selected": 0
+      },
+      "opt6": {
+        "value": "VLAN4guest_wifi",
+        "selected": 0
+      },
+      "opt4": {
+        "value": "VLAN5LAB",
+        "selected": 0
+      },
+      "opt10": {
+        "value": "VLAN5_ax0_igb3",
+        "selected": 0
+      },
+      "opt7": {
+        "value": "VLAN6SolarDMZ",
+        "selected": 0
+      },
+      "opt8": {
+        "value": "VLAN7cam",
+        "selected": 0
+      },
+      "opt13": {
+        "value": "VLAN10Podman",
+        "selected": 0
+      },
+      "opt5": {
+        "value": "VLAN81wifi",
+        "selected": 0
+      },
+      "wan": {
+        "value": "WAN",
+        "selected": 0
+      },
+      "opt9": {
+        "value": "wg0",
+        "selected": 0
+      }
+    },
+    "categories": {
+      "1f97698d-cd58-4a3c-bd6d-14d570fdebef": {
+        "value": "IoT external communication control",
+        "selected": 0
+      }
+    },
+    "description": ""
+  }
+}

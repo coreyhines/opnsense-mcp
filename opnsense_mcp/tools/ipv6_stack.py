@@ -108,6 +108,39 @@ def _parse_v6_network(value: str, label: str) -> tuple[Any, str | None]:
     return network, None
 
 
+def _parse_vip_address(subnet: str, subnet_bits: Any) -> tuple[Any, int, str | None]:
+    """Parse a VIP host address and bound its prefix length by address family.
+
+    ``subnet`` is a bare address (no prefix length). Returns
+    ``(address, bits, None)`` on success, or ``(None, 0, error)`` on refusal.
+    """
+    try:
+        address = ipaddress.ip_address(subnet)
+    except ValueError:
+        return None, 0, f"subnet {subnet!r} is not a valid address"
+
+    max_bits = 32 if address.version == 4 else 128
+    family = "IPv4" if address.version == 4 else "IPv6"
+    try:
+        bits = int(subnet_bits)
+    except (TypeError, ValueError):
+        return (
+            None,
+            0,
+            f"subnet_bits {subnet_bits!r} is not an integer prefix length",
+        )
+    if bits < 0 or bits > max_bits:
+        return (
+            None,
+            0,
+            (
+                f"subnet_bits {bits} is out of range for {family} address "
+                f"{subnet!r} (valid 0–{max_bits})"
+            ),
+        )
+    return address, bits, None
+
+
 class ListNptRulesTool(_V6ToolBase):
     """List NPTv6 rules."""
 
@@ -281,20 +314,33 @@ class MkNptRuleTool(_V6ToolBase):
             result = await self.client._make_request(
                 "POST", NPT["add"], call_class="write", json={"rule": payload}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", "/api/firewall/filter/apply", call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create NPT rule")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, "/api/firewall/filter/apply")
+                applied = True
+            except ApplyError as exc:
+                logger.warning("NPT rule created but filter reload failed: %s", exc)
+                apply_error = str(exc)
+
+        out = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged. Run the apply step to load it.",
+            "applied": applied,
+            "note": (
+                "Rule created and loaded into the packet filter."
+                if applied
+                else "Staged. Run the apply step to load it."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ToggleNptRuleTool(_V6ToolBase):
@@ -463,6 +509,11 @@ class MkVipTool(_V6ToolBase):
                 "status": "error",
                 "error": "interface, subnet and subnet_bits are required",
             }
+
+        _address, bits_int, parse_error = _parse_vip_address(subnet, bits)
+        if parse_error:
+            return {"status": "error", "error": parse_error}
+
         if mode not in VIP_MODES:
             return {
                 "status": "error",
@@ -491,29 +542,40 @@ class MkVipTool(_V6ToolBase):
                 "interface": interface,
                 "mode": mode,
                 "subnet": subnet,
-                "subnet_bits": str(bits),
+                "subnet_bits": str(bits_int),
                 "descr": params.get("description", ""),
                 "vhid": str(params["vhid"]) if params.get("vhid") else "",
             }
             result = await self.client._make_request(
                 "POST", VIP["add"], call_class="write", json={"vip": payload}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST",
-                    "/api/interfaces/vip_settings/reconfigure",
-                    call_class="apply",
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create VIP")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, "/api/interfaces/vip_settings/reconfigure")
+                applied = True
+            except ApplyError as exc:
+                logger.warning("VIP created but interfaces not reconfigured: %s", exc)
+                apply_error = str(exc)
+
+        out = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged. Reconfigure interfaces to bring it up.",
+            "applied": applied,
+            "note": (
+                "VIP created and interfaces reconfigured."
+                if applied
+                else "Staged. Reconfigure interfaces to bring it up."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmVipTool(_V6ToolBase):
@@ -625,6 +687,30 @@ class MkLoopbackTool(_V6ToolBase):
             "planned_subnet_bits": {
                 "type": "number",
                 "description": "Prefix length for planned_address, normally 32 or 128",
+                "optional": True,
+            },
+            "ipaddrv6": {
+                "type": "string",
+                "description": (
+                    "Recognized and refused: IPv6 addressing mode such as "
+                    "track6. Not written — the API cannot set it"
+                ),
+                "optional": True,
+            },
+            "track6-interface": {
+                "type": "string",
+                "description": (
+                    "Recognized and refused: interface whose delegated prefix "
+                    "to track. Not written — the API cannot set it"
+                ),
+                "optional": True,
+            },
+            "track6-prefix-id": {
+                "type": "number",
+                "description": (
+                    "Recognized and refused: IPv6 prefix-id for Track Interface. "
+                    "Not written — the API cannot set it"
+                ),
                 "optional": True,
             },
             "apply": {

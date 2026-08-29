@@ -130,6 +130,27 @@
       "type": "object"
     }
   },
+  "apply_dns_ula": {
+    "description": "Execute a plan_dns_ula mapping: for each record add the ULA host override, read it back, then delete the GUA one. Refuses any record that no longer matches the plan. Dry run by default.",
+    "inputSchema": {
+      "properties": {
+        "dry_run": {
+          "default": true,
+          "description": "Re-read every record and report what would happen without writing anything (default true). Set false to move them.",
+          "optional": true,
+          "type": "boolean"
+        },
+        "records": {
+          "description": "The `records` list from a plan_dns_ula result, verbatim. Each entry needs uuid, hostname, domain, current, proposed and keep_gua. Targets are never recomputed here, so what runs is what was reviewed.",
+          "type": "array"
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "type": "object"
+    }
+  },
   "apply_fw_changes": {
     "description": "Apply staged firewall filter changes, loading every rule written with apply=false into the running ruleset",
     "inputSchema": {
@@ -273,6 +294,10 @@
     "description": "Delete a queue (confirm token required)",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
         "confirm": {
           "type": "string"
         },
@@ -290,6 +315,10 @@
     "description": "Delete a rule (confirm token required)",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
         "confirm": {
           "type": "string"
         },
@@ -662,6 +691,21 @@
     "inputSchema": {
       "properties": {},
       "required": [],
+      "type": "object"
+    }
+  },
+  "inventory_prefix": {
+    "description": "Read-only inventory of address literals within a prefix across firewall aliases, filter rules, Unbound host overrides, and DHCP reservations",
+    "inputSchema": {
+      "properties": {
+        "prefix": {
+          "description": "IPv4 or IPv6 prefix to inventory",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prefix"
+      ],
       "type": "object"
     }
   },
@@ -1234,7 +1278,7 @@
     }
   },
   "mk_loopback": {
-    "description": "Create a loopback interface device",
+    "description": "Create a loopback interface device. Track Interface IPv6 addressing is refused with manual UI/config-edit steps: every /api/interfaces/ model was probed, but loopback is device-only, settings is global toggles, overview is read-only, and VIP/VLAN models have no interface addressing. Requests using the config.xml shape ipaddrv6=track6, track6-interface, and track6-prefix-id are recognized but never partially staged",
     "inputSchema": {
       "properties": {
         "apply": {
@@ -1247,6 +1291,11 @@
           "description": "Device description",
           "type": "string"
         },
+        "ipaddrv6": {
+          "description": "Recognized and refused: IPv6 addressing mode such as track6. Not written \u2014 the API cannot set it",
+          "optional": true,
+          "type": "string"
+        },
         "planned_address": {
           "description": "An address you intend this loopback to carry. Not written here \u2014 OPNsense has no per-interface addressing API \u2014 but echoed back as the exact step to perform. Use set_interface_address to actually write one",
           "optional": true,
@@ -1254,6 +1303,16 @@
         },
         "planned_subnet_bits": {
           "description": "Prefix length for planned_address, normally 32 or 128",
+          "optional": true,
+          "type": "number"
+        },
+        "track6-interface": {
+          "description": "Recognized and refused: interface whose delegated prefix to track. Not written \u2014 the API cannot set it",
+          "optional": true,
+          "type": "string"
+        },
+        "track6-prefix-id": {
+          "description": "Recognized and refused: IPv6 prefix-id for Track Interface. Not written \u2014 the API cannot set it",
           "optional": true,
           "type": "number"
         }
@@ -2581,7 +2640,7 @@
     }
   },
   "set_router_advert": {
-    "description": "Update a radvd entry: enable it, change mode, or deprecate the old prefix",
+    "description": "Update a radvd entry: enable it or change mode. Deprecation is not supported when dnsmasq serves RA because dnsmasq has no preferred-lifetime field.",
     "inputSchema": {
       "properties": {
         "apply": {

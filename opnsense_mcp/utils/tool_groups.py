@@ -25,7 +25,7 @@ The floor is lower than it should be for a reason worth knowing: MCP gives
 every tool a complete schema with no cross-tool reference, so `apply` is stored
 13 times no matter how canonical its definition is.
 
-Result: 113 operations behind 14 names.
+Result: 115 operations behind 14 names.
 """
 
 from __future__ import annotations
@@ -132,6 +132,8 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "set_advert": "set_router_advert",
             "plan_ula": "plan_dns_ula",
             "apply_ula": "apply_ula",
+            "inventory_prefix": "inventory_prefix",
+            "apply_dns_plan": "apply_dns_ula",
         },
     ),
     "interface_device": (

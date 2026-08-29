@@ -16,6 +16,12 @@ Because the toggle endpoints' argument sense is ambiguous across versions,
 enabling and disabling is done by reading the object and writing the field
 back. The state asked for is the state written, whatever the endpoint would
 have done.
+
+Applying is its own phase. `reconfigure` answers `{"status": ...}` at HTTP 200
+even when configd refuses, so every apply here goes through `run_apply`, which
+reads that answer, and every result carries `applied` saying whether the change
+is live. The apply sits outside the write's `try` so a reconfigure failure is
+never reported as the write having failed.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ import ipaddress
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import flatten_mvc_node
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
@@ -91,6 +98,27 @@ class _RoutingToolBase:
             "POST", endpoint, json={"current": 1, "rowCount": 5000}
         )
         return data.get("rows", []) if isinstance(data, dict) else []
+
+    async def _apply(
+        self, params: dict[str, Any], endpoint: str, what: str
+    ) -> tuple[bool, str]:
+        """Reconfigure as a separate phase, and report what it answered.
+
+        Called after the write's `try` has closed, never inside it: an apply
+        that failed is not a write that failed, and for a delete saying so
+        inverts the truth. The record is gone and the caller is told it is not,
+        so the natural next move is to try again.
+
+        Returns whether the change is live, and the reason when it is not.
+        """
+        if not params.get("apply", False):
+            return False, ""
+        try:
+            await run_apply(self.client, endpoint)
+        except ApplyError as exc:
+            logger.warning("%s written but not applied: %s", what, exc)
+            return False, str(exc)
+        return True, ""
 
     def _confirm(self, resource: str, uuid: str, confirm: Any) -> dict[str, Any] | None:
         """Return a confirmation response, or None when the token is valid."""
@@ -206,20 +234,27 @@ class MkVlanTool(_RoutingToolBase):
             result = await self.client._make_request(
                 "POST", VLAN["add"], call_class="write", json={"vlan": payload}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", VLAN["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create VLAN")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = await self._apply(params, VLAN["reconfigure"], "VLAN")
+
+        out: dict[str, Any] = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged. Assigning and addressing the interface stays a UI step.",
+            "applied": applied,
+            "note": (
+                "Created and reconfigured, so the device exists on the system. "
+                "Assigning and addressing the interface stays a UI step."
+                if applied
+                else "Staged. Assigning and addressing the interface stays a UI step."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmVlanTool(_RoutingToolBase):
@@ -398,20 +433,24 @@ class MkGatewayTool(_RoutingToolBase):
                 call_class="write",
                 json={"gateway_item": payload},
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", GATEWAY["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create gateway")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = await self._apply(
+            params, GATEWAY["reconfigure"], "Gateway"
+        )
+
+        out: dict[str, Any] = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged.",
+            "applied": applied,
+            "note": "Created and reconfigured." if applied else "Staged.",
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ToggleGatewayTool(_RoutingToolBase):
@@ -465,20 +504,24 @@ class ToggleGatewayTool(_RoutingToolBase):
                 call_class="write",
                 json={"gateway_item": payload},
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", GATEWAY["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to toggle gateway")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = await self._apply(
+            params, GATEWAY["reconfigure"], "Gateway"
+        )
+
+        out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "enabled": bool(params["enabled"]),
             "disabled_field": payload["disabled"],
+            "applied": applied,
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ListRoutesTool(_RoutingToolBase):
@@ -584,20 +627,22 @@ class MkRouteTool(_RoutingToolBase):
             result = await self.client._make_request(
                 "POST", ROUTE["add"], call_class="write", json={"route": payload}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", ROUTE["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create route")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = await self._apply(params, ROUTE["reconfigure"], "Route")
+
+        out: dict[str, Any] = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged.",
+            "applied": applied,
+            "note": "Created and reconfigured." if applied else "Staged.",
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ToggleRouteTool(_RoutingToolBase):
@@ -649,15 +694,21 @@ class ToggleRouteTool(_RoutingToolBase):
                 call_class="write",
                 json={"route": payload},
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", ROUTE["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to toggle route")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "uuid": uuid, "enabled": bool(params["enabled"])}
+        applied, apply_error = await self._apply(params, ROUTE["reconfigure"], "Route")
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "enabled": bool(params["enabled"]),
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmRouteTool(_RoutingToolBase):
@@ -696,15 +747,21 @@ class RmRouteTool(_RoutingToolBase):
             await self.client._make_request(
                 "POST", f"{ROUTE['delete']}/{uuid}", call_class="write", json={}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", ROUTE["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete route")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "uuid": uuid, "deleted": True}
+        applied, apply_error = await self._apply(params, ROUTE["reconfigure"], "Route")
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmGatewayTool(_RoutingToolBase):
@@ -754,17 +811,27 @@ class RmGatewayTool(_RoutingToolBase):
             result = await self.client._make_request(
                 "POST", f"{GATEWAY['delete']}/{uuid}", call_class="write", json={}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", GATEWAY["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete gateway")
             return {"status": "error", "error": str(exc)}
 
+        # Nothing was removed, so there is nothing to apply.
         if isinstance(result, dict) and result.get("result") == "not found":
             return {
                 "status": "error",
                 "error": f"no gateway with uuid {uuid}; it may already be gone.",
             }
-        return {"status": "success", "uuid": uuid, "deleted": True}
+
+        applied, apply_error = await self._apply(
+            params, GATEWAY["reconfigure"], "Gateway"
+        )
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out

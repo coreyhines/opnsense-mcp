@@ -15,6 +15,9 @@ the outside world resolves them.
 
 from __future__ import annotations
 
+import copy
+import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -36,14 +39,19 @@ from opnsense_mcp.utils.ra_daemon import (
     REASON_DNSMASQ_SERVING,
 )
 
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "opnsense-26.7.3"
+
 RA_UUID = "3204fed6-b745-4b7c-8d83-8c4ddb076048"
 HOST_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+# Interface actually selected in the captured radvd get_entry fixture below.
+RA_IFACE = "opt13"
 
 RA_ROWS = {
     "rows": [
         {
             "uuid": RA_UUID,
-            "interface": "opt2",
+            "interface": RA_IFACE,
             "mode": "managed",
             "enabled": "0",
             "AdvPreferredLifetime": "",
@@ -60,7 +68,7 @@ RA_ROWS_ENABLED = {
     "rows": [
         {
             "uuid": RA_UUID,
-            "interface": "opt2",
+            "interface": RA_IFACE,
             "mode": "managed",
             "enabled": "1",
             "AdvPreferredLifetime": "",
@@ -71,46 +79,25 @@ RA_ROWS_ENABLED = {
     "total": 1,
 }
 
-RA_ENTRY = {
-    "entry": {
-        "interface": {"opt2": {"selected": 1, "value": "VLAN2"}},
-        "mode": {
-            "managed": {"selected": 1, "value": "Managed"},
-            "unmanaged": {"selected": 0, "value": "Unmanaged"},
-        },
-        "enabled": "0",
-        "AdvPreferredLifetime": "",
-        "AdvValidLifetime": "",
-        "DeprecatePrefix": "0",
-        "RDNSS": "2001:db8:1e5:b7e2::2",
-        "MaxRtrAdvInterval": "600",
-    }
-}
+# Live capture from opnsense-26.7.3_8's radvd get_entry endpoint. The root key
+# is "entries" (not "entry") and every select is MVC-shaped — see
+# tests/fixtures/opnsense-26.7.3/radvd_get_entry.json. Loaded rather than
+# retyped so drift in the real shape shows up here, not just in the tool.
+RA_ENTRY = json.loads((FIXTURES_DIR / "radvd_get_entry.json").read_text())
 
-RA_ENTRY_ENABLED = {
-    "entry": {
-        "interface": {"opt2": {"selected": 1, "value": "VLAN2"}},
-        "mode": {
-            "managed": {"selected": 1, "value": "Managed"},
-            "unmanaged": {"selected": 0, "value": "Unmanaged"},
-        },
-        "enabled": "1",
-        "AdvPreferredLifetime": "",
-        "AdvValidLifetime": "",
-        "DeprecatePrefix": "0",
-        "MaxRtrAdvInterval": "600",
-    }
-}
+# Same capture with the daemon actually enabled, for the "radvd serves" tests.
+RA_ENTRY_ENABLED = copy.deepcopy(RA_ENTRY)
+RA_ENTRY_ENABLED["entries"]["enabled"] = "1"
 
-# dnsmasq v6 range on opt2 with RA serving
+# dnsmasq v6 range on RA_IFACE with RA serving
 DNSMASQ_RANGE_ROWS = {
     "rows": [
         {
             "uuid": "dnsmasq-range-uuid",
-            "interface": "opt2",
+            "interface": RA_IFACE,
             "start_addr": "::100",
             "end_addr": "::1ff",
-            "constructor": "opt2",
+            "constructor": RA_IFACE,
             "ra_mode": "slaac",
         }
     ],
@@ -121,7 +108,7 @@ DNSMASQ_RANGE_ROWS_EMPTY = {"rows": [], "total": 0}
 
 # Interface states for classification
 INTERFACE_STATES = [
-    {"identifier": "opt2", "device": "vlan2", "enabled": True},
+    {"identifier": RA_IFACE, "device": "vlan13", "enabled": True},
     {"identifier": "opt3", "device": "vlan3", "enabled": True},
 ]
 
@@ -224,7 +211,7 @@ async def test_list_router_adverts_projects_fields() -> None:
     result = await ListRouterAdvertsTool(client).execute({})
 
     assert result["count"] == 1
-    assert result["entries"][0]["interface"] == "opt2"
+    assert result["entries"][0]["interface"] == RA_IFACE
     assert result["entries"][0]["mode"] == "managed"
 
 
@@ -541,7 +528,7 @@ async def test_set_router_advert_refuses_when_dnsmasq_serves() -> None:
 
     # Refused, not error
     assert result["status"] == "refused"
-    assert result["interface"] == "opt2"
+    assert result["interface"] == RA_IFACE
     assert REASON_DNSMASQ_SERVING in result["reason_codes"]
 
     # Falsification: no set_entry call was made
@@ -723,3 +710,138 @@ async def test_apply_ula_reports_verification_failure() -> None:
     assert "ra_result" in result
     assert result["ra_result"]["verified"] is False
     assert "mismatches" in result["ra_result"]
+
+
+@pytest.mark.asyncio
+async def test_apply_ula_detects_radvd_field_drift_even_when_daemon_stays_radvd() -> (
+    None
+):
+    """A reconfigure cannot change which daemon serves — only its own fields.
+
+    Comparing the classified daemon before/after (radvd both times here) never
+    catches a real divergence, because the classifier does not look at `mode`.
+    The comparison has to read the radvd row's own fields.
+    """
+    client = _client()
+    call_count = {"search_entry": 0}
+
+    drifted_row = {**RA_ROWS_ENABLED["rows"][0], "mode": "unmanaged"}
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "search_entry" in endpoint:
+            call_count["search_entry"] += 1
+            if call_count["search_entry"] == 1:
+                return RA_ROWS_ENABLED
+            # After apply: still enabled (still classified as radvd-served) but
+            # the mode field silently reverted.
+            return {"rows": [drifted_row], "total": 1}
+        if "search_range" in endpoint:
+            return DNSMASQ_RANGE_ROWS_EMPTY
+        if "overview/export" in endpoint:
+            return INTERFACE_STATES
+        return {"status": "ok"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    assert result["status"] == "warning"
+    assert result["applied"] is False
+    assert result["ra_result"]["verified"] is False
+    assert "mismatches" in result["ra_result"]
+
+
+@pytest.mark.asyncio
+async def test_apply_ula_detects_dnsmasq_field_drift_even_when_daemon_stays_dnsmasq() -> (
+    None
+):
+    """Same as the radvd case, for the dnsmasq-served path.
+
+    `ra_mode` flipping from `slaac` to `stateful` does not cross the
+    off-link/not-off-link boundary the classifier checks, so the daemon
+    classification is unchanged; the constructor/ra_mode fields still moved.
+    """
+    client = _client()
+    call_count = {"search_range": 0}
+
+    drifted_row = {**DNSMASQ_RANGE_ROWS["rows"][0], "ra_mode": "stateful"}
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "search_entry" in endpoint:
+            return RA_ROWS  # radvd disabled throughout
+        if "search_range" in endpoint:
+            call_count["search_range"] += 1
+            if call_count["search_range"] == 1:
+                return DNSMASQ_RANGE_ROWS
+            return {"rows": [drifted_row], "total": 1}
+        if "overview/export" in endpoint:
+            return INTERFACE_STATES
+        return {"status": "ok"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    assert result["status"] == "warning"
+    assert result["applied"] is False
+    assert result["ra_result"]["verified"] is False
+    assert "mismatches" in result["ra_result"]
+
+
+# --- the reconfigure's own answer -------------------------------------------
+#
+# Found by adversarial review. `_apply_ra_domain` called `_make_request`
+# directly, and the client raises only on `{"result": "failed"}` while a
+# service controller answers with `{"status": ...}`. A configd refusal arrived
+# as HTTP 200 and the domain reported itself applied. `run_apply` exists in
+# this repo for exactly that, and this path was not using it.
+
+
+@pytest.mark.asyncio
+async def test_a_refused_ra_reconfigure_is_not_reported_as_applied() -> None:
+    """status: failed at HTTP 200 must not read as a completed apply."""
+    client = _client()
+    calls: list[dict[str, Any]] = []
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        calls.append({"method": method, "endpoint": endpoint})
+        if "search_entry" in endpoint:
+            return RA_ROWS
+        if "search_range" in endpoint:
+            return DNSMASQ_RANGE_ROWS
+        if "get_entry" in endpoint:
+            return RA_ENTRY
+        if "overview/export" in endpoint:
+            return INTERFACE_STATES
+        if "reconfigure" in endpoint:
+            # What configd answers when it refuses. Not an exception, not
+            # {"result": "failed"}: a 200 with a status the caller must read.
+            return {"status": "failed"}
+        return {"result": "saved", "status": "ok"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    ra_result = result.get("ra_result", {})
+    assert ra_result.get("verified") is False
+    assert ra_result.get("apply_errors")
+    assert result["applied"] is False
+
+
+@pytest.mark.asyncio
+async def test_verified_does_not_claim_the_advertisement_changed() -> None:
+    """`verified` means the daemons accepted the reload, and says so.
+
+    The comparison behind it reads the configuration store on both sides, and
+    a reconfigure does not write config rows, so it cannot observe the reload.
+    An earlier version implied otherwise by reporting a bare `verified: true`.
+    """
+    client = _client()
+    _stub_with_dnsmasq(client, RA_ROWS, DNSMASQ_RANGE_ROWS, RA_ENTRY, INTERFACE_STATES)
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    ra_result = result["ra_result"]
+    assert ra_result["verified"] is True
+    assert "not observable" in ra_result["verified_scope"]

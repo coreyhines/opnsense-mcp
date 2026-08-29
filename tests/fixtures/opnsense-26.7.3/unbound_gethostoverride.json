@@ -1,0 +1,38 @@
+{
+  "host": {
+    "enabled": "1",
+    "hostname": "pidoh",
+    "domain": "example.com",
+    "rr": {
+      "A": {
+        "value": "A (IPv4 address)",
+        "selected": 0
+      },
+      "AAAA": {
+        "value": "AAAA (IPv6 address)",
+        "selected": 1
+      },
+      "MX": {
+        "value": "MX (mail server)",
+        "selected": 0
+      },
+      "TXT": {
+        "value": "TXT (text)",
+        "selected": 0
+      }
+    },
+    "mxprio": "",
+    "mx": "",
+    "ttl": "",
+    "server": "2001:db8:1:1::4",
+    "txtdata": "",
+    "addptr": "1",
+    "aliases": {
+      "": {
+        "value": "",
+        "selected": 1
+      }
+    },
+    "description": "podman pihole doh service"
+  }
+}

@@ -20,9 +20,10 @@ import os
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 # Add the project root to the path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -279,20 +280,76 @@ class PerformanceBenchmark:
 # It lives here rather than in tests/ on purpose: it opens a live connection,
 # and a probe named test_* at the collection path means a routine `pytest`
 # run dials the firewall.
+#
+# MVC select fields look like ``{"opt13": {"selected": 1, "value": "..."}}``.
+# The shape check compares only the outer field names on a node (or row),
+# not the option keys inside a select. Normalizers read those outer names;
+# option sets change whenever interfaces or plugins are added and would
+# produce constant false drift without teaching us anything about the
+# contract the tools depend on.
 
 FIXTURE_DIR = Path(__file__).parent / "tests" / "fixtures" / "opnsense-26.7.3"
 
-# fixture file -> (HTTP method, endpoint, request body)
-SHAPE_SOURCES: dict[str, tuple[str, str, dict[str, Any] | None]] = {
-    "filter_searchrule_rows.json": (
+
+@dataclass(frozen=True)
+class ShapeSource:
+    """One API response whose shape is tracked against a fixture.
+
+    ``kind="rows"`` is a bootgrid ``{"rows": [...]}`` payload; ``kind="node"``
+    is a ``get_*`` response wrapping fields under ``root_key``.
+    """
+
+    method: str
+    endpoint: str
+    body: dict[str, Any] | None = None
+    kind: Literal["rows", "node"] = "rows"
+    root_key: str | None = None
+
+
+# Bootgrid search endpoints return ``{"rows": [...]}`` — ``_row_keys`` unions
+# every row's keys. ``get_*`` endpoints return ``{<root_key>: {...}}`` —
+# ``_node_keys`` takes the field names of that single node. Declaring the
+# kind here is what stops a node fixture from comparing empty-to-empty.
+SHAPE_SOURCES: dict[str, ShapeSource] = {
+    "filter_searchrule_rows.json": ShapeSource(
         "POST",
         "/api/firewall/filter/searchRule",
         {"current": 1, "rowCount": 5},
+        kind="rows",
     ),
-    "dnsmasq_search_range_rows.json": (
+    "dnsmasq_search_range_rows.json": ShapeSource(
         "GET",
         "/api/dnsmasq/settings/search_range",
         None,
+        kind="rows",
+    ),
+    "radvd_get_entry.json": ShapeSource(
+        "GET",
+        "/api/radvd/settings/get_entry",
+        None,
+        kind="node",
+        root_key="entries",
+    ),
+    "unbound_gethostoverride.json": ShapeSource(
+        "GET",
+        "/api/unbound/settings/getHostOverride",
+        None,
+        kind="node",
+        root_key="host",
+    ),
+    "npt_get_rule_blank.json": ShapeSource(
+        "GET",
+        "/api/firewall/npt/get_rule",
+        None,
+        kind="node",
+        root_key="rule",
+    ),
+    "vip_get_item_blank.json": ShapeSource(
+        "GET",
+        "/api/interfaces/vip_settings/get_item",
+        None,
+        kind="node",
+        root_key="vip",
     ),
 }
 
@@ -305,6 +362,103 @@ def _row_keys(payload: Any) -> set[str]:
     return (
         set().union(*(set(r) for r in rows if isinstance(r, dict))) if rows else set()
     )
+
+
+def _node_keys(payload: Any, root_key: str) -> tuple[set[str] | None, str | None]:
+    """Extract outer field names of the node under ``root_key``.
+
+    Returns ``(keys, error)``. A missing or non-dict root key is the D1
+    pattern (fixture said ``entry``, firewall sends ``entries``): return
+    ``(None, message)`` so the caller reports drift instead of comparing
+    two empty sets.
+    """
+    if not isinstance(payload, dict):
+        return None, f"payload is not a dict (got {type(payload).__name__})"
+
+    if root_key not in payload:
+        present = sorted(k for k in payload if isinstance(k, str))
+        return None, (
+            f"root key {root_key!r} missing from response; "
+            f"top-level keys present: {present}"
+        )
+
+    node = payload[root_key]
+    if not isinstance(node, dict):
+        return None, (
+            f"node at root key {root_key!r} is not a dict (got {type(node).__name__})"
+        )
+
+    # Outer field names only — see module note on MVC selects.
+    return set(node), None
+
+
+def _keys_for_source(
+    payload: Any, source: ShapeSource
+) -> tuple[set[str] | None, str | None]:
+    """Dispatch key extraction for a declared shape source."""
+    if source.kind == "node":
+        if not source.root_key:
+            return None, "node-shaped source declares no root_key"
+        return _node_keys(payload, source.root_key)
+    return _row_keys(payload), None
+
+
+def compare_shape_keys(
+    expected: set[str] | None,
+    live: set[str] | None,
+    *,
+    kind: Literal["rows", "node"],
+    expected_error: str | None = None,
+    live_error: str | None = None,
+) -> list[tuple[str, str]]:
+    """Compare extracted key sets for one shape source.
+
+    Returns a list of ``(status, detail)`` findings. Status is one of
+    ``ok``, ``drift``, ``stale``, ``empty``, or ``error``. An empty list is
+    not used; success is a single ``("ok", ...)`` entry.
+
+    For ``kind="node"``, an empty-vs-empty comparison is never ``ok``: that
+    is how a missing root key used to hide behind two empty sets.
+    """
+    findings: list[tuple[str, str]] = []
+    if expected_error is not None or live_error is not None:
+        parts = [p for p in (expected_error, live_error) if p]
+        findings.append(("error", "; ".join(parts)))
+        return findings
+
+    assert expected is not None and live is not None
+
+    if kind == "node" and not expected and not live:
+        findings.append(
+            (
+                "error",
+                "node source produced empty key sets on both sides; "
+                "refusing to treat empty-vs-empty as a match",
+            )
+        )
+        return findings
+
+    if kind == "rows" and not live:
+        findings.append(("empty", "returned no rows to compare"))
+        return findings
+
+    if kind == "node" and not live:
+        findings.append(("error", "node source produced an empty live key set"))
+        return findings
+
+    gone = sorted(expected - live)
+    added = sorted(live - expected)
+    if gone:
+        findings.append(
+            ("drift", f"fixture keys the firewall no longer sends: {', '.join(gone)}")
+        )
+    if added:
+        findings.append(
+            ("stale", f"firewall keys missing from the fixture: {', '.join(added)}")
+        )
+    if not findings:
+        findings.append(("ok", f"{len(expected)} keys match"))
+    return findings
 
 
 async def check_response_shapes(verbose: bool = False) -> int:
@@ -320,46 +474,55 @@ async def check_response_shapes(verbose: bool = False) -> int:
         return 1
 
     drifted = 0
-    for filename, (method, endpoint, body) in SHAPE_SOURCES.items():
+    for filename, source in SHAPE_SOURCES.items():
         fixture_path = FIXTURE_DIR / filename
         if not fixture_path.exists():
             print(f"MISSING  {filename}: no captured fixture to compare against")
             drifted += 1
             continue
 
-        expected = _row_keys(json.loads(fixture_path.read_text()))
+        expected, expected_err = _keys_for_source(
+            json.loads(fixture_path.read_text()), source
+        )
         try:
-            live = _row_keys(
-                await client._make_request(method, endpoint, json=body)
-                if body is not None
-                else await client._make_request(method, endpoint)
+            live_payload = (
+                await client._make_request(
+                    source.method, source.endpoint, json=source.body
+                )
+                if source.body is not None
+                else await client._make_request(source.method, source.endpoint)
             )
+            live, live_err = _keys_for_source(live_payload, source)
         except Exception as exc:  # noqa: BLE001
-            print(f"ERROR    {filename}: {endpoint} failed: {exc}")
+            print(f"ERROR    {filename}: {source.endpoint} failed: {exc}")
             drifted += 1
             continue
 
-        if not live:
-            print(f"EMPTY    {filename}: {endpoint} returned no rows to compare")
-            continue
-
-        gone = sorted(expected - live)
-        added = sorted(live - expected)
-        if gone:
-            print(
-                f"DRIFT    {filename}: fixture keys the firewall no longer sends: {', '.join(gone)}"
-            )
-            drifted += 1
-        if added:
-            print(
-                f"STALE    {filename}: firewall keys missing from the fixture: {', '.join(added)}"
-            )
-            drifted += 1
-        if not gone and not added:
-            print(f"OK       {filename}: {len(expected)} keys match")
-        elif verbose:
-            print(f"         expected={sorted(expected)}")
-            print(f"         live    ={sorted(live)}")
+        findings = compare_shape_keys(
+            expected,
+            live,
+            kind=source.kind,
+            expected_error=expected_err,
+            live_error=live_err,
+        )
+        for status, detail in findings:
+            if status == "ok":
+                print(f"OK       {filename}: {detail}")
+            elif status == "empty":
+                print(f"EMPTY    {filename}: {source.endpoint} {detail}")
+            elif status == "drift":
+                print(f"DRIFT    {filename}: {detail}")
+                drifted += 1
+            elif status == "stale":
+                print(f"STALE    {filename}: {detail}")
+                drifted += 1
+            else:
+                print(f"DRIFT    {filename}: {detail}")
+                drifted += 1
+        if verbose and any(s != "ok" and s != "empty" for s, _ in findings):
+            if expected is not None and live is not None:
+                print(f"         expected={sorted(expected)}")
+                print(f"         live    ={sorted(live)}")
 
     return 1 if drifted else 0
 
