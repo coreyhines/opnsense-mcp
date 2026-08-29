@@ -10,11 +10,6 @@ on:
     # Weekly, Monday 07:00 UTC, an hour after the flent baseline.
     - cron: "0 7 * * 1"
   workflow_dispatch:
-    inputs:
-      probe_token:
-        description: "Check whether the automatic Actions token can file issues"
-        required: false
-        default: "false"
 
 jobs:
   survey:
@@ -47,43 +42,12 @@ jobs:
           echo "stale=${stale}" >> "$GITHUB_OUTPUT"
           python scripts/check_dependency_freshness.py --json > /tmp/survey.json 2>/dev/null || true
 
-      - name: Probe whether the automatic token can write issues
-        if: github.event.inputs.probe_token == 'true'
-        env:
-          # Forgejo hands every run a token. The docs are explicit that it is
-          # read-only for forked-repo pull requests and writable for
-          # pull_request_target, and silent about scheduled runs, which is the
-          # case this workflow actually uses. So ask the API rather than guess.
-          AUTO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          SERVER: ${{ github.server_url }}
-        run: |
-          if [ -z "${AUTO_TOKEN}" ]; then
-            echo "RESULT: no automatic token is exposed to this run"
-            exit 0
-          fi
-          code=$(curl -sS -o /tmp/probe.json -w "%{http_code}" -X POST \
-            -H "Authorization: token ${AUTO_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "${SERVER}/api/v1/repos/${REPO}/issues" \
-            -d '{"title":"token probe (delete me)","body":"Probing whether the automatic Actions token can file issues. Safe to close."}')
-          echo "RESULT: create issue -> HTTP ${code}"
-          if [ "${code}" = "201" ]; then
-            number=$(python -c "import json;print(json.load(open('/tmp/probe.json'))['number'])")
-            curl -sS -X PATCH -H "Authorization: token ${AUTO_TOKEN}" \
-              -H "Content-Type: application/json" \
-              "${SERVER}/api/v1/repos/${REPO}/issues/${number}" \
-              -d '{"state":"closed"}' >/dev/null
-            echo "RESULT: automatic token CAN file issues; closed probe issue #${number}"
-          else
-            cat /tmp/probe.json
-            echo "RESULT: automatic token CANNOT file issues; the secret is needed"
-          fi
-
       - name: File an issue when something is behind
         if: steps.survey.outputs.stale != '0'
         env:
-          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN || secrets.OPNSENSE_MCP_ISSUE_TOKEN }}
+          # Forgejo hands every run a token. Verified on run 228: it filed
+          # and closed issue #32, so no repo secret is needed here.
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           SERVER: ${{ github.server_url }}
         run: |
