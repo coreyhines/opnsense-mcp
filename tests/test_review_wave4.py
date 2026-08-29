@@ -80,6 +80,7 @@ _NOT_TOOLS = frozenset(
         # `tool_groups` are code, and the rest are fields on existing tools.
         "dry_run",
         "get_entry",
+        "search_item",
         "input_schema",
         "mcp_server",
         "runtime_paths",
