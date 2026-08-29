@@ -47,8 +47,19 @@ These exist because a hand-written fixture said the radvd root key was
 `list_adverts` returned, and the suite stayed green throughout: the
 fixture and the code shared one wrong assumption, which is not a test.
 
-Two of the four carry a second finding. The VIP model has `address`,
-`network` and `descr`, and no `subnet` or `subnet_bits` — the names
-`search_item` returns for display and the names the write path was
-posting. The NPT model confirms `source_net` / `destination_net` /
-`trackif`, which the code already had right.
+The NPT model confirms `source_net` / `destination_net` / `trackif`,
+which the code already had right.
+
+The VIP model is worth a note, because reading it wrongly is how this
+paragraph first got written. Its fields are `address`, `network` and
+`descr`; there is no `subnet` or `subnet_bits`, and `mk_vip` posts
+exactly those two names. That looks like the defect this directory
+exists to catch, and it is not: tested on the live firewall by creating
+an ipalias VIP through `mk_vip`, reading it back, and deleting it, the
+address round-trips correctly. `search_item` renders `subnet` and
+`subnet_bits` as display columns and the write path accepts them.
+
+A model's field list is evidence about storage, not about what a
+controller accepts. Two adversarial reviewers read this file and
+independently reported the mismatch as an unfixed bug, which is what an
+untested inference in a fixtures README buys.

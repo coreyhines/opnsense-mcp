@@ -786,3 +786,62 @@ async def test_apply_ula_detects_dnsmasq_field_drift_even_when_daemon_stays_dnsm
     assert result["applied"] is False
     assert result["ra_result"]["verified"] is False
     assert "mismatches" in result["ra_result"]
+
+
+# --- the reconfigure's own answer -------------------------------------------
+#
+# Found by adversarial review. `_apply_ra_domain` called `_make_request`
+# directly, and the client raises only on `{"result": "failed"}` while a
+# service controller answers with `{"status": ...}`. A configd refusal arrived
+# as HTTP 200 and the domain reported itself applied. `run_apply` exists in
+# this repo for exactly that, and this path was not using it.
+
+
+@pytest.mark.asyncio
+async def test_a_refused_ra_reconfigure_is_not_reported_as_applied() -> None:
+    """status: failed at HTTP 200 must not read as a completed apply."""
+    client = _client()
+    calls: list[dict[str, Any]] = []
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        calls.append({"method": method, "endpoint": endpoint})
+        if "search_entry" in endpoint:
+            return RA_ROWS
+        if "search_range" in endpoint:
+            return DNSMASQ_RANGE_ROWS
+        if "get_entry" in endpoint:
+            return RA_ENTRY
+        if "overview/export" in endpoint:
+            return INTERFACE_STATES
+        if "reconfigure" in endpoint:
+            # What configd answers when it refuses. Not an exception, not
+            # {"result": "failed"}: a 200 with a status the caller must read.
+            return {"status": "failed"}
+        return {"result": "saved", "status": "ok"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    ra_result = result.get("ra_result", {})
+    assert ra_result.get("verified") is False
+    assert ra_result.get("apply_errors")
+    assert result["applied"] is False
+
+
+@pytest.mark.asyncio
+async def test_verified_does_not_claim_the_advertisement_changed() -> None:
+    """`verified` means the daemons accepted the reload, and says so.
+
+    The comparison behind it reads the configuration store on both sides, and
+    a reconfigure does not write config rows, so it cannot observe the reload.
+    An earlier version implied otherwise by reporting a bare `verified: true`.
+    """
+    client = _client()
+    _stub_with_dnsmasq(client, RA_ROWS, DNSMASQ_RANGE_ROWS, RA_ENTRY, INTERFACE_STATES)
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    ra_result = result["ra_result"]
+    assert ra_result["verified"] is True
+    assert "not observable" in ra_result["verified_scope"]

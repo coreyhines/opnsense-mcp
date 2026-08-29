@@ -64,6 +64,7 @@ import logging
 from typing import Any
 
 from opnsense_mcp.tools.ula_migration import UNBOUND
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import flatten_mvc_node
 
 logger = logging.getLogger(__name__)
@@ -405,12 +406,15 @@ class ApplyDnsUlaTool:
         }
         if wrote and not dry_run:
             try:
-                await self.client._make_request(
-                    "POST", UNBOUND["reconfigure"], call_class="apply"
-                )
+                # run_apply, not a bare request: the client raises only on
+                # {"result": "failed"}, while a service controller answers with
+                # {"status": ...}. A configd refusal arrives as HTTP 200 and was
+                # reported here as ok -- on the run that had just deleted every
+                # GUA record from the configuration store.
+                await run_apply(self.client, UNBOUND["reconfigure"])
                 reconfigure = {"ran": True, "ok": True}
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Failed to reconfigure Unbound")
+            except ApplyError as exc:
+                logger.warning("Unbound reconfigure did not complete: %s", exc)
                 reconfigure = {"ran": True, "ok": False, "error": str(exc)}
 
         failed_reload = reconfigure["ran"] and not reconfigure.get("ok")

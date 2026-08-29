@@ -257,3 +257,32 @@ def test_the_installer_and_the_example_do_not_disagree() -> None:
     assert not missing, (
         f"the example documents mounts install.sh does not create: {sorted(missing)}"
     )
+
+
+def test_the_installer_restarts_a_running_unit() -> None:
+    """A re-run that rewrites the quadlet must reload the running container.
+
+    `systemctl start` on an active unit is a no-op and `daemon-reload` does not
+    restart services, so the script rewrote the unit with the new mounts,
+    printed "Install finished", and left the container running the old image
+    with the old mount set. Verified by hand on the deployment: after a
+    successful re-run, `podman ps` still showed the previous image tag.
+
+    The mounts this file asserts are therefore only true of the next cold
+    start unless the installer restarts what is already up.
+    """
+    body = INSTALL_SH.read_text()
+    start = body.index("enable_or_start_quadlet() {")
+    # The function's own closing brace, at its indent. Searching for a bare
+    # "}" stops inside "${sname}".
+    end = body.index("\n  }", start)
+    helper = body[start:end]
+
+    assert "is-active" in helper, (
+        "the installer does not check whether the unit is already running, so "
+        "a re-run cannot restart it"
+    )
+    assert "restart" in helper, (
+        "the installer never restarts; a rewritten quadlet stays unapplied "
+        "until something else stops the unit"
+    )

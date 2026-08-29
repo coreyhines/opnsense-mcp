@@ -15,6 +15,7 @@ import ipaddress
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import flatten_mvc_node
 from opnsense_mcp.utils.ra_daemon import (
     DAEMON_BOTH,
@@ -675,17 +676,23 @@ class ApplyUlaTool(_UlaToolBase):
 
         # Reconfigure in order: radvd then dnsmasq (order matters less here,
         # but consistent ordering aids debugging)
+        # run_apply reads what the reconfigure answered. A service controller
+        # returns {"status": ...} and the client raises only on
+        # {"result": "failed"}, so a configd refusal arrives as HTTP 200.
+        apply_errors: list[str] = []
         if needs_radvd:
-            await self.client._make_request(
-                "POST", RADVD["reconfigure"], call_class="apply"
-            )
-            reconfigured.append(DAEMON_RADVD)
+            try:
+                await run_apply(self.client, RADVD["reconfigure"])
+                reconfigured.append(DAEMON_RADVD)
+            except ApplyError as exc:
+                apply_errors.append(str(exc))
 
         if needs_dnsmasq:
-            await self.client._make_request(
-                "POST", DNSMASQ["reconfigure"], call_class="apply"
-            )
-            reconfigured.append(DAEMON_DNSMASQ)
+            try:
+                await run_apply(self.client, DNSMASQ["reconfigure"])
+                reconfigured.append(DAEMON_DNSMASQ)
+            except ApplyError as exc:
+                apply_errors.append(str(exc))
 
         # Verify: re-read the serving daemon's own fields and compare against
         # what was staged before the reconfigure. Reconfigure cannot change
@@ -701,19 +708,41 @@ class ApplyUlaTool(_UlaToolBase):
             verdicts_after, radvd_rows_after, dnsmasq_rows_after
         )
 
-        verified = True
-        mismatches: list[str] = []
+        # This comparison does NOT verify the reload. Both snapshots come from
+        # search_entry and search_range, which read the configuration store,
+        # and a reconfigure applies config to a running daemon without writing
+        # config rows -- so before and after are equal on every healthy run.
+        # An earlier version compared the classified daemon and always passed;
+        # replacing it with more fields from the same source kept that
+        # property. What it does catch is a concurrent change to the config
+        # between the two reads, which is worth reporting under its own name.
+        drifted: list[str] = []
         for iface, before_fields in signature_before.items():
             after_fields = signature_after.get(iface)
             if after_fields != before_fields:
-                verified = False
-                mismatches.append(f"{iface}: was {before_fields}, now {after_fields}")
+                drifted.append(f"{iface}: was {before_fields}, now {after_fields}")
+
+        # What is actually established: every serving daemon was asked to
+        # reload and answered with success. Whether the advertisement on the
+        # wire changed is not observable through this API, so it is not
+        # claimed. rdisc6 or ndp -I on a client is the check that would settle
+        # it, and it is a console step.
+        verified = not apply_errors and not drifted
+        mismatches = drifted
 
         result: dict[str, Any] = {
             "daemons_reconfigured": reconfigured,
             "verified": verified,
+            # Named so a caller cannot read `verified` as more than it is.
+            "verified_scope": (
+                "every serving daemon accepted the reload; the advertisement "
+                "on the wire is not observable through this API"
+            ),
         }
+        if apply_errors:
+            result["apply_errors"] = apply_errors
         if mismatches:
+            result["config_drift"] = mismatches
             result["mismatches"] = mismatches
         return result
 
@@ -725,8 +754,10 @@ class ApplyUlaTool(_UlaToolBase):
         attempting a rollback that could leave the box in a third state.
 
         The ``ra`` domain routes to the daemon(s) actually serving RA and
-        verifies that the reconfigure took effect. If verification fails,
-        ``applied`` is ``False`` for that domain.
+        checks that each accepted the reload. It does not confirm the
+        advertisement changed on the wire: nothing in this API exposes that,
+        and ``verified_scope`` in the result says so rather than letting
+        ``verified`` imply it.
         """
         params = params or {}
         if not self.client:
