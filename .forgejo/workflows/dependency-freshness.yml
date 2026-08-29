@@ -22,10 +22,13 @@ jobs:
     container:
       image: docker.io/library/python:3.12-slim
     steps:
-      - name: Install git and curl
+      - name: Install git, node, and curl
+        # actions/checkout is a Node action and this image has no node, so the
+        # checkout step dies with "executable file `node` not found in $PATH".
+        # deploy.yml already carries this note for its alpine image.
         run: |
           apt-get update -qq
-          apt-get install -y -qq git curl >/dev/null
+          apt-get install -y -qq git curl nodejs >/dev/null
       - uses: https://data.forgejo.org/actions/checkout@v6
 
       - name: Install dependencies
@@ -34,14 +37,18 @@ jobs:
       - name: Survey
         id: survey
         run: |
+          # No pipe: `cmd | tee` reports tee's status, so `$?` was always 0 and
+          # the issue step below could never have fired.
           set +e
-          python scripts/check_dependency_freshness.py | tee /tmp/survey.txt
-          echo "stale=$?" >> "$GITHUB_OUTPUT"
-          python scripts/check_dependency_freshness.py --json > /tmp/survey.json 2>/dev/null
+          python scripts/check_dependency_freshness.py > /tmp/survey.txt 2>&1
+          stale=$?
           set -e
+          cat /tmp/survey.txt
+          echo "stale=${stale}" >> "$GITHUB_OUTPUT"
+          python scripts/check_dependency_freshness.py --json > /tmp/survey.json 2>/dev/null || true
 
       - name: Probe whether the automatic token can write issues
-        if: inputs.probe_token == 'true'
+        if: github.event.inputs.probe_token == 'true'
         env:
           # Forgejo hands every run a token. The docs are explicit that it is
           # read-only for forked-repo pull requests and writable for
