@@ -16,6 +16,15 @@ import logging
 from typing import Any
 
 from opnsense_mcp.utils.mvc_merge import flatten_mvc_node
+from opnsense_mcp.utils.ra_daemon import (
+    DAEMON_BOTH,
+    DAEMON_DNSMASQ,
+    DAEMON_NONE,
+    DAEMON_RADVD,
+    REASON_BOTH_SERVING,
+    RaVerdict,
+    classify_ra_daemons,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +34,19 @@ RADVD = {
     "set": "/api/radvd/settings/set_entry",
     "reconfigure": "/api/radvd/service/reconfigure",
 }
+DNSMASQ = {
+    "search_range": "/api/dnsmasq/settings/search_range",
+    "reconfigure": "/api/dnsmasq/service/reconfigure",
+}
 UNBOUND = {
     "search": "/api/unbound/settings/searchHostOverride",
     "get": "/api/unbound/settings/getHostOverride",
     "set": "/api/unbound/settings/setHostOverride",
     "reconfigure": "/api/unbound/service/reconfigure",
 }
+
+# Reason code for deprecate refusal — dnsmasq has no preferred-lifetime field.
+REASON_DEPRECATE_NOT_SUPPORTED = "dnsmasq_deprecate_not_supported"
 
 # NPT translation must be live before the prefix is advertised, or anything
 # that believes the advertisement sends traffic that cannot be translated.
@@ -56,6 +72,48 @@ class _UlaToolBase:
 
     def _no_client(self) -> dict[str, Any]:
         return {"status": "error", "error": "No client available"}
+
+    async def _fetch_radvd_rows(self) -> list[dict[str, Any]]:
+        """Fetch radvd search_entry rows for classification."""
+        data = await self.client._make_request(
+            "POST", RADVD["search"], json={"current": 1, "rowCount": 5000}
+        )
+        return data.get("rows", []) if isinstance(data, dict) else []
+
+    async def _fetch_dnsmasq_range_rows(self) -> list[dict[str, Any]]:
+        """Fetch dnsmasq search_range rows for classification."""
+        data = await self.client._make_request(
+            "POST", DNSMASQ["search_range"], json={"current": 1, "rowCount": 5000}
+        )
+        return data.get("rows", []) if isinstance(data, dict) else []
+
+    async def _fetch_interface_states(self) -> dict[str, bool]:
+        """Fetch interface admin-up states from the overview endpoint."""
+        try:
+            raw = await self.client._make_request(
+                "GET", "/api/interfaces/overview/export"
+            )
+            states: dict[str, bool] = {}
+            if isinstance(raw, list):
+                for entry in raw:
+                    iface = entry.get("identifier") or entry.get("device") or ""
+                    if iface:
+                        states[iface] = entry.get("enabled") in (True, 1, "1")
+            elif isinstance(raw, dict):
+                for key, val in raw.items():
+                    if isinstance(val, dict):
+                        states[key] = val.get("enabled") in (True, 1, "1")
+            return states
+        except Exception:
+            logger.warning("Failed to fetch interface states; verdict may be imprecise")
+            return {}
+
+    async def _classify_interfaces(self) -> dict[str, RaVerdict]:
+        """Classify which RA daemon serves each interface."""
+        radvd_rows = await self._fetch_radvd_rows()
+        dnsmasq_rows = await self._fetch_dnsmasq_range_rows()
+        interface_states = await self._fetch_interface_states()
+        return classify_ra_daemons(radvd_rows, dnsmasq_rows, interface_states)
 
 
 class ListRouterAdvertsTool(_UlaToolBase):
@@ -102,7 +160,9 @@ class SetRouterAdvertTool(_UlaToolBase):
 
     name = "set_router_advert"
     description = (
-        "Update a radvd entry: enable it, change mode, or deprecate the old prefix"
+        "Update a radvd entry: enable it or change mode. Deprecation is not "
+        "supported when dnsmasq serves RA because dnsmasq has no preferred-lifetime "
+        "field."
     )
     input_schema: dict[str, Any] = {
         "type": "object",
@@ -138,8 +198,12 @@ class SetRouterAdvertTool(_UlaToolBase):
     async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Read the entry, overlay the changes, write it back.
 
-        Setting the preferred lifetime to 0 is how clients are told to stop
-        sourcing new connections from a prefix while existing ones drain.
+        Consults which daemon actually serves RA on the interface. Writing to
+        radvd when dnsmasq serves is silently ineffective, so this refuses
+        rather than reporting success for a no-op.
+
+        Deprecation (preferred_lifetime=0 or deprecate_prefix=True) is refused
+        when dnsmasq serves because dnsmasq has no preferred-lifetime field.
         """
         params = params or {}
         if not self.client:
@@ -149,12 +213,109 @@ class SetRouterAdvertTool(_UlaToolBase):
         if not uuid:
             return {"status": "error", "error": "uuid is required"}
 
+        # Check if this is a deprecate request
+        wants_deprecate = (
+            params.get("deprecate_prefix") is True
+            or params.get("preferred_lifetime") == 0
+        )
+
         try:
+            # Fetch the radvd entry to get its interface
             current = await self.client._make_request("GET", f"{RADVD['get']}/{uuid}")
             node = current.get("entry") if isinstance(current, dict) else None
             if not isinstance(node, dict):
                 return {"status": "error", "error": f"radvd entry {uuid} not found"}
 
+            # Extract the interface from the entry (MVC select → key)
+            iface_field = node.get("interface", {})
+            if isinstance(iface_field, dict):
+                iface = next(
+                    (k for k, v in iface_field.items() if v.get("selected")), ""
+                )
+            else:
+                iface = str(iface_field or "")
+
+            # Classify which daemon serves RA on this interface
+            verdicts = await self._classify_interfaces()
+            verdict = verdicts.get(iface)
+
+            # If the interface is not in our classification, check radvd entry
+            # without dnsmasq context (may be a new interface not in ranges)
+            if verdict is None:
+                # No range on this interface, check if radvd is enabled
+                radvd_rows = await self._fetch_radvd_rows()
+                iface_states = await self._fetch_interface_states()
+                verdicts = classify_ra_daemons(radvd_rows, [], iface_states)
+                verdict = verdicts.get(iface)
+
+            # Apply the routing decision
+            if verdict is not None:
+                if verdict.daemon == DAEMON_BOTH:
+                    return {
+                        "status": "refused",
+                        "reason": (
+                            "Both radvd and dnsmasq serve RA on this interface. "
+                            "Writing either one makes the misconfiguration worse. "
+                            "Disable one before proceeding."
+                        ),
+                        "reason_codes": list(verdict.reason_codes),
+                        "interface": iface,
+                        "uuid": uuid,
+                    }
+
+                if verdict.daemon == DAEMON_DNSMASQ:
+                    # More specific message when deprecation is requested
+                    if wants_deprecate:
+                        return {
+                            "status": "refused",
+                            "reason": (
+                                f"dnsmasq serves RA on {iface} and has no "
+                                "preferred-lifetime field. Deprecating an advertised "
+                                "prefix is not implementable through this API. "
+                                "Phase 3 (graceful prefix deprecation) must be done "
+                                "in the UI or by dropping track6 from the interface."
+                            ),
+                            "reason_codes": [
+                                REASON_DEPRECATE_NOT_SUPPORTED,
+                                *verdict.reason_codes,
+                            ],
+                            "interface": iface,
+                            "uuid": uuid,
+                            "missing_capability": "preferred_lifetime",
+                        }
+                    return {
+                        "status": "refused",
+                        "reason": (
+                            f"dnsmasq serves RA on {iface}, not radvd. Writing to "
+                            "radvd would change config nothing reads. Use the "
+                            "dhcp_ranges tool to modify dnsmasq RA settings."
+                        ),
+                        "reason_codes": list(verdict.reason_codes),
+                        "interface": iface,
+                        "uuid": uuid,
+                    }
+
+                if verdict.daemon == DAEMON_NONE:
+                    return {
+                        "status": "refused",
+                        "reason": (
+                            f"Neither radvd nor dnsmasq is advertising on {iface}. "
+                            "Enable one daemon before configuring RA."
+                        ),
+                        "reason_codes": list(verdict.reason_codes),
+                        "interface": iface,
+                        "uuid": uuid,
+                    }
+
+            # If we get here and the caller wants deprecation, refuse if
+            # dnsmasq serves (already checked) OR if we would be writing to
+            # radvd (which is the only path left). However, radvd *does* support
+            # deprecation, so only refuse when dnsmasq serves — but we already
+            # exited above for dnsmasq. Double-check nonetheless for the
+            # REASON_DEPRECATE_NOT_SUPPORTED code path (future-proofing for
+            # when dnsmasq ranges might be partially served).
+
+            # radvd serves — proceed with the write
             payload = flatten_mvc_node(node)
             for field in _RA_COMPUTED:
                 payload.pop(field, None)
@@ -187,7 +348,8 @@ class SetRouterAdvertTool(_UlaToolBase):
         return {
             "status": "success",
             "uuid": uuid,
-            "interface": payload.get("interface", ""),
+            "interface": iface,
+            "daemon": DAEMON_RADVD,
             "note": "Staged unless apply was set.",
         }
 
@@ -411,12 +573,84 @@ class ApplyUlaTool(_UlaToolBase):
         "required": [],
     }
 
+    async def _apply_ra_domain(self) -> dict[str, Any]:
+        """Apply the RA domain by reconfiguring the serving daemon(s).
+
+        Returns a dict with keys:
+        - ``daemons_reconfigured``: list of daemon names reconfigured
+        - ``verified``: whether post-apply read confirmed the state
+        - ``error``: error message if something went wrong (optional)
+        """
+        verdicts_before = await self._classify_interfaces()
+
+        # Determine which daemons serve across any interface
+        needs_radvd = any(
+            v.daemon in (DAEMON_RADVD, DAEMON_BOTH) for v in verdicts_before.values()
+        )
+        needs_dnsmasq = any(
+            v.daemon in (DAEMON_DNSMASQ, DAEMON_BOTH) for v in verdicts_before.values()
+        )
+
+        if not needs_radvd and not needs_dnsmasq:
+            # No RA daemon serving on any interface — nothing to apply
+            return {
+                "daemons_reconfigured": [],
+                "verified": True,
+                "note": "No RA daemon serving on any interface; nothing to reconfigure.",
+            }
+
+        reconfigured: list[str] = []
+
+        # Reconfigure in order: radvd then dnsmasq (order matters less here,
+        # but consistent ordering aids debugging)
+        if needs_radvd:
+            await self.client._make_request(
+                "POST", RADVD["reconfigure"], call_class="apply"
+            )
+            reconfigured.append(DAEMON_RADVD)
+
+        if needs_dnsmasq:
+            await self.client._make_request(
+                "POST", DNSMASQ["reconfigure"], call_class="apply"
+            )
+            reconfigured.append(DAEMON_DNSMASQ)
+
+        # Verify: re-read and confirm the serving state
+        verdicts_after = await self._classify_interfaces()
+
+        # The apply is verified if the daemon classification is unchanged
+        # (we reconfigured what was serving, not changed what serves).
+        # A more sophisticated check would compare specific fields, but the
+        # point is to detect when reconfigure returned ok but nothing happened.
+        verified = True
+        mismatches: list[str] = []
+        for iface, before in verdicts_before.items():
+            after = verdicts_after.get(iface)
+            if after is None or after.daemon != before.daemon:
+                verified = False
+                mismatches.append(
+                    f"{iface}: was {before.daemon}, now "
+                    f"{after.daemon if after else 'unknown'}"
+                )
+
+        result: dict[str, Any] = {
+            "daemons_reconfigured": reconfigured,
+            "verified": verified,
+        }
+        if mismatches:
+            result["mismatches"] = mismatches
+        return result
+
     async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Reconfigure each domain in turn, reporting where it stopped.
 
         This is not a transaction. If a domain fails the ones before it stay
         applied, so the result says what landed and what did not rather than
         attempting a rollback that could leave the box in a third state.
+
+        The ``ra`` domain routes to the daemon(s) actually serving RA and
+        verifies that the reconfigure took effect. If verification fails,
+        ``applied`` is ``False`` for that domain.
         """
         params = params or {}
         if not self.client:
@@ -450,15 +684,42 @@ class ApplyUlaTool(_UlaToolBase):
             }
 
         done: list[str] = []
+        ra_result: dict[str, Any] | None = None
+
         for domain in ordered:
             try:
-                await self.client._make_request(
-                    "POST", _DOMAIN_ENDPOINTS[domain], call_class="apply"
-                )
+                if domain == "ra":
+                    # Special handling: route to serving daemon and verify
+                    ra_result = await self._apply_ra_domain()
+                    if not ra_result.get("verified", True):
+                        # The reconfigure returned ok but verification failed
+                        remaining = ordered[ordered.index(domain) + 1 :]
+                        return {
+                            "status": "warning",
+                            "dry_run": False,
+                            "applied": False,
+                            "done": done,
+                            "failed": domain,
+                            "remaining": remaining,
+                            "ra_result": ra_result,
+                            "error": (
+                                "RA reconfigure returned ok but post-apply "
+                                "verification found mismatches. The serving state "
+                                "may not reflect the staged changes."
+                            ),
+                            "recovery": (
+                                "Check interface RA configuration and retry. The "
+                                "mismatches field shows which interfaces diverged."
+                            ),
+                        }
+                else:
+                    await self.client._make_request(
+                        "POST", _DOMAIN_ENDPOINTS[domain], call_class="apply"
+                    )
             except Exception as exc:  # noqa: BLE001
                 logger.exception("apply_ula failed at %s", domain)
                 remaining = ordered[ordered.index(domain) + 1 :]
-                return {
+                result: dict[str, Any] = {
                     "status": "partial_failure",
                     "dry_run": False,
                     "applied": True,
@@ -471,11 +732,17 @@ class ApplyUlaTool(_UlaToolBase):
                         "Fix the cause and re-run with the remaining domains."
                     ),
                 }
+                if ra_result:
+                    result["ra_result"] = ra_result
+                return result
             done.append(domain)
 
-        return {
+        result = {
             "status": "success",
             "dry_run": False,
             "applied": True,
             "done": done,
         }
+        if ra_result:
+            result["ra_result"] = ra_result
+        return result

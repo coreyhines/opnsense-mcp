@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from opnsense_mcp.tools.ula_migration import (
+    REASON_DEPRECATE_NOT_SUPPORTED,
     ApplyUlaTool,
     ListRouterAdvertsTool,
     PlanDnsUlaTool,
@@ -28,6 +29,12 @@ from opnsense_mcp.tools.ula_migration import (
     SetRouterAdvertTool,
 )
 from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.ra_daemon import (
+    DAEMON_DNSMASQ,
+    DAEMON_RADVD,
+    REASON_BOTH_SERVING,
+    REASON_DNSMASQ_SERVING,
+)
 
 RA_UUID = "3204fed6-b745-4b7c-8d83-8c4ddb076048"
 HOST_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -48,6 +55,22 @@ RA_ROWS = {
     "total": 1,
 }
 
+# radvd entry with enabled=1 (actually serving)
+RA_ROWS_ENABLED = {
+    "rows": [
+        {
+            "uuid": RA_UUID,
+            "interface": "opt2",
+            "mode": "managed",
+            "enabled": "1",
+            "AdvPreferredLifetime": "",
+            "AdvValidLifetime": "",
+            "DeprecatePrefix": "",
+        }
+    ],
+    "total": 1,
+}
+
 RA_ENTRY = {
     "entry": {
         "interface": {"opt2": {"selected": 1, "value": "VLAN2"}},
@@ -63,6 +86,44 @@ RA_ENTRY = {
         "MaxRtrAdvInterval": "600",
     }
 }
+
+RA_ENTRY_ENABLED = {
+    "entry": {
+        "interface": {"opt2": {"selected": 1, "value": "VLAN2"}},
+        "mode": {
+            "managed": {"selected": 1, "value": "Managed"},
+            "unmanaged": {"selected": 0, "value": "Unmanaged"},
+        },
+        "enabled": "1",
+        "AdvPreferredLifetime": "",
+        "AdvValidLifetime": "",
+        "DeprecatePrefix": "0",
+        "MaxRtrAdvInterval": "600",
+    }
+}
+
+# dnsmasq v6 range on opt2 with RA serving
+DNSMASQ_RANGE_ROWS = {
+    "rows": [
+        {
+            "uuid": "dnsmasq-range-uuid",
+            "interface": "opt2",
+            "start_addr": "::100",
+            "end_addr": "::1ff",
+            "constructor": "opt2",
+            "ra_mode": "slaac",
+        }
+    ],
+    "total": 1,
+}
+
+DNSMASQ_RANGE_ROWS_EMPTY = {"rows": [], "total": 0}
+
+# Interface states for classification
+INTERFACE_STATES = [
+    {"identifier": "opt2", "device": "vlan2", "enabled": True},
+    {"identifier": "opt3", "device": "vlan3", "enabled": True},
+]
 
 HOST_OVERRIDES = {
     "rows": [
@@ -129,14 +190,24 @@ def _client() -> OPNsenseClient:
 
 
 def _stub(client: OPNsenseClient, responses: dict[str, Any]) -> list[dict[str, Any]]:
+    """Stub client for existing tests, now with classification support.
+
+    Provides empty dnsmasq ranges and interface states that allow radvd writes.
+    Tests that need specific classification behavior should use _stub_with_dnsmasq.
+    """
     calls: list[dict[str, Any]] = []
 
     async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
         calls.append({"endpoint": endpoint, "json": kwargs.get("json")})
+        # Classification endpoints: return data that allows radvd writes
+        if "search_range" in endpoint:
+            return DNSMASQ_RANGE_ROWS_EMPTY
+        if "overview/export" in endpoint:
+            return INTERFACE_STATES
         for key, value in responses.items():
             if key in endpoint:
                 return value
-        return {"result": "saved"}
+        return {"result": "saved", "status": "ok"}
 
     client._make_request = AsyncMock(side_effect=fake)
     return calls
@@ -161,10 +232,16 @@ async def test_list_router_adverts_projects_fields() -> None:
 async def test_set_router_advert_preserves_untouched_fields() -> None:
     """radvd entries carry many fields; a partial POST would blank them."""
     client = _client()
-    calls = _stub(client, {"get_entry": RA_ENTRY, "search_entry": RA_ROWS})
+    # Use enabled entry so radvd is classified as serving
+    calls = _stub(
+        client, {"get_entry": RA_ENTRY_ENABLED, "search_entry": RA_ROWS_ENABLED}
+    )
 
-    await SetRouterAdvertTool(client).execute({"uuid": RA_UUID, "enabled": True})
+    result = await SetRouterAdvertTool(client).execute(
+        {"uuid": RA_UUID, "enabled": True}
+    )
 
+    assert result["status"] == "success"
     payload = next(c for c in calls if "set_entry" in c["endpoint"])["json"]["entry"]
     assert payload["enabled"] == "1"
     assert payload["MaxRtrAdvInterval"] == "600"
@@ -173,9 +250,15 @@ async def test_set_router_advert_preserves_untouched_fields() -> None:
 
 @pytest.mark.asyncio
 async def test_set_router_advert_can_deprecate_the_old_prefix() -> None:
-    """Preferred lifetime 0 is how clients stop sourcing from the old prefix."""
+    """Preferred lifetime 0 is how clients stop sourcing from the old prefix.
+
+    Deprecation via radvd works when radvd serves (not dnsmasq).
+    """
     client = _client()
-    calls = _stub(client, {"get_entry": RA_ENTRY, "search_entry": RA_ROWS})
+    # Use enabled entry so radvd is classified as serving
+    calls = _stub(
+        client, {"get_entry": RA_ENTRY_ENABLED, "search_entry": RA_ROWS_ENABLED}
+    )
 
     result = await SetRouterAdvertTool(client).execute(
         {"uuid": RA_UUID, "preferred_lifetime": 0, "deprecate_prefix": True}
@@ -347,16 +430,20 @@ async def test_apply_ula_runs_domains_in_order() -> None:
     """NPT before RA: advertising a prefix whose translation is not live yet
     black-holes anything that believes the advertisement."""
     client = _client()
-    calls = _stub(client, {})
+    # Provide radvd serving so the RA domain reconfigures radvd
+    calls = _stub(client, {"search_entry": RA_ROWS_ENABLED})
 
     result = await ApplyUlaTool(client).execute({"dry_run": False})
 
     assert result["applied"] is True
     assert result["done"] == ["vip", "npt", "ra", "unbound"]
     order = [c["endpoint"] for c in calls]
-    assert order.index("/api/firewall/filter/apply") < order.index(
-        "/api/radvd/service/reconfigure"
+    # NPT (firewall filter apply) before RA (radvd reconfigure)
+    filter_idx = next(i for i, ep in enumerate(order) if "firewall/filter/apply" in ep)
+    radvd_idx = next(
+        i for i, ep in enumerate(order) if "radvd/service/reconfigure" in ep
     )
+    assert filter_idx < radvd_idx
 
 
 @pytest.mark.asyncio
@@ -403,3 +490,236 @@ async def test_apply_ula_reports_where_it_stopped() -> None:
     assert result["failed"] == "ra"
     assert result["remaining"] == ["unbound"]
     assert "radvd reconfigure failed" in result["error"]
+
+
+# --- daemon routing (bucket B4) --------------------------------------------
+
+
+def _stub_with_dnsmasq(
+    client: OPNsenseClient,
+    radvd_rows: dict[str, Any],
+    dnsmasq_rows: dict[str, Any],
+    ra_entry: dict[str, Any],
+    interface_states: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Stub the client to return dnsmasq ranges and interface states."""
+    calls: list[dict[str, Any]] = []
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        calls.append(
+            {"method": method, "endpoint": endpoint, "json": kwargs.get("json")}
+        )
+        if "search_entry" in endpoint:
+            return radvd_rows
+        if "search_range" in endpoint:
+            return dnsmasq_rows
+        if "get_entry" in endpoint:
+            return ra_entry
+        if "overview/export" in endpoint:
+            return interface_states
+        return {"result": "saved", "status": "ok"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_set_router_advert_refuses_when_dnsmasq_serves() -> None:
+    """With dnsmasq serving, set_router_advert does NOT issue a radvd write."""
+    client = _client()
+    calls = _stub_with_dnsmasq(
+        client,
+        RA_ROWS,  # radvd disabled
+        DNSMASQ_RANGE_ROWS,  # dnsmasq serving
+        RA_ENTRY,
+        INTERFACE_STATES,
+    )
+
+    result = await SetRouterAdvertTool(client).execute(
+        {"uuid": RA_UUID, "enabled": True}
+    )
+
+    # Refused, not error
+    assert result["status"] == "refused"
+    assert result["interface"] == "opt2"
+    assert REASON_DNSMASQ_SERVING in result["reason_codes"]
+
+    # Falsification: no set_entry call was made
+    set_calls = [c for c in calls if "set_entry" in c["endpoint"]]
+    assert set_calls == [], "radvd set_entry should not have been called"
+
+
+@pytest.mark.asyncio
+async def test_set_router_advert_refuses_when_both_serve() -> None:
+    """Both radvd and dnsmasq serving → refused with code present."""
+    client = _client()
+    calls = _stub_with_dnsmasq(
+        client,
+        RA_ROWS_ENABLED,  # radvd enabled
+        DNSMASQ_RANGE_ROWS,  # dnsmasq also serving
+        RA_ENTRY_ENABLED,
+        INTERFACE_STATES,
+    )
+
+    result = await SetRouterAdvertTool(client).execute(
+        {"uuid": RA_UUID, "enabled": True}
+    )
+
+    assert result["status"] == "refused"
+    assert REASON_BOTH_SERVING in result["reason_codes"]
+
+    # No write
+    set_calls = [c for c in calls if "set_entry" in c["endpoint"]]
+    assert set_calls == []
+
+
+@pytest.mark.asyncio
+async def test_set_router_advert_deprecate_refused_names_missing_capability() -> None:
+    """Deprecate request when dnsmasq serves names the missing field."""
+    client = _client()
+    _stub_with_dnsmasq(
+        client,
+        RA_ROWS,  # radvd disabled
+        DNSMASQ_RANGE_ROWS,  # dnsmasq serving
+        RA_ENTRY,
+        INTERFACE_STATES,
+    )
+
+    # Request deprecation via preferred_lifetime=0
+    result = await SetRouterAdvertTool(client).execute(
+        {"uuid": RA_UUID, "preferred_lifetime": 0}
+    )
+
+    assert result["status"] == "refused"
+    assert REASON_DEPRECATE_NOT_SUPPORTED in result["reason_codes"]
+    assert result.get("missing_capability") == "preferred_lifetime"
+
+
+@pytest.mark.asyncio
+async def test_set_router_advert_deprecate_prefix_refused_names_missing_capability() -> (
+    None
+):
+    """Deprecate request via deprecate_prefix=True when dnsmasq serves."""
+    client = _client()
+    _stub_with_dnsmasq(
+        client,
+        RA_ROWS,  # radvd disabled
+        DNSMASQ_RANGE_ROWS,  # dnsmasq serving
+        RA_ENTRY,
+        INTERFACE_STATES,
+    )
+
+    result = await SetRouterAdvertTool(client).execute(
+        {"uuid": RA_UUID, "deprecate_prefix": True}
+    )
+
+    assert result["status"] == "refused"
+    assert REASON_DEPRECATE_NOT_SUPPORTED in result["reason_codes"]
+    assert "preferred_lifetime" in result.get("missing_capability", "")
+
+
+@pytest.mark.asyncio
+async def test_set_router_advert_succeeds_when_radvd_serves() -> None:
+    """When radvd serves, the write proceeds and reports the daemon."""
+    client = _client()
+    calls = _stub_with_dnsmasq(
+        client,
+        RA_ROWS_ENABLED,  # radvd enabled
+        DNSMASQ_RANGE_ROWS_EMPTY,  # no dnsmasq range
+        RA_ENTRY_ENABLED,
+        INTERFACE_STATES,
+    )
+
+    result = await SetRouterAdvertTool(client).execute(
+        {"uuid": RA_UUID, "enabled": True}
+    )
+
+    assert result["status"] == "success"
+    assert result.get("daemon") == DAEMON_RADVD
+
+    # Verify the set_entry call was made
+    set_calls = [c for c in calls if "set_entry" in c["endpoint"]]
+    assert len(set_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_ula_routes_ra_to_dnsmasq_when_serving() -> None:
+    """When dnsmasq serves RA, apply_ula reconfigures dnsmasq, not radvd."""
+    client = _client()
+    calls = _stub_with_dnsmasq(
+        client,
+        RA_ROWS,  # radvd disabled
+        DNSMASQ_RANGE_ROWS,  # dnsmasq serving
+        RA_ENTRY,
+        INTERFACE_STATES,
+    )
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+    assert "ra" in result["done"]
+
+    # Check that dnsmasq reconfigure was called, not radvd
+    reconfigure_calls = [c for c in calls if "reconfigure" in c["endpoint"]]
+    dnsmasq_reconfigure = [c for c in reconfigure_calls if "dnsmasq" in c["endpoint"]]
+    radvd_reconfigure = [c for c in reconfigure_calls if "radvd" in c["endpoint"]]
+
+    assert len(dnsmasq_reconfigure) == 1
+    assert len(radvd_reconfigure) == 0
+
+
+@pytest.mark.asyncio
+async def test_apply_ula_routes_ra_to_radvd_when_serving() -> None:
+    """When radvd serves RA, apply_ula reconfigures radvd."""
+    client = _client()
+    calls = _stub_with_dnsmasq(
+        client,
+        RA_ROWS_ENABLED,  # radvd enabled
+        DNSMASQ_RANGE_ROWS_EMPTY,  # no dnsmasq
+        RA_ENTRY_ENABLED,
+        INTERFACE_STATES,
+    )
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+
+    reconfigure_calls = [c for c in calls if "reconfigure" in c["endpoint"]]
+    radvd_reconfigure = [c for c in reconfigure_calls if "radvd" in c["endpoint"]]
+
+    assert len(radvd_reconfigure) == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_ula_reports_verification_failure() -> None:
+    """apply_ula reports applied=false when post-apply read finds mismatches."""
+    client = _client()
+    call_count = {"search_entry": 0}
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "search_entry" in endpoint:
+            call_count["search_entry"] += 1
+            if call_count["search_entry"] == 1:
+                # Before apply: radvd enabled
+                return RA_ROWS_ENABLED
+            # After apply: radvd disabled (simulating unexpected state change)
+            return RA_ROWS
+        if "search_range" in endpoint:
+            return DNSMASQ_RANGE_ROWS_EMPTY
+        if "overview/export" in endpoint:
+            return INTERFACE_STATES
+        return {"status": "ok"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ApplyUlaTool(client).execute({"dry_run": False, "domains": ["ra"]})
+
+    # The verification failed: daemon changed from radvd to none
+    assert result["status"] == "warning"
+    assert result["applied"] is False
+    assert result["failed"] == "ra"
+    assert "ra_result" in result
+    assert result["ra_result"]["verified"] is False
+    assert "mismatches" in result["ra_result"]
