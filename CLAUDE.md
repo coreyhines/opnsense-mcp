@@ -172,6 +172,17 @@ the kernel kept it and one orphan accumulated per delete. An apply reporting
 success is evidence the request was accepted, not that the system reached the
 state.
 
+**A tool that writes to a service nobody is running reports success forever.**
+`ula_migration.py` targeted radvd unconditionally. This firewall serves RA
+through dnsmasq: ten v6 ranges carry a constructor field across nine
+interfaces, while nine of ten radvd entries are disabled and the tenth is on an
+admin-down interface. `apply_ula` called `radvd/service/reconfigure`, got `ok`,
+and reported `applied: true` having changed nothing observable. The design spec
+listed radvd or dnsmasq as alternatives and made "which one does this box use"
+a gate. The gate was never closed and the tools were built for radvd anyway.
+Fixed in bucket B4: writes now consult which daemon actually serves, and the
+apply re-reads and reports `applied: false` when the state does not match.
+
 **Now enforced, not remembered.**
 `.claude/hooks/bash_guard.py` runs as a `PreToolUse` hook on every Bash call. It
 refuses the `;`-chained publish and the bare-cat heredoc, and warns on workspace
@@ -179,7 +190,7 @@ Python calling `get_opnsense_client()`. `tests/test_bash_guard.py` holds the
 falsification cases, including the one where the guard blocked its own commit
 for quoting a pattern it forbids.
 
-Eight more run as tests:
+Nine more run as tests:
 
 | Check | Fails when |
 |---|---|
@@ -191,6 +202,7 @@ Eight more run as tests:
 | `test_deploy_runtime_paths.py` | a quadlet mounts a path no install step creates, or backups are unset or read-only |
 | `test_ssh_known_hosts.py` | the host-key check accepts a listed name presenting the wrong key |
 | `test_shaper_kernel_sync.py` | an applied delete reports success while the kernel still holds the pipe |
+| `test_apply_ula_reports_verification_failure` | an applied RA change reports success while the serving daemon does not match |
 
 `benchmark_performance.py --check-shapes` diffs live response keys against the
 captured fixtures. It needs the firewall, so it is a command rather than a test.
