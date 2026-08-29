@@ -1,0 +1,226 @@
+{
+  "entries": {
+    "enabled": "0",
+    "interface": {
+      "opt1": {
+        "value": "720xpmgmt",
+        "selected": 0
+      },
+      "opt11": {
+        "value": "MGMT_LAN",
+        "selected": 0
+      },
+      "opt2": {
+        "value": "VLAN2wired",
+        "selected": 0
+      },
+      "opt3": {
+        "value": "VLAN3LAB",
+        "selected": 0
+      },
+      "opt6": {
+        "value": "VLAN4guest_wifi",
+        "selected": 0
+      },
+      "opt4": {
+        "value": "VLAN5LAB",
+        "selected": 0
+      },
+      "opt10": {
+        "value": "VLAN5_ax0_igb3",
+        "selected": 0
+      },
+      "opt7": {
+        "value": "VLAN6SolarDMZ",
+        "selected": 0
+      },
+      "opt8": {
+        "value": "VLAN7cam",
+        "selected": 0
+      },
+      "opt13": {
+        "value": "VLAN10Podman",
+        "selected": 1
+      },
+      "opt5": {
+        "value": "VLAN81wifi",
+        "selected": 0
+      },
+      "wan": {
+        "value": "WAN",
+        "selected": 0
+      },
+      "opt9": {
+        "value": "wg0",
+        "selected": 0
+      }
+    },
+    "Base6Interface": {
+      "": {
+        "value": "None",
+        "selected": 1
+      },
+      "opt1": {
+        "value": "720xpmgmt",
+        "selected": 0
+      },
+      "opt11": {
+        "value": "MGMT_LAN",
+        "selected": 0
+      },
+      "opt2": {
+        "value": "VLAN2wired",
+        "selected": 0
+      },
+      "opt3": {
+        "value": "VLAN3LAB",
+        "selected": 0
+      },
+      "opt6": {
+        "value": "VLAN4guest_wifi",
+        "selected": 0
+      },
+      "opt4": {
+        "value": "VLAN5LAB",
+        "selected": 0
+      },
+      "opt10": {
+        "value": "VLAN5_ax0_igb3",
+        "selected": 0
+      },
+      "opt7": {
+        "value": "VLAN6SolarDMZ",
+        "selected": 0
+      },
+      "opt8": {
+        "value": "VLAN7cam",
+        "selected": 0
+      },
+      "opt13": {
+        "value": "VLAN10Podman",
+        "selected": 0
+      },
+      "opt5": {
+        "value": "VLAN81wifi",
+        "selected": 0
+      },
+      "wan": {
+        "value": "WAN",
+        "selected": 0
+      },
+      "opt9": {
+        "value": "wg0",
+        "selected": 0
+      }
+    },
+    "mode": {
+      "router": {
+        "value": "Router Only",
+        "selected": 0
+      },
+      "unmanaged": {
+        "value": "Unmanaged",
+        "selected": 0
+      },
+      "managed": {
+        "value": "Managed",
+        "selected": 1
+      },
+      "assist": {
+        "value": "Assisted",
+        "selected": 0
+      },
+      "stateless": {
+        "value": "Stateless",
+        "selected": 0
+      }
+    },
+    "DeprecatePrefix": {
+      "": {
+        "value": "Automatic",
+        "selected": 1
+      },
+      "on": {
+        "value": "On",
+        "selected": 0
+      },
+      "off": {
+        "value": "Off",
+        "selected": 0
+      }
+    },
+    "RemoveAdvOnExit": {
+      "": {
+        "value": "Automatic",
+        "selected": 1
+      },
+      "on": {
+        "value": "On",
+        "selected": 0
+      },
+      "off": {
+        "value": "Off",
+        "selected": 0
+      }
+    },
+    "RemoveRoute": {
+      "": {
+        "value": "Automatic",
+        "selected": 1
+      },
+      "on": {
+        "value": "On",
+        "selected": 0
+      },
+      "off": {
+        "value": "Off",
+        "selected": 0
+      }
+    },
+    "routes": {
+      "": {
+        "value": "",
+        "selected": 1
+      }
+    },
+    "RDNSS": {
+      "2001:db8:1:1::2": {
+        "value": "2001:db8:1:1::2",
+        "selected": 1
+      }
+    },
+    "DNSSL": {
+      "example.com": {
+        "value": "example.com",
+        "selected": 1
+      }
+    },
+    "dns": "1",
+    "MinRtrAdvInterval": "200",
+    "MaxRtrAdvInterval": "600",
+    "AdvDNSSLLifetime": "",
+    "AdvDefaultLifetime": "",
+    "AdvLinkMTU": "",
+    "AdvPreferredLifetime": "",
+    "AdvRASrcAddress": "",
+    "AdvRDNSSLifetime": "",
+    "AdvRouteLifetime": "",
+    "AdvValidLifetime": "",
+    "AdvDefaultPreference": {
+      "low": {
+        "value": "Low",
+        "selected": 0
+      },
+      "medium": {
+        "value": "Medium",
+        "selected": 1
+      },
+      "high": {
+        "value": "High",
+        "selected": 0
+      }
+    },
+    "nat64prefix": "",
+    "AdvCurHopLimit": "64"
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "vip": {
+    "interface": {
+      "wan": {
+        "value": "WAN",
+        "selected": 0
+      },
+      "opt2": {
+        "value": "VLAN2wired",
+        "selected": 0
+      },
+      "opt3": {
+        "value": "VLAN3LAB",
+        "selected": 0
+      },
+      "opt4": {
+        "value": "VLAN5LAB",
+        "selected": 0
+      },
+      "opt5": {
+        "value": "VLAN81wifi",
+        "selected": 0
+      },
+      "opt6": {
+        "value": "VLAN4guest_wifi",
+        "selected": 0
+      },
+      "opt7": {
+        "value": "VLAN6SolarDMZ",
+        "selected": 0
+      },
+      "opt8": {
+        "value": "VLAN7cam",
+        "selected": 0
+      },
+      "opt11": {
+        "value": "MGMT_LAN",
+        "selected": 0
+      },
+      "lo0": {
+        "value": "Loopback",
+        "selected": 0
+      },
+      "opt1": {
+        "value": "720xpmgmt",
+        "selected": 0
+      },
+      "opt9": {
+        "value": "wg0",
+        "selected": 0
+      },
+      "opt13": {
+        "value": "VLAN10Podman",
+        "selected": 0
+      },
+      "opt10": {
+        "value": "VLAN5_ax0_igb3",
+        "selected": 0
+      }
+    },
+    "mode": {
+      "ipalias": {
+        "value": "IP Alias",
+        "selected": 1
+      },
+      "carp": {
+        "value": "CARP",
+        "selected": 0
+      },
+      "proxyarp": {
+        "value": "Proxy ARP",
+        "selected": 0
+      }
+    },
+    "gateway": "",
+    "noexpand": "0",
+    "nobind": "0",
+    "password": "",
+    "vhid": "",
+    "advbase": "1",
+    "advskew": "0",
+    "peer": "",
+    "peer6": "",
+    "nosync": "0",
+    "address": "",
+    "vhid_txt": "",
+    "descr": "",
+    "network": ""
+  }
+}

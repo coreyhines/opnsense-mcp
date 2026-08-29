@@ -28,3 +28,27 @@ Capture the whole response, not the row you care about: the keys that are
 absent are the finding. Sanitise per the table in the 26.7.2 README, then add
 a contract test that asserts the normalizer produces **non-empty** values from
 it. A test that only checks a key exists is what let both defects ship.
+
+## Node-shaped captures (`get_*`), 2026-08-29
+
+Captured live off OPNsense 26.7.3_8. Addresses moved into `2001:db8::/32`
+and the domain to `example.com`; every key name is exactly what the
+firewall sent.
+
+| File | Endpoint | Root key |
+|---|---|---|
+| `radvd_get_entry.json` | `radvd/settings/get_entry/<uuid>` | `entries` |
+| `unbound_gethostoverride.json` | `unbound/settings/getHostOverride/<uuid>` | `host` |
+| `npt_get_rule_blank.json` | `firewall/npt/get_rule` | `rule` |
+| `vip_get_item_blank.json` | `interfaces/vip_settings/get_item` | `vip` |
+
+These exist because a hand-written fixture said the radvd root key was
+`entry`. It is `entries`, so `set_advert` could not resolve any uuid
+`list_adverts` returned, and the suite stayed green throughout: the
+fixture and the code shared one wrong assumption, which is not a test.
+
+Two of the four carry a second finding. The VIP model has `address`,
+`network` and `descr`, and no `subnet` or `subnet_bits` — the names
+`search_item` returns for display and the names the write path was
+posting. The NPT model confirms `source_net` / `destination_net` /
+`trackif`, which the code already had right.
