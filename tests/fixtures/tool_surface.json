@@ -1210,6 +1210,11 @@
           "optional": true,
           "type": "string"
         },
+        "set_tag": {
+          "description": "dnsmasq client tag uuid. Every client leasing from this range is tagged with it, and a DHCP option carrying the same tag is sent only to those clients. Copy it from another range on the same interface; list_options shows which options each tag carries.",
+          "optional": true,
+          "type": "string"
+        },
         "start_addr": {
           "description": "First address",
           "type": "string"
@@ -2324,6 +2329,11 @@
         },
         "ra_router_lifetime": {
           "description": "Router lifetime, in seconds. The model has no preferred lifetime for the advertised prefix.",
+          "optional": true,
+          "type": "string"
+        },
+        "set_tag": {
+          "description": "dnsmasq client tag uuid. Every client leasing from this range is tagged with it, and a DHCP option carrying the same tag is sent only to those clients. Copy it from another range on the same interface; list_options shows which options each tag carries.",
           "optional": true,
           "type": "string"
         },

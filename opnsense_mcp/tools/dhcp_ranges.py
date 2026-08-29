@@ -91,6 +91,12 @@ _RANGE_WRITE_FIELDS = (
     "lease_time",
     "domain",
     "description",
+    # The dnsmasq client tag. A range's set_tag labels every client that
+    # leases from it, and a DHCP option carrying the matching `tag` is sent
+    # only to those clients. Omitting it from the writable set meant a range
+    # created here could never receive the options its VLAN's other ranges
+    # get -- a ULA range served addresses and no DNS server.
+    "set_tag",
     "ra_mode",
     "ra_priority",
     "ra_interval",
@@ -154,6 +160,17 @@ def _v6_schema_fields() -> dict[str, Any]:
         "prefix_len": {
             "type": "string",
             "description": "Advertised prefix length, e.g. 64",
+            "optional": True,
+        },
+        "set_tag": {
+            "type": "string",
+            "description": (
+                "dnsmasq client tag uuid. Every client leasing from this "
+                "range is tagged with it, and a DHCP option carrying the "
+                "same tag is sent only to those clients. Copy it from "
+                "another range on the same interface; list_options shows "
+                "which options each tag carries."
+            ),
             "optional": True,
         },
         "ra_mode": {

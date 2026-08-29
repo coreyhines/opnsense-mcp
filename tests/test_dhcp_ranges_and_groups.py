@@ -834,3 +834,74 @@ async def test_deleted_option_stays_deleted_when_reconfigure_refuses() -> None:
     assert result["applied"] is False
     assert result["apply_error"]
     assert [c for c in calls if "del_option" in c["endpoint"]]
+
+
+# --- set_tag is writable ----------------------------------------------------
+#
+# A range's set_tag labels every client that leases from it, and a DHCP option
+# carrying the matching `tag` reaches only those clients. It is one of the 18
+# fields the model returns, but it was absent from the writable set, so a range
+# created through this tool could never carry a tag.
+#
+# The failure is silent and deferred: the range is created, it serves addresses,
+# and the clients simply never receive the DNS server their VLAN's other ranges
+# hand out. Nine ULA ranges were created that way during the v6 migration before
+# anyone noticed.
+
+
+TAG_UUID = "97f6eab8-edd3-4390-a721-dfe9584c6b73"
+
+
+@pytest.mark.asyncio
+async def test_create_range_writes_the_set_tag_it_was_given() -> None:
+    client = _client()
+    calls = _stub(client, {"search_range": {"rows": [], "total": 0}})
+
+    await MkDhcpRangeTool(client).execute(
+        {
+            "interface": "opt3",
+            "start_addr": "2001:db8:1e5:b503::2",
+            "end_addr": "2001:db8:1e5:b503::ffff",
+            "set_tag": TAG_UUID,
+        }
+    )
+
+    payload = next(c for c in calls if "add_range" in c["endpoint"])["json"]["range"]
+    assert payload["set_tag"] == TAG_UUID, (
+        "set_tag was dropped from the create payload; the range will serve "
+        "addresses and no tagged options"
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_range_can_set_and_change_the_tag() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "get_range": {"range": dict(RANGE_ROWS["rows"][0])},
+            "search_range": RANGE_ROWS,
+        },
+    )
+
+    await SetDhcpRangeTool(client).execute({"uuid": RANGE_UUID, "set_tag": TAG_UUID})
+
+    payload = next(c for c in calls if "set_range" in c["endpoint"])["json"]["range"]
+    assert payload["set_tag"] == TAG_UUID
+
+
+@pytest.mark.asyncio
+async def test_update_range_preserves_an_existing_tag_it_was_not_given() -> None:
+    """The merge must not blank a tag a range already carries."""
+    existing = dict(RANGE_ROWS["rows"][0])
+    existing["set_tag"] = TAG_UUID
+    client = _client()
+    calls = _stub(
+        client,
+        {"get_range": {"range": existing}, "search_range": RANGE_ROWS},
+    )
+
+    await SetDhcpRangeTool(client).execute({"uuid": RANGE_UUID, "lease_time": "3600"})
+
+    payload = next(c for c in calls if "set_range" in c["endpoint"])["json"]["range"]
+    assert payload["set_tag"] == TAG_UUID
