@@ -114,6 +114,8 @@ from opnsense_mcp.tools.set_fw_rule import SetFwRuleTool
 from opnsense_mcp.tools.system import SystemTool
 from opnsense_mcp.tools.toggle_dhcp_range import ToggleDhcpRangeTool
 from opnsense_mcp.tools.toggle_fw_rule import ToggleFwRuleTool
+from opnsense_mcp.tools.ula_dns_apply import ApplyDnsUlaTool
+from opnsense_mcp.tools.ula_inventory import InventoryPrefixTool
 from opnsense_mcp.tools.ula_migration import (
     ApplyUlaTool,
     ListRouterAdvertsTool,
@@ -137,6 +139,7 @@ class Tool(Protocol):
 # built separately and passed in (see `build_tools`).
 TOOL_CLASSES: tuple[type, ...] = (
     AliasesTool,
+    ApplyDnsUlaTool,
     ApplyFwChangesTool,
     ApplyUlaTool,
     BgpStatusTool,
@@ -185,6 +188,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     MkNatOutboundTool,
     MkVipTool,
     MkSnapshotTool,
+    InventoryPrefixTool,
     MoveDhcpHostTool,
     NatOutboundModeTool,
     PacketCaptureTool2,

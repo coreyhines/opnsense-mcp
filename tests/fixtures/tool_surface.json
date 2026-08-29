@@ -130,6 +130,27 @@
       "type": "object"
     }
   },
+  "apply_dns_ula": {
+    "description": "Execute a plan_dns_ula mapping: for each record add the ULA host override, read it back, then delete the GUA one. Refuses any record that no longer matches the plan. Dry run by default.",
+    "inputSchema": {
+      "properties": {
+        "dry_run": {
+          "default": true,
+          "description": "Re-read every record and report what would happen without writing anything (default true). Set false to move them.",
+          "optional": true,
+          "type": "boolean"
+        },
+        "records": {
+          "description": "The `records` list from a plan_dns_ula result, verbatim. Each entry needs uuid, hostname, domain, current, proposed and keep_gua. Targets are never recomputed here, so what runs is what was reviewed.",
+          "type": "array"
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "type": "object"
+    }
+  },
   "apply_fw_changes": {
     "description": "Apply staged firewall filter changes, loading every rule written with apply=false into the running ruleset",
     "inputSchema": {
@@ -670,6 +691,21 @@
     "inputSchema": {
       "properties": {},
       "required": [],
+      "type": "object"
+    }
+  },
+  "inventory_prefix": {
+    "description": "Read-only inventory of address literals within a prefix across firewall aliases, filter rules, Unbound host overrides, and DHCP reservations",
+    "inputSchema": {
+      "properties": {
+        "prefix": {
+          "description": "IPv4 or IPv6 prefix to inventory",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prefix"
+      ],
       "type": "object"
     }
   },

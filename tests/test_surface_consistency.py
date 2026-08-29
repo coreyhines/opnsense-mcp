@@ -10,7 +10,12 @@ Assertions here are on structured fields, never on message wording.
 
 from __future__ import annotations
 
+import ast
 import asyncio
+import inspect
+import re
+import sys
+import textwrap
 from typing import Any
 
 import pytest
@@ -471,7 +476,68 @@ DELETES_WITHOUT_CONFIRM = {
     # A name-to-address mapping, recreated from the uuid and address the
     # caller just listed. Cheap to undo, unlike a filter rule.
     "rmdns": "trivially recreated",
+    # Not a delete tool: it executes a reviewed plan_ula mapping, and the
+    # delete is its second step, gated on reading the replacement back.
+    # `dry_run` defaults true, so an unconfirmed call reports what it would
+    # move without moving it -- the same opt-in write as rm_dhcp_host. A
+    # per-record token is impractical at 54 records and a single token for
+    # 54 deletes would confirm less than the dry run already shows.
+    "apply_dns_ula": "dry-run by default, and the delete is gated on read-back",
 }
+
+
+# An OPNsense delete endpoint. The MVC convention is `delItem` / `del_rule` /
+# `delHostOverride` under `/api/<module>/`, so the request path is a reliable
+# signal of what a tool does to the firewall.
+_DELETE_PATH = re.compile(r"/api/[\w/]*?/del[A-Z_]")
+
+
+def _is_delete_str(value: object) -> bool:
+    """Whether a resolved constant is a delete endpoint path."""
+    return isinstance(value, str) and bool(_DELETE_PATH.search(value))
+
+
+def _is_destructive(action: str, tool: object) -> bool:
+    """Whether a tool removes configuration, by behaviour rather than by name.
+
+    Matching on the action name alone was the hole: `apply_dns_plan` issues
+    `delHostOverride` for every record it moves, and passed this check because
+    nobody had called it a delete. A name is a label; the endpoint the tool
+    posts to is the behaviour.
+
+    The whole class is walked, not just `execute`: `ApplyDnsUlaTool` issues its
+    delete from a helper, and scoping to `execute` missed it entirely.
+
+    Resolution is deliberately narrow. Modules here collect their endpoints in
+    one dict -- `NPT = {"search": ..., "delete": ...}` -- so a tool that merely
+    mentions `NPT` is not thereby a delete: `list_npt_rules` reads
+    `NPT["search"]`. Only a literal delete path, a name bound directly to one,
+    or a subscript resolving to one counts.
+    """
+    if "delete" in action or action.startswith("rm"):
+        return True
+    try:
+        tree = ast.parse(textwrap.dedent(inspect.getsource(type(tool))))
+    except (OSError, TypeError, SyntaxError):  # pragma: no cover - defensive
+        return False
+    module = sys.modules.get(type(tool).__module__)
+    ns = vars(module) if module else {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and _is_delete_str(node.value):
+            return True
+        if isinstance(node, ast.Name) and _is_delete_str(ns.get(node.id)):
+            return True
+        if (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Name)
+            and isinstance(node.slice, ast.Constant)
+        ):
+            container = ns.get(node.value.id)
+            if isinstance(container, dict) and _is_delete_str(
+                container.get(node.slice.value)
+            ):
+                return True
+    return False
 
 
 def test_every_delete_either_confirms_or_says_why_not() -> None:
@@ -494,10 +560,10 @@ def test_every_delete_either_confirms_or_says_why_not() -> None:
     unprotected: list[str] = []
     for _description, members in GROUPS.values():
         for action, tool_name in members.items():
-            if "delete" not in action and not action.startswith("rm"):
-                continue
             tool = tools.get(tool_name)
             if tool is None:
+                continue
+            if not _is_destructive(action, tool):
                 continue
             props = (getattr(tool, "input_schema", {}) or {}).get("properties") or {}
             if "confirm" in props or tool_name in DELETES_WITHOUT_CONFIRM:
