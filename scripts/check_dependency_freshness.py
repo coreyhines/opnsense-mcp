@@ -20,17 +20,21 @@ import json
 import re
 import sys
 import tomllib
-import urllib.error
-import urllib.request
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
+import requests
 from packaging.version import InvalidVersion, Version
 
 REPO = Path(__file__).resolve().parent.parent
 PYPROJECT = REPO / "pyproject.toml"
 PYPI = "https://pypi.org/pypi/{}/json"
+
+# PEP 508 names only. Interpolating an unvalidated name into a URL is how a
+# fetch ends up somewhere other than PyPI; requests also refuses file://,
+# which urllib would have honoured.
+SAFE_NAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$")
 
 
 def _declared() -> dict[str, str]:
@@ -50,10 +54,13 @@ def _declared() -> dict[str, str]:
 
 def _latest_stable(name: str) -> str | None:
     """The newest non-prerelease release on PyPI, or None when unreachable."""
+    if not SAFE_NAME.match(name):
+        return None
     try:
-        with urllib.request.urlopen(PYPI.format(name), timeout=20) as response:
-            data = json.load(response)
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        response = requests.get(PYPI.format(name), timeout=20)
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError):
         return None
 
     best: Version | None = None
