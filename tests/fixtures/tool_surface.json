@@ -1234,7 +1234,7 @@
     }
   },
   "mk_loopback": {
-    "description": "Create a loopback interface device",
+    "description": "Create a loopback interface device. Track Interface IPv6 addressing is refused with manual UI/config-edit steps: every /api/interfaces/ model was probed, but loopback is device-only, settings is global toggles, overview is read-only, and VIP/VLAN models have no interface addressing. Requests using the config.xml shape ipaddrv6=track6, track6-interface, and track6-prefix-id are recognized but never partially staged",
     "inputSchema": {
       "properties": {
         "apply": {
@@ -1247,6 +1247,11 @@
           "description": "Device description",
           "type": "string"
         },
+        "ipaddrv6": {
+          "description": "Recognized and refused: IPv6 addressing mode such as track6. Not written \u2014 the API cannot set it",
+          "optional": true,
+          "type": "string"
+        },
         "planned_address": {
           "description": "An address you intend this loopback to carry. Not written here \u2014 OPNsense has no per-interface addressing API \u2014 but echoed back as the exact step to perform. Use set_interface_address to actually write one",
           "optional": true,
@@ -1254,6 +1259,16 @@
         },
         "planned_subnet_bits": {
           "description": "Prefix length for planned_address, normally 32 or 128",
+          "optional": true,
+          "type": "number"
+        },
+        "track6-interface": {
+          "description": "Recognized and refused: interface whose delegated prefix to track. Not written \u2014 the API cannot set it",
+          "optional": true,
+          "type": "string"
+        },
+        "track6-prefix-id": {
+          "description": "Recognized and refused: IPv6 prefix-id for Track Interface. Not written \u2014 the API cannot set it",
           "optional": true,
           "type": "number"
         }
@@ -2581,7 +2596,7 @@
     }
   },
   "set_router_advert": {
-    "description": "Update a radvd entry: enable it, change mode, or deprecate the old prefix",
+    "description": "Update a radvd entry: enable it or change mode. Deprecation is not supported when dnsmasq serves RA because dnsmasq has no preferred-lifetime field.",
     "inputSchema": {
       "properties": {
         "apply": {
