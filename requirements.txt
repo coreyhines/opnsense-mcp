@@ -11,7 +11,6 @@ requests>=2.31.0
 python-multipart>=0.0.30
 typing-extensions>=4.0.0
 passlib[bcrypt]>=1.7.4
-httpx>=0.24.0
 python-dotenv>=1.0.0
 # fastmcp 4 is the first line depending on mcp>=2.0, the first SDK
 # implementing MCP 2026-07-28. Still a beta; PEP 440 lets an explicit
