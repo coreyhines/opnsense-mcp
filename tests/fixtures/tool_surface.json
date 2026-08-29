@@ -273,6 +273,10 @@
     "description": "Delete a queue (confirm token required)",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
         "confirm": {
           "type": "string"
         },
@@ -290,6 +294,10 @@
     "description": "Delete a rule (confirm token required)",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": true,
+          "type": "boolean"
+        },
         "confirm": {
           "type": "string"
         },
