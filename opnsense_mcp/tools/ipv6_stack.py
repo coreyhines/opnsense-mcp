@@ -584,10 +584,30 @@ class ListLoopbackTool(_V6ToolBase):
 
 
 class MkLoopbackTool(_V6ToolBase):
-    """Create a loopback device."""
+    """Create a loopback device, or explain how to make a PD holder manually.
+
+    OPNsense 26.7 exposes only the loopback device list through
+    ``loopback_settings/get``. The other ``/api/interfaces/`` models were also
+    probed: ``settings/get`` has global IPv6/offload toggles,
+    ``overview/interfacesInfo`` is read-only status, and the VIP/VLAN models do
+    not carry interface addressing. Consequently, Track Interface IPv6 mode
+    and its prefix-id are UI or config-edit only.
+
+    An unsupported Track Interface request returns ``status: success`` because
+    the tool ran and correctly answered the request. ``unsupported: true`` and
+    ``created: false`` distinguish that finding from a completed write; actual
+    failures still return ``status: error``.
+    """
 
     name = "mk_loopback"
-    description = "Create a loopback interface device"
+    description = (
+        "Create a loopback interface device. Track Interface IPv6 addressing is "
+        "refused with manual UI/config-edit steps: every /api/interfaces/ model "
+        "was probed, but loopback is device-only, settings is global toggles, "
+        "overview is read-only, and VIP/VLAN models have no interface addressing. "
+        "Requests using the config.xml shape ipaddrv6=track6, track6-interface, "
+        "and track6-prefix-id are recognized but never partially staged"
+    )
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
@@ -634,6 +654,39 @@ class MkLoopbackTool(_V6ToolBase):
         description = (params.get("description") or "").strip()
         if not description:
             return {"status": "error", "error": "description is required"}
+
+        ipv6_mode = (params.get("ipaddrv6") or "").strip()
+        track_interface = (params.get("track6-interface") or "").strip()
+        prefix_id = params.get("track6-prefix-id")
+        if ipv6_mode == "track6" or track_interface or prefix_id is not None:
+            return {
+                "status": "success",
+                "unsupported": True,
+                "created": False,
+                "reason": {
+                    "code": "per_interface_ipv6_addressing_api_unavailable",
+                    "capability": "Track Interface IPv6 addressing mode",
+                    "availability": "UI or config.xml edit only",
+                    "detail": (
+                        "OPNsense exposes no API for per-interface IPv6 "
+                        "addressing mode, including track6-interface and "
+                        "track6-prefix-id."
+                    ),
+                },
+                "requested": {
+                    "ipaddrv6": ipv6_mode,
+                    "track6-interface": track_interface,
+                    "track6-prefix-id": prefix_id,
+                },
+                "manual_steps": [
+                    "Create and assign the dedicated interface.",
+                    "Set IPv6 Configuration Type to Track Interface.",
+                    f"Set the tracked interface to {track_interface or 'WAN'}.",
+                    f"Set the IPv6 prefix-id to {prefix_id}.",
+                    "Turn router advertisements off on the interface.",
+                    "Do not add firewall policy for the interface.",
+                ],
+            }
 
         address = (params.get("planned_address") or "").strip()
         subnet_bits = params.get("planned_subnet_bits")
