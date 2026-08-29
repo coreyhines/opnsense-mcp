@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from opnsense_mcp.build_info import get_build_info
 from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.deploy_probe import runtime_paths_report
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,16 @@ class SystemTool:
             return {
                 "status": "success",
                 "system": combined_status,
-                "mcp_server": get_build_info(),
+                "mcp_server": {
+                    **get_build_info(),
+                    # Our own runtime paths, judged at call time. A broken
+                    # path is a finding to report here, never a reason to
+                    # fail the call: `system` is the tool someone calls to
+                    # find out what is wrong. Before this, the only way to
+                    # learn a deployed backup directory was broken was to
+                    # attempt a download and read the error.
+                    "runtime_paths": runtime_paths_report(),
+                },
             }
 
         except Exception as e:
