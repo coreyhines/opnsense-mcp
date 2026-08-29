@@ -82,9 +82,9 @@ Both sides of the swap keep the same six capacity groups, so the spread is uncha
 |---|---|---|---|---|
 | S1 | **done** | — | — | coordinator inline |
 | S2 | **done** | — | — | coordinator inline |
-| B1 | pending | — | — | — |
-| B2 | pending | — | — | — |
-| B3 | pending | — | — | — |
+| B1 | **merged** | `feat/ula-ra-gaps-bucket-B1-claude` | `e206d91` | claude-cli |
+| B2 | **merged** | `feat/ula-ra-gaps-bucket-B2-codex` | `969ce93` | codex-cli |
+| B3 | **merged** | `feat/ula-ra-gaps-bucket-B3-cursor` | `ef16641` | cursor-cli |
 | B4 | pending | — | — | — |
 | B5 | pending | — | — | — |
 | B8 | pending | — | — | — |

@@ -119,10 +119,6 @@ def test_captured_v6_range_normalizes_to_a_non_empty_constructor() -> None:
     assert mapped["constructor"] == row["constructor"] == selected[0]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Bucket B1 will add the dnsmasq range RA fields to the normalizer",
-)
 def test_captured_v6_range_normalizes_ra_mode_value() -> None:
     """The selected RA mode must not disappear from the normalized range."""
     from opnsense_mcp.tools.dhcp_ranges import _RANGE_FIELDS, _project
