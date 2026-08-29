@@ -222,7 +222,7 @@ class SetRouterAdvertTool(_UlaToolBase):
         try:
             # Fetch the radvd entry to get its interface
             current = await self.client._make_request("GET", f"{RADVD['get']}/{uuid}")
-            node = current.get("entry") if isinstance(current, dict) else None
+            node = current.get("entries") if isinstance(current, dict) else None
             if not isinstance(node, dict):
                 return {"status": "error", "error": f"radvd entry {uuid} not found"}
 
@@ -573,6 +573,59 @@ class ApplyUlaTool(_UlaToolBase):
         "required": [],
     }
 
+    @staticmethod
+    def _ra_signature(
+        verdicts: dict[str, RaVerdict],
+        radvd_rows: list[dict[str, Any]],
+        dnsmasq_rows: list[dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        """Snapshot the serving daemon's own fields for each serving interface.
+
+        A reconfigure cannot change *which* daemon serves — that is decided by
+        `enabled`, `constructor` and `ra_mode`, none of which a reconfigure
+        writes. It can only fail to apply the fields the daemon actually reads
+        (`mode`, lifetimes, `DeprecatePrefix` for radvd; `constructor`/`ra_mode`
+        for dnsmasq). Comparing the classified daemon before and after — as
+        this used to — compares a value a reconfigure cannot move, so it always
+        passes. Comparing these fields can actually catch a divergence.
+        """
+        radvd_by_iface = {
+            str(row.get("interface") or "").strip(): row
+            for row in radvd_rows
+            if str(row.get("interface") or "").strip()
+        }
+        dnsmasq_by_iface: dict[str, dict[str, Any]] = {}
+        for row in dnsmasq_rows:
+            iface = str(row.get("interface") or row.get("constructor") or "").strip()
+            if iface:
+                dnsmasq_by_iface[iface] = row
+
+        signature: dict[str, dict[str, Any]] = {}
+        for iface, verdict in verdicts.items():
+            fields: dict[str, Any] = {}
+            if verdict.daemon in (DAEMON_RADVD, DAEMON_BOTH):
+                row = radvd_by_iface.get(iface, {})
+                fields.update(
+                    {
+                        "radvd_enabled": row.get("enabled"),
+                        "radvd_mode": row.get("mode"),
+                        "AdvPreferredLifetime": row.get("AdvPreferredLifetime"),
+                        "AdvValidLifetime": row.get("AdvValidLifetime"),
+                        "DeprecatePrefix": row.get("DeprecatePrefix"),
+                    }
+                )
+            if verdict.daemon in (DAEMON_DNSMASQ, DAEMON_BOTH):
+                row = dnsmasq_by_iface.get(iface, {})
+                fields.update(
+                    {
+                        "dnsmasq_constructor": row.get("constructor"),
+                        "dnsmasq_ra_mode": row.get("ra_mode"),
+                    }
+                )
+            if fields:
+                signature[iface] = fields
+        return signature
+
     async def _apply_ra_domain(self) -> dict[str, Any]:
         """Apply the RA domain by reconfiguring the serving daemon(s).
 
@@ -581,7 +634,12 @@ class ApplyUlaTool(_UlaToolBase):
         - ``verified``: whether post-apply read confirmed the state
         - ``error``: error message if something went wrong (optional)
         """
-        verdicts_before = await self._classify_interfaces()
+        radvd_rows_before = await self._fetch_radvd_rows()
+        dnsmasq_rows_before = await self._fetch_dnsmasq_range_rows()
+        interface_states_before = await self._fetch_interface_states()
+        verdicts_before = classify_ra_daemons(
+            radvd_rows_before, dnsmasq_rows_before, interface_states_before
+        )
 
         # Determine which daemons serve across any interface
         needs_radvd = any(
@@ -599,6 +657,10 @@ class ApplyUlaTool(_UlaToolBase):
                 "note": "No RA daemon serving on any interface; nothing to reconfigure.",
             }
 
+        signature_before = self._ra_signature(
+            verdicts_before, radvd_rows_before, dnsmasq_rows_before
+        )
+
         reconfigured: list[str] = []
 
         # Reconfigure in order: radvd then dnsmasq (order matters less here,
@@ -615,23 +677,27 @@ class ApplyUlaTool(_UlaToolBase):
             )
             reconfigured.append(DAEMON_DNSMASQ)
 
-        # Verify: re-read and confirm the serving state
-        verdicts_after = await self._classify_interfaces()
+        # Verify: re-read the serving daemon's own fields and compare against
+        # what was staged before the reconfigure. Reconfigure cannot change
+        # which daemon serves, so that comparison alone would always pass;
+        # this compares the fields a reconfigure could actually fail to apply.
+        radvd_rows_after = await self._fetch_radvd_rows()
+        dnsmasq_rows_after = await self._fetch_dnsmasq_range_rows()
+        interface_states_after = await self._fetch_interface_states()
+        verdicts_after = classify_ra_daemons(
+            radvd_rows_after, dnsmasq_rows_after, interface_states_after
+        )
+        signature_after = self._ra_signature(
+            verdicts_after, radvd_rows_after, dnsmasq_rows_after
+        )
 
-        # The apply is verified if the daemon classification is unchanged
-        # (we reconfigured what was serving, not changed what serves).
-        # A more sophisticated check would compare specific fields, but the
-        # point is to detect when reconfigure returned ok but nothing happened.
         verified = True
         mismatches: list[str] = []
-        for iface, before in verdicts_before.items():
-            after = verdicts_after.get(iface)
-            if after is None or after.daemon != before.daemon:
+        for iface, before_fields in signature_before.items():
+            after_fields = signature_after.get(iface)
+            if after_fields != before_fields:
                 verified = False
-                mismatches.append(
-                    f"{iface}: was {before.daemon}, now "
-                    f"{after.daemon if after else 'unknown'}"
-                )
+                mismatches.append(f"{iface}: was {before_fields}, now {after_fields}")
 
         result: dict[str, Any] = {
             "daemons_reconfigured": reconfigured,
