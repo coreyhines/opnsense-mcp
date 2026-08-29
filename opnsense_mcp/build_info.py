@@ -19,7 +19,8 @@ def _package_version() -> str:
 def _runtime_git_commit() -> str | None:
     """Best-effort short HEAD for local/dev runs without embedded build metadata."""
     repo_root = Path(__file__).resolve().parent.parent
-    if not (repo_root / ".git").is_dir():
+    # A worktree's .git is a file pointing at the real gitdir, not a directory.
+    if not (repo_root / ".git").exists():
         return None
     try:
         result = subprocess.run(
@@ -37,7 +38,8 @@ def _runtime_git_commit() -> str | None:
 
 def _runtime_git_ref() -> str | None:
     repo_root = Path(__file__).resolve().parent.parent
-    if not (repo_root / ".git").is_dir():
+    # A worktree's .git is a file pointing at the real gitdir, not a directory.
+    if not (repo_root / ".git").exists():
         return None
     try:
         result = subprocess.run(
