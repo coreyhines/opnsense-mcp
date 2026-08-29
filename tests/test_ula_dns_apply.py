@@ -38,6 +38,7 @@ from opnsense_mcp.tools.ula_dns_apply import (
     REASON_GUA_MISSING,
     REASON_INVALID_RECORD,
     REASON_KEEP_GUA,
+    REASON_NO_OP_MOVE,
     REASON_READBACK_FAILED,
     ApplyDnsUlaTool,
 )
@@ -762,3 +763,78 @@ async def test_no_client_is_an_error() -> None:
     result = await ApplyDnsUlaTool(None).execute({"records": []})
 
     assert result["status"] == "error"
+
+
+# --- 8. a record must never be its own replacement ---------------------------
+#
+# Found by adversarial review, not by this suite. The tool deleted a name's
+# only AAAA record and reported `outcome: moved`, `verified: true`,
+# `changed: 1`. Every existing safety property held while it happened: the
+# read-back genuinely found the right name at the right address, because the
+# record it read back was the record it was about to delete.
+#
+# Reachable through the documented two-tool workflow, since `plan_dns_ula`
+# accepted identical prefixes and planned every record onto the address it
+# already held. Three gates now, at each layer that could reintroduce it
+# alone.
+
+
+@pytest.mark.asyncio
+async def test_a_record_planned_onto_its_own_address_is_never_deleted() -> None:
+    """Gate one: the plan record itself is a no-op and is refused as one."""
+    store = _Unbound([_host(NAS_UUID, "nas", GUA_NAS)])
+    plan = [_plan_record(NAS_UUID, "nas", GUA_NAS, GUA_NAS)]
+
+    result = await ApplyDnsUlaTool(_client(store)).execute(
+        {"records": plan, "dry_run": False}
+    )
+
+    entry = _result_for(result, NAS_UUID)
+    assert entry["outcome"] == OUTCOME_SKIPPED
+    assert entry["reason"] == REASON_NO_OP_MOVE
+    # The point of the test: the answer is still there.
+    assert NAS_UUID in store.hosts
+    assert store.hosts[NAS_UUID]["server"] == GUA_NAS
+    assert not any(f"delHostOverride/{NAS_UUID}" in call for call in store.endpoints())
+    assert result["changed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_record_that_drifted_onto_its_target_is_never_deleted() -> None:
+    """A record already at its target survives.
+
+    Written to exercise gate two, and it does not: removing gate two leaves
+    this green, because the pre-existing drift check refuses the record first
+    (the firewall holds an address the plan did not record). Kept as a
+    regression test for the outcome that matters -- the answer is still there
+    -- with its real coverage stated rather than implied.
+
+    Gate two is therefore belt-and-braces against a path no current test
+    reaches. It stays because the index is keyed on live addresses and the
+    drift check is the only thing standing in front of it.
+    """
+    # Plan says GUA -> ULA. The firewall already holds the ULA.
+    store = _Unbound([_host(NAS_UUID, "nas", ULA_NAS)])
+    plan = [_plan_record(NAS_UUID, "nas", GUA_NAS, ULA_NAS)]
+
+    result = await ApplyDnsUlaTool(_client(store)).execute(
+        {"records": plan, "dry_run": False}
+    )
+
+    entry = _result_for(result, NAS_UUID)
+    assert entry["outcome"] == OUTCOME_SKIPPED
+    assert NAS_UUID in store.hosts
+    assert not any(f"delHostOverride/{NAS_UUID}" in call for call in store.endpoints())
+
+
+@pytest.mark.asyncio
+async def test_the_dry_run_also_refuses_a_self_move() -> None:
+    """A dry run that showed `would_move` was the reason review missed this."""
+    store = _Unbound([_host(NAS_UUID, "nas", GUA_NAS)])
+    plan = [_plan_record(NAS_UUID, "nas", GUA_NAS, GUA_NAS)]
+
+    result = await ApplyDnsUlaTool(_client(store)).execute({"records": plan})
+
+    entry = _result_for(result, NAS_UUID)
+    assert entry["outcome"] == OUTCOME_SKIPPED
+    assert entry["reason"] == REASON_NO_OP_MOVE

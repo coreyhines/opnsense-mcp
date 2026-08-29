@@ -102,6 +102,11 @@ REASON_READBACK_FAILED = "ula_readback_failed"
 REASON_ADD_NO_UUID = "add_returned_no_uuid"
 REASON_DELETE_REJECTED = "gua_delete_rejected"
 REASON_API_ERROR = "api_error"
+# The plan asks to move a record onto the address it already holds. Acting on
+# it deletes the name's only answer: the resume path finds the record itself
+# as its own replacement, the read-back gate passes because it is genuinely
+# the right name at the right address, and the delete removes it.
+REASON_NO_OP_MOVE = "current_equals_proposed"
 
 # What `delHostOverride` says when it worked. Mirrors `rmdns`.
 _DELETE_OK = ("deleted", "ok", 1)
@@ -158,6 +163,12 @@ class _Planned:
             # Recomputing a missing target here would mean acting on something
             # the operator never reviewed.
             self.skip = REASON_INVALID_RECORD
+        elif self.current == self.proposed:
+            # Gate one of three. A move to the address already held is not a
+            # move, and every downstream check passes it: the record resolves
+            # as its own replacement and the read-back confirms the right name
+            # at the right address, so the delete takes the only answer away.
+            self.skip = REASON_NO_OP_MOVE
 
     def result(self, outcome: str, **extra: Any) -> dict[str, Any]:
         """A per-record result carrying the plan's own view of the record."""
@@ -314,6 +325,15 @@ class ApplyDnsUlaTool:
                 )
                 continue
             ula_uuid = existing.get((entry.fqdn, str(proposed)))
+            if ula_uuid == entry.uuid:
+                # Gate two of three. The index is built over every AAAA record
+                # including the one this entry is about to delete, so a record
+                # can resolve as its own replacement. Independent of gate one
+                # because the index is keyed on the live address, not the
+                # plan's: a record that drifted onto its own target reaches
+                # here with current != proposed.
+                results.append(entry.result(OUTCOME_SKIPPED, reason=REASON_NO_OP_MOVE))
+                continue
 
             try:
                 gua = await self._read(entry.uuid)

@@ -486,6 +486,16 @@ class PlanDnsUlaTool(_UlaToolBase):
 
         if gua.version != 6 or ula.version != 6:
             return {"status": "error", "error": "both prefixes must be IPv6"}
+        if gua == ula:
+            return {
+                "status": "error",
+                "error": (
+                    f"gua_prefix and ula_prefix are both {gua}. Every record "
+                    f"would be planned to move onto the address it already "
+                    f"holds, which apply_dns_plan cannot distinguish from a "
+                    f"completed move: it would delete each name's only answer."
+                ),
+            }
         if gua.prefixlen != ula.prefixlen:
             return {
                 "status": "error",

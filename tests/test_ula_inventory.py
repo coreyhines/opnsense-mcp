@@ -25,6 +25,9 @@ FIXTURES = Path(__file__).parent / "fixtures" / "opnsense-26.7.3"
 PREFIX = ipaddress.ip_network("2001:db8:1e5:b502::/64")
 
 
+PREFIX_TEXT_HOST = str(next(PREFIX.hosts()))
+
+
 def test_filter_normalizer_reads_captured_search_rule_field_names() -> None:
     """The captured fixture uses source_net/destination_net, as the API does."""
     response = json.loads((FIXTURES / "filter_searchrule_rows.json").read_text())
@@ -106,31 +109,79 @@ def test_unbound_normalizer_reports_fqdn_uuid_and_server() -> None:
     ]
 
 
-def test_dhcp_normalizer_splits_real_search_host_ip_shape() -> None:
+def test_dhcp_reservations_on_this_firewall_carry_a_prefix_relative_suffix() -> None:
+    """The v6 half of a reservation is `::N`, not an address.
+
+    This test replaces one that called `172.20.8.2,2001:db8:1e5:b502::2` the
+    "real search_host ip shape". The firewall sends `<v4>,::2`: dnsmasq
+    stores an interface identifier and prepends whatever prefix the interface
+    serves, which is what the `dhcp create_host` schema calls an IPv6 suffix.
+
+    A suffix parses cleanly as an absolute address in `::/128`, so it used to
+    satisfy `parsed` and fail `matches` and land in neither counter. Every
+    reservation on the box disappeared from a sweep that called itself
+    complete.
+    """
     response = {
         "rows": [
             {
                 "uuid": "dhcp-uuid",
                 "host": "printer",
-                "ip": "172.20.8.2,2001:db8:1e5:b502::2",
+                "ip": "192.0.2.2,::2",
                 "hwaddr": "aa:bb:cc:dd:ee:ff",
             }
         ],
         "total": 1,
     }
 
-    hits, skipped = _inventory_dhcp_hosts(response, PREFIX)
+    hits, skipped, suffixes = _inventory_dhcp_hosts(response, PREFIX)
 
-    assert skipped == 0
-    assert hits == [
-        {
-            "source": "dhcp_reservation",
-            "uuid": "dhcp-uuid",
-            "name": "printer",
-            "field": "ip",
-            "address": "2001:db8:1e5:b502::2",
-        }
-    ]
+    assert hits == []
+    assert suffixes == [{"uuid": "dhcp-uuid", "name": "printer", "suffix": "::2"}]
+    # The v4 half is a real address outside the queried v6 prefix, so it is a
+    # skip. What matters is that nothing is silently uncounted.
+    assert skipped == 1
+
+
+def test_a_reservation_holding_a_full_address_is_still_a_hit() -> None:
+    """Suffix handling must not swallow an absolute address inside the prefix."""
+    response = {
+        "rows": [
+            {
+                "uuid": "dhcp-uuid",
+                "host": "nas",
+                "ip": f"192.0.2.3,{PREFIX_TEXT_HOST}",
+            }
+        ],
+        "total": 1,
+    }
+
+    hits, skipped, suffixes = _inventory_dhcp_hosts(response, PREFIX)
+
+    assert suffixes == []
+    assert [h["address"] for h in hits] == [PREFIX_TEXT_HOST]
+
+
+def test_every_reservation_value_lands_in_exactly_one_bucket() -> None:
+    """Hits, skips and suffixes must account for every value seen.
+
+    The original defect was not a wrong answer but an unaccounted one: a value
+    that matched no branch incremented no counter, so the totals looked
+    healthy while 94 reservations went missing.
+    """
+    response = {
+        "rows": [
+            {"uuid": "a", "host": "one", "ip": "192.0.2.2,::2"},
+            {"uuid": "b", "host": "two", "ip": f"192.0.2.3,{PREFIX_TEXT_HOST}"},
+            {"uuid": "c", "host": "three", "ip": "192.0.2.9"},
+            {"uuid": "d", "host": "four", "ip": "not-an-address"},
+        ],
+        "total": 4,
+    }
+
+    hits, skipped, suffixes = _inventory_dhcp_hosts(response, PREFIX)
+
+    assert len(hits) + skipped + len(suffixes) == 6
 
 
 def test_unparseable_values_are_skipped_and_counted() -> None:
@@ -216,7 +267,10 @@ async def test_execute_sweeps_every_source_read_only_and_reports_values() -> Non
     assert result["status"] == "success"
     assert result["prefix"] == "2001:db8:1e5:b502::/64"
     assert result["count"] == 4
-    assert result["skipped_count"] == 1  # unresolved OLD_GUAS rule reference
+    # The OLD_GUAS rule reference, plus the v4 half of the reservation. That
+    # second one used to be counted nowhere: parsed, outside the v6 prefix,
+    # and matched by no branch.
+    assert result["skipped_count"] == 2
     assert {hit["source"] for hit in result["hits"]} == {
         "firewall_alias",
         "filter_rule",
@@ -250,5 +304,7 @@ async def test_empty_result_is_a_successful_sweep() -> None:
         "prefix": "2001:db8::/32",
         "count": 0,
         "skipped_count": 0,
+        "suffix_count": 0,
+        "suffixes": [],
         "hits": [],
     }
