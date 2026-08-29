@@ -248,27 +248,39 @@ def test_every_apply_field_declares_its_default() -> None:
     schema mispredicts whether a change goes live. The fact has to be
     machine-readable per action, not prose in some descriptions and absent
     from others.
+
+    A tool whose `execute` reads `apply` but whose `input_schema` omits the
+    field entirely is invisible to a check that only inspects *declared*
+    `apply` fields: `delete_shaper_queue` and `delete_shaper_rule` applied to
+    the live firewall by default while advertising no `apply` property at
+    all. So this also statically walks each leaf tool's `execute` body (the
+    same walk `test_schema_completeness.py` uses) to catch an undeclared read,
+    not only a declared-but-defaultless one.
     """
     from opnsense_mcp.fastmcp_server import build_shaper_tools
     from opnsense_mcp.utils.mock_api import MockOPNsenseClient
     from opnsense_mcp.utils.registry import build_tools
+    from tests._schema_ast import execute_ast, param_keys_read
 
     client = MockOPNsenseClient(
         {"development": {"mock_data_path": "examples/mock_data"}}
     )
     tools = build_tools(client, extra=build_shaper_tools(client))
 
-    undeclared = [
-        name
-        for name, tool in tools.items()
-        if "apply"
-        in ((getattr(tool, "input_schema", {}) or {}).get("properties") or {})
-        and "default"
-        not in (getattr(tool, "input_schema", {}) or {})["properties"]["apply"]
-    ]
+    undeclared: list[str] = []
+    for name, tool in tools.items():
+        props = (getattr(tool, "input_schema", {}) or {}).get("properties") or {}
+        if "apply" in props:
+            if "default" not in props["apply"]:
+                undeclared.append(name)
+            continue
+        execute = execute_ast(tool)
+        if execute is not None and "apply" in param_keys_read(execute):
+            undeclared.append(name)
 
     assert not undeclared, (
-        "these tools take `apply` without declaring its default; read the "
+        "these tools take `apply` without declaring its default (or without "
+        "declaring `apply` in input_schema at all); read the "
         "params.get('apply', X) in each and write X into the schema: "
         + ", ".join(sorted(undeclared))
     )
