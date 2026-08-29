@@ -87,6 +87,6 @@ Both sides of the swap keep the same six capacity groups, so the spread is uncha
 | B3 | **merged** | `feat/ula-ra-gaps-bucket-B3-cursor` | `ef16641` | cursor-cli |
 | B4 | **merged** | `feat/ula-ra-gaps-bucket-B4-cursor` | `fffacd8` | cursor-cli |
 | B5 | **merged** (rerouted ollama-cloud → codex) | `feat/ula-ra-gaps-bucket-B5-codex` | `9a1cfeb` | codex-cli |
-| B8 | running (rerouted opencode → ollama-local) | `feat/ula-ra-gaps-bucket-B8-ollama` | — | ollama-local |
-| B6 | pending | — | — | — |
-| B7 | pending | — | — | — |
+| B8 | **merged** (rerouted opencode → ollama-local) | `feat/ula-ra-gaps-bucket-B8-ollama` | `b31227d` | ollama-local |
+| B6 | **done** (no change needed; verified) | — | — | coordinator inline |
+| B7 | **done** | — | — | coordinator inline |

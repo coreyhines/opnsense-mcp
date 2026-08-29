@@ -180,8 +180,8 @@ admin-down interface. `apply_ula` called `radvd/service/reconfigure`, got `ok`,
 and reported `applied: true` having changed nothing observable. The design spec
 listed radvd or dnsmasq as alternatives and made "which one does this box use"
 a gate. The gate was never closed and the tools were built for radvd anyway.
-Fixed in bucket B4: writes now consult which daemon actually serves, and the
-apply re-reads and reports `applied: false` when the state does not match.
+The fix: writes now consult which daemon actually serves, and the apply
+re-reads and reports `applied: false` when the state does not match.
 
 **Now enforced, not remembered.**
 `.claude/hooks/bash_guard.py` runs as a `PreToolUse` hook on every Bash call. It

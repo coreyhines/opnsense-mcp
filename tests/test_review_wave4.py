@@ -88,6 +88,7 @@ _NOT_TOOLS = frozenset(
         "ra_router_lifetime",
         "get_range",
         "search_range",
+        "set_range",
         "dhcp6_duid",
         "password_hash",
         "secret_key",

@@ -78,3 +78,23 @@ here rather than an SSH workaround: *"Only if G0/G2 fail; then say UI. No silent
 - **B5**: track-interface addressing refused with the manual steps, since no API expresses it.
 
 Phase 3 (graceful deprecate) remains unavailable. The dnsmasq range model has no preferred-lifetime field, so advertising the delegated prefix with preferred-lifetime 0 so clients drain off it is not reachable through this API. It is reachable only by a UI action or a `config.xml` edit, neither of which a tool can perform without the same SSH workaround this project has already ruled out for interface addressing.
+
+## Wave 4 verification
+
+**B6 (wiring): nothing to change, verified rather than assumed.** The grouped `dhcp` tool already
+exposes all eight new range fields, because `GroupedTool` aggregates its members' schemas and no
+bucket added an action. `tool_groups.py` and `registry.py` are untouched.
+
+**B7 (live verify).** The fix itself cannot be verified live: the deployed container runs the
+previous build, so what follows checks the API facts the fix depends on.
+
+- The committed fixture matches the live object exactly. 18 keys either side, no key on one side
+  only, and the `ra_mode` option set is identical. The capture has not drifted.
+- **The dnsmasq range model has no `disabled` field, and no `enabled` field either.** Neither
+  `search_range` rows nor the `get_range` node carry one. `toggle_range` builds a payload
+  containing `disabled` and posts it to `set_range`.
+
+That second point is a defect of the same shape as the RA one this round fixed: a write whose
+key the model does not declare, followed by a success report. It was not exercised here, because
+proving it would mean toggling a live DHCP range. Filed separately rather than fixed inside a
+bucket that did not own it.
