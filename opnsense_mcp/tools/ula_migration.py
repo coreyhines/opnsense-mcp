@@ -338,16 +338,25 @@ class SetRouterAdvertTool(_UlaToolBase):
                 call_class="write",
                 json={"entry": payload},
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", RADVD["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to update radvd entry")
             return {"status": "error", "error": str(exc)}
 
+        # The apply is its own phase. Inside the write's try, a reload failure
+        # was reported as the write having failed.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, RADVD["reconfigure"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning("radvd entry written but not applied: %s", exc)
+                apply_error = str(exc)
+
         return {
             "status": "success",
+            "applied": applied,
+            **({"apply_error": apply_error} if apply_error else {}),
             "uuid": uuid,
             "interface": iface,
             "daemon": DAEMON_RADVD,
@@ -428,16 +437,23 @@ class SetHostOverrideTool(_UlaToolBase):
                 call_class="write",
                 json={"host": payload},
             )
-            if params.get("apply", True):
-                await self.client._make_request(
-                    "POST", UNBOUND["reconfigure"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to update host override")
             return {"status": "error", "error": str(exc)}
 
+        applied, apply_error = False, ""
+        if params.get("apply", True):
+            try:
+                await run_apply(self.client, UNBOUND["reconfigure"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning("host override written but not applied: %s", exc)
+                apply_error = str(exc)
+
         return {
             "status": "success",
+            "applied": applied,
+            **({"apply_error": apply_error} if apply_error else {}),
             "uuid": uuid,
             "hostname": payload.get("hostname", ""),
             "rr": payload.get("rr", ""),
@@ -820,23 +836,25 @@ class ApplyUlaTool(_UlaToolBase):
                             ),
                         }
                 else:
-                    await self.client._make_request(
-                        "POST", _DOMAIN_ENDPOINTS[domain], call_class="apply"
-                    )
+                    await run_apply(self.client, _DOMAIN_ENDPOINTS[domain])
             except Exception as exc:  # noqa: BLE001
                 logger.exception("apply_ula failed at %s", domain)
                 remaining = ordered[ordered.index(domain) + 1 :]
                 result: dict[str, Any] = {
                     "status": "partial_failure",
                     "dry_run": False,
-                    "applied": True,
+                    # Not hard-coded True: when the first domain fails, `done`
+                    # is empty and nothing was applied at all. Reporting a
+                    # blanket True there describes a run that did not happen.
+                    "applied": bool(done),
                     "done": done,
                     "failed": domain,
                     "remaining": remaining,
                     "error": str(exc),
                     "recovery": (
-                        "Earlier domains stayed applied. Nothing was rolled back. "
-                        "Fix the cause and re-run with the remaining domains."
+                        f"{'Earlier domains stayed applied. ' if done else ''}"
+                        "Nothing was rolled back. Fix the cause and re-run with "
+                        "the remaining domains."
                     ),
                 }
                 if ra_result:

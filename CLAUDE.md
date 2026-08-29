@@ -183,6 +183,26 @@ a gate. The gate was never closed and the tools were built for radvd anyway.
 The fix: writes now consult which daemon actually serves, and the apply
 re-reads and reports `applied: false` when the state does not match.
 
+**A scripted falsification loop can lie to you via stale bytecode.**
+Reverting one site at a time often produces files of *identical byte length*,
+because the inserted block is the same across sites sharing an endpoint
+constant. CPython invalidates `.pyc` on `(mtime, size)`, and mtimes are
+second-granularity, so a fast revert-and-check loop can reuse stale bytecode
+and report a reverted site as still passing. Two of three loop runs disagreed
+before this was found. Any scripted revert loop here needs
+`PYTHONDONTWRITEBYTECODE=1` and a `__pycache__` sweep between iterations, or it
+under-reports — which means the method this list depends on quietly stops
+working.
+
+**A check that reads documentation is not a check on the deployment.**
+`test_deploy_runtime_paths` asserted against `deploy/*.container.example` and
+passed for months while installed units left `OPNSENSE_BACKUP_DIR` unset and
+`/root/.ssh` unmounted. `install.sh` never reads that file: it verifies it
+exists, then writes the unit from its own printf lines, which omitted all
+three. The tests now parse the unit the installer generates. Separately, the
+installer only ever ran `systemctl start`, which is a no-op on an active unit,
+so a re-run rewrote the quadlet and left the old container running.
+
 **Now enforced, not remembered.**
 `.claude/hooks/bash_guard.py` runs as a `PreToolUse` hook on every Bash call. It
 refuses the `;`-chained publish and the bare-cat heredoc, and warns on workspace
@@ -203,6 +223,10 @@ Nine more run as tests:
 | `test_ssh_known_hosts.py` | the host-key check accepts a listed name presenting the wrong key |
 | `test_shaper_kernel_sync.py` | an applied delete reports success while the kernel still holds the pipe |
 | `test_apply_ula_reports_verification_failure` | an applied RA change reports success while the serving daemon does not match |
+| `test_apply_discipline.py` | a call passes `call_class="apply"` without going through `run_apply`, so a configd refusal at HTTP 200 reads as applied |
+| `test_every_delete_either_confirms_or_says_why_not` | a tool whose class posts to a `del*` endpoint takes no confirm token and is not listed with a reason — matched on the endpoint, not the action name |
+| `test_schema_completeness.py` | `execute` reads a `params` key the tool's own `input_schema` never declares |
+| `test_shape_check.py` | a node-shaped API response is compared with the row extractor, so empty matches empty and nothing is checked |
 
 `benchmark_performance.py --check-shapes` diffs live response keys against the
 captured fixtures. It needs the firewall, so it is a command rather than a test.
