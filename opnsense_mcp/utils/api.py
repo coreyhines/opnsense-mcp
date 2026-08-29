@@ -848,7 +848,20 @@ class OPNsenseClient:
             }
 
     async def apply_firewall_changes(self: "OPNsenseClient") -> dict[str, Any]:
-        """Apply firewall changes and create a rollback point."""
+        """Apply firewall changes without a half-finished savepoint protocol.
+
+        Uses :func:`opnsense_mcp.utils.apply.run_apply` so a configd refusal at
+        HTTP 200 is not treated as success. Still raises on failure: this method
+        *is* the apply, and callers (``apply_fw_changes``, fw_rule writes) already
+        treat an exception as "not applied". Returning ``applied: False`` without
+        raising would make ``apply_fw_changes`` report success with ``applied:
+        True``. Fw-rule tools that wrap this inside the write's ``try`` still
+        mis-attribute an apply miss as a write failure — that is a tool-layer
+        fix, not a client-contract change.
+        """
+        # Lazy: apply.py imports error types from this module.
+        from opnsense_mcp.utils.apply import ApplyError, run_apply
+
         try:
             # No savepoint. OPNsense pairs savepoint/apply-with-revision with a
             # cancelRollback that confirms the result, and this client never
@@ -857,15 +870,27 @@ class OPNsenseClient:
             # endpoints are absent from the 26.7 series anyway, so the path
             # could not be exercised. A plain apply is what the firewall needs.
             logger.debug("Applying firewall changes")
-            apply_resp = await self._make_request(
-                "POST", "/api/firewall/filter/apply", call_class="apply"
-            )
+            # Capture the body so ResponseError still carries the API `message`
+            # (existing tests and callers match on it). ApplyError's text is
+            # only the status token.
+            held: list[Any] = []
+            real_make = self._make_request
 
-            # Handle different response formats for apply operation
-            status = apply_resp.get("status", "").strip().lower()
-            if status not in ("ok", "success"):
-                error_msg = _api_error_detail(apply_resp)
-                self._raise_apply_changes_failed(error_msg)
+            async def _capture(
+                method: str, endpoint: str, *args: Any, **kwargs: Any
+            ) -> Any:
+                response = await real_make(method, endpoint, *args, **kwargs)
+                held.append(response)
+                return response
+
+            self._make_request = _capture  # type: ignore[method-assign]
+            try:
+                await run_apply(self, "/api/firewall/filter/apply")
+            except ApplyError:
+                detail = _api_error_detail(held[-1]) if held else "Unknown API error"
+                self._raise_apply_changes_failed(detail)
+            finally:
+                self._make_request = real_make  # type: ignore[method-assign]
         except APIError:
             raise
         except Exception as e:
@@ -873,7 +898,7 @@ class OPNsenseClient:
             raise RequestError(f"Failed to apply firewall changes: {e!s}") from e
         else:
             logger.info("Successfully applied firewall changes")
-            return {"result": "success"}
+            return {"result": "success", "applied": True}
 
     async def search_arp_table(self: "OPNsenseClient", query: str) -> list[dict]:
         """
@@ -1602,16 +1627,51 @@ class OPNsenseClient:
         )
 
     async def reconfigure_unbound(self) -> dict[str, Any]:
-        """Apply Unbound DNS configuration changes."""
-        return await self._make_request(
-            "POST", ENDPOINTS["unbound"]["reconfigure"], call_class="apply"
-        )
+        """Apply Unbound DNS configuration changes.
+
+        Reads what reconfigure answered. A configd refusal at HTTP 200 returns
+        ``applied: False`` with ``apply_error`` rather than raising: ``mkdns`` /
+        ``rmdns`` wrap this inside the write's ``try``, so raising would report
+        the write as failed when the override is already committed. Those tools
+        must start checking the returned ``applied`` flag (tool-layer buckets).
+        """
+        # Lazy: apply.py imports error types from this module.
+        from opnsense_mcp.utils.apply import ApplyError, run_apply
+
+        try:
+            response = await run_apply(self, ENDPOINTS["unbound"]["reconfigure"])
+        except ApplyError as exc:
+            return {
+                "status": "failed",
+                "applied": False,
+                "apply_error": str(exc),
+            }
+        out = dict(response) if response else {}
+        out["applied"] = True
+        return out
 
     async def restart_unbound(self) -> dict[str, Any]:
-        """Restart Unbound (clears resolver cache; brief DNS interruption)."""
-        return await self._make_request(
-            "POST", ENDPOINTS["unbound"]["restart"], call_class="apply"
-        )
+        """Restart Unbound (clears resolver cache; brief DNS interruption).
+
+        Single attempt — do not retry; a restart briefly interrupts DNS.
+        Same return contract as :meth:`reconfigure_unbound`: report apply
+        failure via ``applied: False`` so ``flush_dns`` is not forced to treat
+        a refused restart as an opaque exception (it still must read the flag).
+        """
+        # Lazy: apply.py imports error types from this module.
+        from opnsense_mcp.utils.apply import ApplyError, run_apply
+
+        try:
+            response = await run_apply(self, ENDPOINTS["unbound"]["restart"])
+        except ApplyError as exc:
+            return {
+                "status": "failed",
+                "applied": False,
+                "apply_error": str(exc),
+            }
+        out = dict(response) if response else {}
+        out["applied"] = True
+        return out
 
     async def search_aliases(self, search: str = "") -> list[dict[str, Any]]:
         """List firewall aliases, optionally filtered."""
