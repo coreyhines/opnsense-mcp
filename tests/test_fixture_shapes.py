@@ -114,7 +114,9 @@ def test_captured_v6_range_normalizes_to_a_non_empty_constructor() -> None:
     node = captured["get_range"]["range"]
     mapped = _project(row, _RANGE_FIELDS)
 
-    selected = [key for key, option in node["constructor"].items() if option["selected"]]
+    selected = [
+        key for key, option in node["constructor"].items() if option["selected"]
+    ]
     assert selected == ["opt13"]
     assert mapped["constructor"] == row["constructor"] == selected[0]
 

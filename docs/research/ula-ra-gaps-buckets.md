@@ -85,8 +85,8 @@ Both sides of the swap keep the same six capacity groups, so the spread is uncha
 | B1 | **merged** | `feat/ula-ra-gaps-bucket-B1-claude` | `e206d91` | claude-cli |
 | B2 | **merged** | `feat/ula-ra-gaps-bucket-B2-codex` | `969ce93` | codex-cli |
 | B3 | **merged** | `feat/ula-ra-gaps-bucket-B3-cursor` | `ef16641` | cursor-cli |
-| B4 | pending | — | — | — |
-| B5 | pending | — | — | — |
-| B8 | pending | — | — | — |
+| B4 | **merged** | `feat/ula-ra-gaps-bucket-B4-cursor` | `fffacd8` | cursor-cli |
+| B5 | **merged** (rerouted ollama-cloud → codex) | `feat/ula-ra-gaps-bucket-B5-codex` | `9a1cfeb` | codex-cli |
+| B8 | running (rerouted opencode → ollama-local) | `feat/ula-ra-gaps-bucket-B8-ollama` | — | ollama-local |
 | B6 | pending | — | — | — |
 | B7 | pending | — | — | — |
