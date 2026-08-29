@@ -2,9 +2,9 @@
 
 **Feature slug:** `ula-ra-gaps`
 **Integration branch:** `feat/ula-ra-gaps-spec`
-**Source issues:** [#26](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/issues/26) (RA daemon defect), [#27](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/issues/27) (dnsmasq range fields), [#28](https://forgejo.freeblizz.com/coreyhines/opnsense-mcp/issues/28) (PD holder)
+**Source issues (Forgejo):** #26 (RA daemon defect), #27 (dnsmasq range fields), #28 (PD holder)
 **Approval status:** approved (user, 2026-08-28)
-**Capacity snapshot (before):** `docs/research/pb-sessions/ula-ra-gaps/before.json`
+**Capacity snapshot (before):** `~/code/untracked/opnsense-mcp-notes/pb-sessions/ula-ra-gaps/before.json` (kept outside the repo: the probe records real infra hostnames, which `test_no_site_identifiers.py` scans for on the filesystem regardless of gitignore)
 **Session level:** GREEN — anthropic 7% session / 39% week, cursor 23%, ollama-cloud 0% session / 49% week, codex 1% session / 24% week
 
 ## Context
