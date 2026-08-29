@@ -26,6 +26,7 @@ from opnsense_mcp.utils.dhcp_subnet_dns import (
     interface_matches,
     parse_dns_server_list,
 )
+from opnsense_mcp.utils.mvc_merge import merge_for_set
 
 logger = logging.getLogger(__name__)
 
@@ -962,25 +963,24 @@ class DnsmasqProvider:
         return {}
 
     def _flat_range_payload(
-        self, row: dict[str, Any], *, enabled: bool
+        self, node: dict[str, Any], *, enabled: bool
     ) -> dict[str, Any]:
-        """Build flat range payload for set_range (preserve pool fields)."""
-        return {
-            "uuid": str(row.get("uuid") or ""),
-            "interface": str(row.get("interface") or ""),
-            "set_tag": str(row.get("set_tag") or ""),
-            "start_addr": str(row.get("start_addr") or ""),
-            "end_addr": str(row.get("end_addr") or ""),
-            "domain": str(row.get("domain") or ""),
-            "domain_search_list": str(row.get("domain_search_list") or ""),
-            "nosync": str(row.get("nosync") or "0"),
-            "dhcpv4": str(row.get("dhcpv4") or "1"),
-            "dhcpv6": str(row.get("dhcpv6") or "0"),
-            "ra_mode": str(row.get("ra_mode") or ""),
-            "ra_priority": str(row.get("ra_priority") or ""),
-            "description": str(row.get("description") or ""),
-            "disabled": "0" if enabled else "1",
-        }
+        """Flatten the whole range node for set_range, changing only the flag.
+
+        A ``set*`` POST replaces the node, so any field the payload omits is
+        reset to its model default. This used to rebuild the range from a
+        hand-listed subset that kept ``ra_mode`` and ``ra_priority`` but dropped
+        ``constructor``, ``prefix_len``, ``ra_interval``, ``ra_mtu``,
+        ``ra_router_lifetime``, ``lease_time`` and ``subnet_mask``, so toggling
+        an IPv6 range blanked the ``constructor`` that makes it advertise. It
+        also invented ``dhcpv4``, ``dhcpv6`` and ``domain_search_list``, which
+        the model does not have.
+
+        ``merge_for_set`` reads the real node instead: it flattens the four MVC
+        selects (``ra_mode``, ``ra_priority``, ``constructor``, ``domain_type``)
+        to their selected keys and carries every other field through unchanged.
+        """
+        return merge_for_set(node, {"disabled": "0" if enabled else "1"})
 
     async def toggle_range(
         self,

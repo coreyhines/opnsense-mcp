@@ -1105,6 +1105,11 @@
           "optional": true,
           "type": "boolean"
         },
+        "constructor": {
+          "description": "Interface key to take the IPv6 prefix from, e.g. opt13. This is the field that makes an IPv6 range advertise; it is not a relay setting.",
+          "optional": true,
+          "type": "string"
+        },
         "description": {
           "optional": true,
           "type": "string"
@@ -1123,6 +1128,41 @@
         },
         "lease_time": {
           "description": "Seconds, or a suffixed value like 2h",
+          "optional": true,
+          "type": "string"
+        },
+        "mode": {
+          "description": "Range mode; empty for a plain DHCP range",
+          "optional": true,
+          "type": "string"
+        },
+        "prefix_len": {
+          "description": "Advertised prefix length, e.g. 64",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_interval": {
+          "description": "Router advertisement interval, in seconds",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_mode": {
+          "description": "One or more of: ra-only, slaac, ra-names, ra-stateless, ra-advrouter, off-link. Empty leaves it unset.",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_mtu": {
+          "description": "MTU to advertise",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_priority": {
+          "description": "Router preference: high, low, or empty for normal.",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_router_lifetime": {
+          "description": "Router lifetime, in seconds. The model has no preferred lifetime for the advertised prefix.",
           "optional": true,
           "type": "string"
         },
@@ -2172,6 +2212,11 @@
           "optional": true,
           "type": "boolean"
         },
+        "constructor": {
+          "description": "Interface key to take the IPv6 prefix from, e.g. opt13. This is the field that makes an IPv6 range advertise; it is not a relay setting.",
+          "optional": true,
+          "type": "string"
+        },
         "description": {
           "optional": true,
           "type": "string"
@@ -2185,6 +2230,41 @@
           "type": "string"
         },
         "lease_time": {
+          "optional": true,
+          "type": "string"
+        },
+        "mode": {
+          "description": "Range mode; empty for a plain DHCP range",
+          "optional": true,
+          "type": "string"
+        },
+        "prefix_len": {
+          "description": "Advertised prefix length, e.g. 64",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_interval": {
+          "description": "Router advertisement interval, in seconds",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_mode": {
+          "description": "One or more of: ra-only, slaac, ra-names, ra-stateless, ra-advrouter, off-link. Empty leaves it unset.",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_mtu": {
+          "description": "MTU to advertise",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_priority": {
+          "description": "Router preference: high, low, or empty for normal.",
+          "optional": true,
+          "type": "string"
+        },
+        "ra_router_lifetime": {
+          "description": "Router lifetime, in seconds. The model has no preferred lifetime for the advertised prefix.",
           "optional": true,
           "type": "string"
         },
