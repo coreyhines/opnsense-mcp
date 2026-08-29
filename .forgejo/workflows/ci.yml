@@ -36,7 +36,14 @@ jobs:
         run: apt-get update && apt-get install -y --no-install-recommends git nodejs
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Install dependencies
-        run: pip install --quiet -r requirements.txt -r requirements-dev.txt
+        # The package itself, not just its requirements: build_info reads
+        # importlib.metadata, so without an install it reports "unknown" and
+        # test_get_build_info_uses_embedded_metadata fails. It passed until now
+        # on whatever opnsense_mcp.egg-info happened to survive in the runner's
+        # reused workspace, which is not something to depend on.
+        run: |
+          pip install --quiet -r requirements.txt -r requirements-dev.txt
+          pip install --quiet -e . --no-deps
       - name: Run tests
         run: |
           pytest tests/ -q --tb=short \

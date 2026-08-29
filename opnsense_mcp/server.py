@@ -54,25 +54,32 @@ def _ensure_runtime_deps() -> None:
         )
         return
 
-    subprocess.run(  # nosec B603
-        [
-            *install,
-            "pydantic>=2.0.0",
-            "requests>=2.31.0",
-            "httpx>=0.24.0",
-            "python-dotenv>=1.0.0",
-            "fastmcp>=0.1.0",
-            "pyyaml>=6.0.0",
-            "fastapi>=0.100.0",
-            "uvicorn>=0.24.0",
-            "ruamel.yaml>=0.17.0",
-            "python-multipart>=0.0.6",
-            "typing-extensions>=4.0.0",
-            "passlib[bcrypt]>=1.7.4",
-            "paramiko>=3.0.0",
-        ],
-        check=True,
-    )
+    # Last resort: no requirements.txt on disk, so take the pins from this
+    # package's own metadata rather than a third hand-maintained copy. The
+    # copy that used to live here had drifted to `fastmcp>=0.1.0`, which
+    # cannot speak any protocol this server implements.
+    try:
+        from importlib.metadata import requires as _requires
+
+        pins = [
+            spec.split(";")[0].strip()
+            for spec in (_requires("opnsense-mcp") or [])
+            if "extra ==" not in spec
+        ]
+    except Exception:  # noqa: BLE001 - bootstrap must not fail on metadata
+        pins = []
+
+    if not pins:
+        # This runs at import, before logging is configured, so stderr it is.
+        print(
+            "opnsense-mcp: cannot bootstrap dependencies, no requirements.txt "
+            "found and package metadata is unavailable; install the package "
+            "first",
+            file=sys.stderr,
+        )
+        return
+
+    subprocess.run([*install, *pins], check=True)  # nosec B603
 
 
 _ensure_runtime_deps()

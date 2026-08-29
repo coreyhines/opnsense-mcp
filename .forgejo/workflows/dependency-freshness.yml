@@ -1,0 +1,97 @@
+name: Dependency freshness
+
+# The suite proves the pins agree with each other. Nothing proves they agree
+# with upstream, because that changes without anyone touching this repo. So it
+# runs on a clock instead, and files an issue rather than failing a build
+# nobody asked to run.
+
+on:
+  schedule:
+    # Weekly, Monday 07:00 UTC, an hour after the flent baseline.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+jobs:
+  survey:
+    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
+    container:
+      image: docker.io/library/python:3.12-slim
+    steps:
+      - name: Install git, node, and curl
+        # actions/checkout is a Node action and this image has no node, so the
+        # checkout step dies with "executable file `node` not found in $PATH".
+        # deploy.yml already carries this note for its alpine image.
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq git curl nodejs >/dev/null
+      - uses: https://data.forgejo.org/actions/checkout@v6
+
+      - name: Install dependencies
+        run: pip install --quiet -r requirements.txt -r requirements-dev.txt
+
+      - name: Survey
+        id: survey
+        run: |
+          # No pipe: `cmd | tee` reports tee's status, so `$?` was always 0 and
+          # the issue step below could never have fired.
+          set +e
+          python scripts/check_dependency_freshness.py > /tmp/survey.txt 2>&1
+          stale=$?
+          set -e
+          cat /tmp/survey.txt
+          echo "stale=${stale}" >> "$GITHUB_OUTPUT"
+          python scripts/check_dependency_freshness.py --json > /tmp/survey.json 2>/dev/null || true
+
+      - name: File an issue when something is behind
+        if: steps.survey.outputs.stale != '0'
+        env:
+          # Forgejo hands every run a token. Verified on run 228: it filed
+          # and closed issue #32, so no repo secret is needed here.
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SERVER: ${{ github.server_url }}
+        run: |
+          if [ -z "${FORGEJO_TOKEN}" ]; then
+            echo "No token available; printing the survey instead." >&2
+            cat /tmp/survey.txt
+            exit 1
+          fi
+          # One open issue at a time: reopening a fresh one every week is noise.
+          existing=$(curl -sS -H "Authorization: token ${FORGEJO_TOKEN}" \
+            "${SERVER}/api/v1/repos/${REPO}/issues?state=open&labels=dependencies" \
+            | python -c "import json,sys; print(len(json.load(sys.stdin)))")
+          if [ "${existing}" != "0" ]; then
+            echo "A dependencies issue is already open; not filing another."
+            exit 0
+          fi
+          body=$(python - <<'PY'
+          import json
+          rows = json.load(open("/tmp/survey.json"))
+          stale = [r for r in rows if r["state"] in ("behind", "prerelease")]
+          lines = ["| package | installed | latest stable | state |", "|---|---|---|---|"]
+          lines += [
+              f"| `{r['name']}` | {r['installed']} | {r['latest_stable']} | {r['state']} |"
+              for r in stale
+          ]
+          print(
+              "The weekly survey found dependencies behind their latest stable "
+              "release.\n\n" + "\n".join(lines) + "\n\n"
+              "Raise the floors in `pyproject.toml`, regenerate the requirements "
+              "files from it, and run the suite. A `prerelease` row that is not "
+              "marked `(declared)` means something pulled a prerelease nobody "
+              "asked for.\n\n"
+              "Filed by `.forgejo/workflows/dependency-freshness.yml`."
+          )
+          PY
+          )
+          curl -sS -X POST -H "Authorization: token ${FORGEJO_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "${SERVER}/api/v1/repos/${REPO}/issues" \
+            -d "$(python -c "
+          import json,sys
+          print(json.dumps({
+              'title': 'Dependencies are behind their latest stable releases',
+              'body': sys.stdin.read(),
+              'labels': [],
+          }))" <<< "${body}")" >/dev/null
+          echo "Issue filed."
