@@ -16,6 +16,7 @@ import asyncio
 import logging
 from typing import Any
 
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
     validate_delete_confirm_token,
@@ -302,20 +303,35 @@ class MkNatOutboundTool(_NatToolBase):
             result = await self.client._make_request(
                 "POST", SNAT["add"], call_class="write", json={"rule": payload}
             )
-            if params.get("apply", False):
-                await self.client._make_request(
-                    "POST", SNAT["apply"], call_class="apply"
-                )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to create outbound NAT rule")
             return {"status": "error", "error": str(exc)}
 
-        return {
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, SNAT["apply"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning(
+                    "Outbound NAT rule created but filter reload failed: %s", exc
+                )
+                apply_error = str(exc)
+
+        out = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "note": "Staged. Apply the filter to load it.",
+            "applied": applied,
+            "note": (
+                "Rule created and loaded into the packet filter."
+                if applied
+                else "Staged. Apply the filter to load it."
+            ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class ToggleNatOutboundTool(_NatToolBase):

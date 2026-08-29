@@ -230,6 +230,32 @@ async def test_npt_stages_without_applying_by_default() -> None:
 
 
 @pytest.mark.asyncio
+async def test_npt_apply_status_failed_keeps_successful_write_visible() -> None:
+    client = _client()
+    _stub(
+        client,
+        {
+            "search_rule": {"rows": [], "total": 0},
+            "filter/apply": {"status": "failed", "message": "pf reload refused"},
+        },
+    )
+
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "trackif": "lan",
+            "apply": True,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is True
+    assert result["applied"] is False
+    assert "apply_error" in result
+
+
+@pytest.mark.asyncio
 async def test_npt_toggle_takes_an_explicit_state() -> None:
     client = _client()
     calls = _stub(client, {"search_rule": NPT_ROWS})
@@ -384,6 +410,35 @@ async def test_vip_accepts_valid_ipv4_and_ipv6_addresses() -> None:
     assert v6["status"] == "success"
     assert v4["status"] == "success"
     assert len([c for c in calls if "add_item" in c["endpoint"]]) == 2
+
+
+@pytest.mark.asyncio
+async def test_vip_apply_status_failed_keeps_successful_write_visible() -> None:
+    client = _client()
+    _stub(
+        client,
+        {
+            "search_item": {"rows": [], "total": 0},
+            "reconfigure": {
+                "status": "failed",
+                "message": "interface reconfigure refused",
+            },
+        },
+    )
+
+    result = await MkVipTool(client).execute(
+        {
+            "interface": "lan",
+            "subnet": "fd0b:b022:1e5:2::1",
+            "subnet_bits": 64,
+            "apply": True,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is True
+    assert result["applied"] is False
+    assert "apply_error" in result
 
 
 # --- loopback --------------------------------------------------------------
