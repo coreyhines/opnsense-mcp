@@ -69,3 +69,12 @@ here rather than an SSH workaround: *"Only if G0/G2 fail; then say UI. No silent
 | B4 | Narrows. Routing, verification and the both-daemons guard stay. The deprecate action is dropped as unimplementable. |
 | B5 | Narrows to document-and-refuse, as its brief anticipated. |
 | #27 | Its open question is answered; the answer removes a capability the issue implied was reachable. |
+
+## What shipped
+
+- **B1**: `_flat_range_payload` replaced with get-and-merge, so toggling a v6 range no longer blanks `constructor`; `list_ranges` returns the `ra_*` fields; create/update accept and validate them.
+- **B3**: `opnsense_mcp/utils/ra_daemon.py`, a pure classifier returning per-interface verdicts of `dnsmasq` / `radvd` / `both` / `none` with reason codes.
+- **B4**: RA writes consult the verdict and refuse when the wrong daemon would be written; `apply_ula` verifies after reconfiguring; a deprecate request is refused by name.
+- **B5**: track-interface addressing refused with the manual steps, since no API expresses it.
+
+Phase 3 (graceful deprecate) remains unavailable. The dnsmasq range model has no preferred-lifetime field, so advertising the delegated prefix with preferred-lifetime 0 so clients drain off it is not reachable through this API. It is reachable only by a UI action or a `config.xml` edit, neither of which a tool can perform without the same SSH workaround this project has already ruled out for interface addressing.
