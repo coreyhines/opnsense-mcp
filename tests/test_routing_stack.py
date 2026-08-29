@@ -28,12 +28,13 @@ from opnsense_mcp.tools.routing_stack import (
     MkGatewayTool,
     MkRouteTool,
     MkVlanTool,
+    RmGatewayTool,
     RmRouteTool,
     RmVlanTool,
     ToggleGatewayTool,
     ToggleRouteTool,
 )
-from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.api import OPNsenseClient, RequestError
 
 VLAN_UUID = "vlan-1111"
 GW_UUID = "gw-2222"
@@ -129,6 +130,8 @@ def _stub(client: OPNsenseClient, responses: dict[str, Any]) -> list[dict[str, A
         calls.append({"endpoint": endpoint, "json": kwargs.get("json")})
         for key, value in responses.items():
             if key in endpoint:
+                if isinstance(value, Exception):
+                    raise value
                 return value
         return {"result": "saved", "uuid": "new-uuid"}
 
@@ -389,8 +392,170 @@ async def test_routing_writes_stage_by_default() -> None:
     client = _client()
     calls = _stub(client, {"searchroute": {"rows": [], "total": 0}})
 
-    await MkRouteTool(client).execute(
+    result = await MkRouteTool(client).execute(
         {"network": "172.20.2.0/24", "gateway": "TRANSIT_INTERNAL"}
     )
 
     assert not [c for c in calls if "reconfigure" in c["endpoint"]]
+    assert result["applied"] is False
+
+
+# --- applying --------------------------------------------------------------
+#
+# `reconfigure` answers a `{"status": ...}` document. A configd refusal comes
+# back as HTTP 200 with a status the client does not raise on, so a tool that
+# only counted the call as having been made reported every refusal as applied.
+# Each case below returns exactly that: not an exception, not
+# `{"result": "failed"}`, but a 200 whose body says the apply did not happen.
+
+APPLY_REFUSED = {"status": "failed"}
+APPLY_OK = {"status": "ok"}
+
+
+async def _confirmed(tool: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """Run a delete twice, feeding back the token the first call issued."""
+    first = await tool.execute(params)
+    assert first["status"] == "confirmation_required"
+    return await tool.execute({**params, "confirm": first["confirm_token"]})
+
+
+async def _run_mk_vlan(client: OPNsenseClient) -> dict[str, Any]:
+    return await MkVlanTool(client).execute(
+        {"parent": "ax0", "tag": 900, "apply": True}
+    )
+
+
+async def _run_mk_gateway(client: OPNsenseClient) -> dict[str, Any]:
+    return await MkGatewayTool(client).execute(
+        {
+            "name": "TRANSIT_NEW",
+            "interface": "opt3",
+            "gateway": "172.31.9.2",
+            "apply": True,
+        }
+    )
+
+
+async def _run_toggle_gateway(client: OPNsenseClient) -> dict[str, Any]:
+    return await ToggleGatewayTool(client).execute(
+        {"uuid": GW_UUID, "enabled": False, "apply": True}
+    )
+
+
+async def _run_mk_route(client: OPNsenseClient) -> dict[str, Any]:
+    return await MkRouteTool(client).execute(
+        {"network": "172.20.9.0/24", "gateway": "TRANSIT_INTERNAL", "apply": True}
+    )
+
+
+async def _run_toggle_route(client: OPNsenseClient) -> dict[str, Any]:
+    return await ToggleRouteTool(client).execute(
+        {"uuid": ROUTE_UUID, "enabled": False, "apply": True}
+    )
+
+
+async def _run_rm_route(client: OPNsenseClient) -> dict[str, Any]:
+    return await _confirmed(RmRouteTool(client), {"uuid": ROUTE_UUID, "apply": True})
+
+
+async def _run_rm_gateway(client: OPNsenseClient) -> dict[str, Any]:
+    return await _confirmed(RmGatewayTool(client), {"uuid": GW_UUID, "apply": True})
+
+
+EMPTY = {"rows": [], "total": 0}
+
+# site -> (what to run, what the reads answer, the field the write itself sets
+# and the value it must still hold once the apply has failed)
+APPLY_SITES = [
+    ("mk_vlan", _run_mk_vlan, {"search_item": EMPTY}, ("created", True)),
+    ("mk_gateway", _run_mk_gateway, {"search_gateway": EMPTY}, ("created", True)),
+    (
+        "toggle_gateway",
+        _run_toggle_gateway,
+        {"get_gateway": GET_GW},
+        ("enabled", False),
+    ),
+    ("mk_route", _run_mk_route, {"searchroute": EMPTY}, ("created", True)),
+    ("toggle_route", _run_toggle_route, {"getroute": GET_ROUTE}, ("enabled", False)),
+    ("rm_route", _run_rm_route, {}, ("deleted", True)),
+    ("rm_gateway", _run_rm_gateway, {}, ("deleted", True)),
+]
+
+
+@pytest.mark.parametrize(
+    ("site", "run", "reads", "wrote"),
+    APPLY_SITES,
+    ids=[case[0] for case in APPLY_SITES],
+)
+@pytest.mark.asyncio
+async def test_a_refused_reconfigure_is_reported_as_not_applied(
+    site: str,
+    run: Any,
+    reads: dict[str, Any],
+    wrote: tuple[str, bool],
+) -> None:
+    """The write happened; the apply did not. Both must be said, separately.
+
+    Reporting this as a write failure inverts the truth for a delete: the
+    record is gone and the caller is told it is not, so the natural next move
+    is to try again.
+    """
+    client = _client()
+    calls = _stub(client, {**reads, "reconfigure": APPLY_REFUSED})
+
+    result = await run(client)
+
+    assert [c for c in calls if "reconfigure" in c["endpoint"]], (
+        f"{site} never called reconfigure"
+    )
+    assert result["status"] == "success"
+    assert result[wrote[0]] is wrote[1]
+    assert result["applied"] is False
+    assert "apply_error" in result
+    assert "error" not in result
+
+
+@pytest.mark.parametrize(
+    ("site", "run", "reads", "wrote"),
+    APPLY_SITES,
+    ids=[case[0] for case in APPLY_SITES],
+)
+@pytest.mark.asyncio
+async def test_an_accepted_reconfigure_is_reported_as_applied(
+    site: str,
+    run: Any,
+    reads: dict[str, Any],
+    wrote: tuple[str, bool],
+) -> None:
+    """The counterpart: `applied` is not hardcoded false."""
+    client = _client()
+    _stub(client, {**reads, "reconfigure": APPLY_OK})
+
+    result = await run(client)
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+    assert "apply_error" not in result
+
+
+@pytest.mark.parametrize(
+    ("site", "run", "reads", "wrote"),
+    APPLY_SITES,
+    ids=[case[0] for case in APPLY_SITES],
+)
+@pytest.mark.asyncio
+async def test_a_reconfigure_that_never_answers_is_not_applied(
+    site: str,
+    run: Any,
+    reads: dict[str, Any],
+    wrote: tuple[str, bool],
+) -> None:
+    """A transport failure applying is also not a write failure."""
+    client = _client()
+    _stub(client, {**reads, "reconfigure": RequestError("configd timed out")})
+
+    result = await run(client)
+
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    assert "apply_error" in result
