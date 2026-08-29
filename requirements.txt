@@ -5,7 +5,7 @@
 fastapi>=0.100.0
 uvicorn>=0.24.0
 ruamel.yaml>=0.17.0
-pydantic>=2.0.0
+pydantic>=2.0.0,<2.14  # pin back: the fastmcp beta otherwise drags a pydantic beta in
 pydantic-settings>=2.14.2
 requests>=2.31.0
 python-multipart>=0.0.30
@@ -13,7 +13,10 @@ typing-extensions>=4.0.0
 passlib[bcrypt]>=1.7.4
 httpx>=0.24.0
 python-dotenv>=1.0.0
-fastmcp>=3.2.4,<4
+# fastmcp 4 is the first line depending on mcp>=2.0, the first SDK
+# implementing MCP 2026-07-28. Still a beta; PEP 440 lets an explicit
+# prerelease specifier install one. Keep in step with pyproject.
+fastmcp>=4.0.0b5,<5
 pyyaml>=6.0.0
 paramiko>=3.0.0
 idna>=3.15

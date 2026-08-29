@@ -264,6 +264,16 @@ def _post_process(tool_name: str, arguments: dict[str, Any], result: Any) -> Any
     return result
 
 
+# Newest first: a client picking from `server/discover` should land on
+# 2026-07-28. The older two stay listed because clients still open with
+# `initialize` during the deprecation window.
+SUPPORTED_PROTOCOL_VERSIONS: tuple[str, ...] = (
+    "2026-07-28",
+    "2025-11-25",
+    "2025-03-26",
+)
+
+
 async def handle_message(
     message: dict[str, Any],
     tools: dict[str, Any] | None = None,
@@ -277,6 +287,35 @@ async def handle_message(
     """
     method = message.get("method")
     msg_id = message.get("id")
+
+    # MCP 2026-07-28 replaces the initialize/initialized handshake with an
+    # on-demand `server/discover`. `initialize` is kept below because clients on
+    # 2025-11-25 still open with it throughout the deprecation window, and this
+    # dispatcher holds no session state either way: every request is answered
+    # from the registry, so nothing here needs a handshake to have happened.
+    if method == "server/discover":
+        build_info = get_build_info()
+        return {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": {
+                "supportedVersions": list(SUPPORTED_PROTOCOL_VERSIONS),
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {
+                    "name": build_info["name"],
+                    "version": build_info["package_version"],
+                    "git_commit": build_info["git_commit"],
+                    "git_ref": build_info["git_ref"],
+                    "build_time": build_info["build_time"],
+                },
+                "instructions": (
+                    "OPNsense firewall management. Most tools are grouped by "
+                    "resource and take an `action`: pick the object, then the "
+                    "verb. Call action='help' on any of them for that "
+                    "resource's per-action fields, defaults and rules."
+                ),
+            },
+        }
 
     # Forgiving protocolVersion handling
     if method == "initialize":
