@@ -1,0 +1,122 @@
+{
+  "search_range": {
+    "current": 1,
+    "rowCount": 1,
+    "total": 1,
+    "rows": [
+      {
+        "%domain_type": "Range",
+        "%interface": "VLAN10Podman",
+        "%set_tag": "vlan-tag",
+        "constructor": "opt13",
+        "description": "VLAN10Podman",
+        "domain": "example.test",
+        "domain_type": "range",
+        "end_addr": "::500",
+        "interface": "opt13",
+        "lease_time": "7200",
+        "mode": "",
+        "nosync": "0",
+        "prefix_len": "",
+        "ra_interval": "",
+        "ra_mode": "slaac",
+        "ra_mtu": "",
+        "ra_priority": "",
+        "ra_router_lifetime": "",
+        "set_tag": "97f6eab8-edd3-4390-a721-222222222222",
+        "start_addr": "::2",
+        "subnet_mask": "",
+        "uuid": "287a64e6-1755-46b2-adc1-111111111111"
+      }
+    ]
+  },
+  "get_range": {
+    "range": {
+      "constructor": {
+        "opt13": {
+          "value": "opt13",
+          "selected": 1
+        }
+      },
+      "description": "VLAN10Podman",
+      "domain": "example.test",
+      "domain_type": {
+        "interface": {
+          "value": "Interface",
+          "selected": 0
+        },
+        "range": {
+          "value": "Range",
+          "selected": 1
+        }
+      },
+      "end_addr": "::500",
+      "interface": {
+        "opt13": {
+          "value": "opt13",
+          "selected": 1
+        }
+      },
+      "lease_time": "7200",
+      "mode": {
+        "static": {
+          "value": "static",
+          "selected": 0
+        }
+      },
+      "nosync": "0",
+      "prefix_len": "",
+      "ra_interval": "",
+      "ra_mode": {
+        "ra-only": {
+          "value": "ra-only",
+          "selected": 0
+        },
+        "slaac": {
+          "value": "slaac",
+          "selected": 1
+        },
+        "ra-names": {
+          "value": "ra-names",
+          "selected": 0
+        },
+        "ra-stateless": {
+          "value": "ra-stateless",
+          "selected": 0
+        },
+        "ra-advrouter": {
+          "value": "ra-advrouter",
+          "selected": 0
+        },
+        "off-link": {
+          "value": "off-link",
+          "selected": 0
+        }
+      },
+      "ra_mtu": "",
+      "ra_priority": {
+        "": {
+          "value": "Normal",
+          "selected": 1
+        },
+        "high": {
+          "value": "High",
+          "selected": 0
+        },
+        "low": {
+          "value": "Low",
+          "selected": 0
+        }
+      },
+      "ra_router_lifetime": "",
+      "set_tag": {
+        "97f6eab8-edd3-4390-a721-222222222222": {
+          "value": "vlan-tag",
+          "selected": 1
+        }
+      },
+      "start_addr": "::2",
+      "subnet_mask": ""
+    }
+  }
+}

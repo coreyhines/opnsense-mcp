@@ -33,8 +33,10 @@ from opnsense_mcp.tools.dhcp_ranges import (
 )
 from opnsense_mcp.tools.fw_groups import ListFwGroupsTool, SetFwGroupTool
 from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.dhcp_providers.dnsmasq import DnsmasqProvider
 
 RANGE_UUID = "range-1234"
+V6_RANGE_UUID = "range-v6-0001"
 GROUP_UUID = "2873531a-bf3b-42c6-9b90-676e193edd67"
 
 RANGE_ROWS = {
@@ -56,6 +58,78 @@ RANGE_ROWS = {
         }
     ],
     "total": 1,
+}
+
+# --- the IPv6 range, in the shape the live API really uses -----------------
+#
+# get_range returns exactly 18 fields, four of them MVC selects rather than
+# scalars. Captured from OPNsense 26.7.3_8; see docs/research/ula-ra-gaps-findings.md.
+
+RA_MODE_OPTIONS = (
+    "ra-only",
+    "slaac",
+    "ra-names",
+    "ra-stateless",
+    "ra-advrouter",
+    "off-link",
+)
+RA_PRIORITY_OPTIONS = ("", "high", "low")
+CONSTRUCTOR_OPTIONS = ("", "opt13", "opt3", "lan")
+DOMAIN_TYPE_OPTIONS = ("interface", "range")
+
+
+def _select(options: tuple[str, ...], chosen: str) -> dict[str, dict[str, Any]]:
+    """Render a select the way an MVC get_* node does."""
+    return {
+        option: {"value": option or "Normal", "selected": 1 if option == chosen else 0}
+        for option in options
+    }
+
+
+V6_RANGE_NODE: dict[str, Any] = {
+    "constructor": _select(CONSTRUCTOR_OPTIONS, "opt13"),
+    "description": "vlan10 v6",
+    "domain": "lab.frobozz.example",
+    "domain_type": _select(DOMAIN_TYPE_OPTIONS, "range"),
+    "end_addr": "",
+    "interface": "opt13",
+    "lease_time": "7200",
+    "mode": "",
+    "nosync": "0",
+    "prefix_len": "64",
+    "ra_interval": "600",
+    "ra_mode": _select(RA_MODE_OPTIONS, "slaac"),
+    "ra_mtu": "1500",
+    "ra_priority": _select(RA_PRIORITY_OPTIONS, ""),
+    "ra_router_lifetime": "1800",
+    "set_tag": "",
+    "start_addr": "",
+    "subnet_mask": "",
+}
+
+# The search row for the same range: scalars, plus uuid and the display label.
+V6_RANGE_ROW: dict[str, Any] = {
+    "uuid": V6_RANGE_UUID,
+    "interface": "opt13",
+    "%interface": "VLAN10",
+    "constructor": "opt13",
+    "domain": "lab.frobozz.example",
+    "domain_type": "range",
+    "description": "vlan10 v6",
+    "disabled": "0",
+    "end_addr": "",
+    "lease_time": "7200",
+    "mode": "",
+    "nosync": "0",
+    "prefix_len": "64",
+    "ra_interval": "600",
+    "ra_mode": "slaac",
+    "ra_mtu": "1500",
+    "ra_priority": "",
+    "ra_router_lifetime": "1800",
+    "set_tag": "",
+    "start_addr": "",
+    "subnet_mask": "",
 }
 
 OPTION_ROWS = {
@@ -220,6 +294,167 @@ async def test_delete_range_needs_confirmation() -> None:
 
     assert result["status"] == "confirmation_required"
     assert not [c for c in calls if "del_range" in c["endpoint"]]
+
+
+# --- the IPv6 fields on a range --------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_ranges_returns_the_ipv6_fields_flattened() -> None:
+    """A select read back as a dict is unusable, and constructor is a select."""
+    client = _client()
+    _stub(client, {"search_range": {"rows": [dict(V6_RANGE_NODE, uuid=V6_RANGE_UUID)]}})
+
+    result = await ListDhcpRangesTool(client).execute({})
+
+    row = result["ranges"][0]
+    assert row["constructor"] == "opt13"
+    assert row["prefix_len"] == "64"
+    assert row["ra_mode"] == "slaac"
+    assert row["ra_priority"] == ""
+    assert row["ra_interval"] == "600"
+    assert row["ra_mtu"] == "1500"
+    assert row["ra_router_lifetime"] == "1800"
+    assert row["domain_type"] == "range"
+
+
+@pytest.mark.asyncio
+async def test_toggle_range_refuses_because_the_model_has_no_enable_flag() -> None:
+    """The toggle wrote a `disabled` key the dnsmasq range model does not have.
+
+    Captured live, `settings/get`, `search_range` and `get_range` all return the
+    same 18 fields and none is an enable flag. The write therefore changed
+    nothing while reporting success, and the same absent key was read back to
+    decide the no-op case, so every enable call claimed the range was already
+    on. It refuses now, and nothing is posted.
+    """
+    posted: list[dict[str, Any]] = []
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "search_range" in endpoint:
+            return {"rows": [dict(V6_RANGE_ROW)]}
+        if "get_range" in endpoint:
+            return {"range": dict(V6_RANGE_NODE)}
+        if "set_range" in endpoint:
+            posted.append(kwargs["json"]["range"])
+        return {"result": "saved"}
+
+    provider = DnsmasqProvider(AsyncMock(side_effect=fake))
+
+    for requested in (True, False):
+        result = await provider.toggle_range(
+            enabled=requested, uuid=V6_RANGE_UUID, dry_run=False
+        )
+        assert result["status"] == "error"
+        assert result["error_code"] == "unsupported_by_model"
+        assert result["unsupported"] is True
+        assert result["applied"] is False
+        assert result["requested_enabled"] is requested
+        assert result["alternatives"]
+
+    assert not posted, "a refused toggle must not POST to set_range"
+
+
+@pytest.mark.asyncio
+async def test_ra_mode_round_trips_through_a_write_and_a_read() -> None:
+    """Write ra-stateless, and read back ra-stateless rather than the default."""
+    client = _client()
+    calls = _stub(client, {"get_range": {"range": dict(V6_RANGE_NODE)}})
+
+    result = await SetDhcpRangeTool(client).execute(
+        {"uuid": V6_RANGE_UUID, "ra_mode": "ra-stateless"}
+    )
+    assert result["status"] == "success"
+
+    payload = next(c for c in calls if "set_range" in c["endpoint"])["json"]["range"]
+    assert payload["ra_mode"] == "ra-stateless"
+    assert payload["constructor"] == "opt13"
+
+    # The firewall echoes a written select back as the selected option.
+    stored = dict(
+        V6_RANGE_NODE,
+        uuid=V6_RANGE_UUID,
+        ra_mode=_select(RA_MODE_OPTIONS, payload["ra_mode"]),
+    )
+    reader = _client()
+    _stub(reader, {"search_range": {"rows": [stored]}})
+
+    reread = await ListDhcpRangesTool(reader).execute({})
+    assert reread["ranges"][0]["ra_mode"] == "ra-stateless"
+
+
+@pytest.mark.asyncio
+async def test_update_range_refuses_an_unknown_ra_mode() -> None:
+    """The model stores nothing for an option key it does not have."""
+    client = _client()
+    calls = _stub(client, {"get_range": {"range": dict(V6_RANGE_NODE)}})
+
+    result = await SetDhcpRangeTool(client).execute(
+        {"uuid": V6_RANGE_UUID, "ra_mode": "advertise-everything"}
+    )
+
+    assert result["status"] == "error"
+    assert not [c for c in calls if "set_range" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_create_range_refuses_an_unknown_ra_priority() -> None:
+    client = _client()
+    calls = _stub(client, {"search_range": {"rows": [], "total": 0}})
+
+    result = await MkDhcpRangeTool(client).execute(
+        {
+            "interface": "opt13",
+            "start_addr": "::1000",
+            "end_addr": "::2000",
+            "ra_priority": "urgent",
+        }
+    )
+
+    assert result["status"] == "error"
+    assert not [c for c in calls if "add_range" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_create_range_sends_the_ipv6_fields_it_was_given() -> None:
+    """And only those: an empty ra_mtu would override the model default."""
+    client = _client()
+    calls = _stub(client, {"search_range": {"rows": [], "total": 0}})
+
+    await MkDhcpRangeTool(client).execute(
+        {
+            "interface": "opt13",
+            "start_addr": "::1000",
+            "end_addr": "::2000",
+            "constructor": "opt13",
+            "prefix_len": "64",
+            "ra_mode": "slaac",
+            "ra_priority": "high",
+        }
+    )
+
+    payload = next(c for c in calls if "add_range" in c["endpoint"])["json"]["range"]
+    assert payload["constructor"] == "opt13"
+    assert payload["prefix_len"] == "64"
+    assert payload["ra_mode"] == "slaac"
+    assert payload["ra_priority"] == "high"
+    assert "ra_mtu" not in payload
+    assert "ra_router_lifetime" not in payload
+
+
+@pytest.mark.asyncio
+async def test_ra_mode_accepts_the_combinations_dnsmasq_allows() -> None:
+    """dnsmasq combines RA modes, so the field is validated token by token."""
+    client = _client()
+    calls = _stub(client, {"get_range": {"range": dict(V6_RANGE_NODE)}})
+
+    result = await SetDhcpRangeTool(client).execute(
+        {"uuid": V6_RANGE_UUID, "ra_mode": ["ra-names", "ra-stateless"]}
+    )
+
+    assert result["status"] == "success"
+    payload = next(c for c in calls if "set_range" in c["endpoint"])["json"]["range"]
+    assert payload["ra_mode"] == "ra-names,ra-stateless"
 
 
 # --- the router option -----------------------------------------------------

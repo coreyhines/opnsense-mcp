@@ -342,12 +342,64 @@ async def test_vip_delete_needs_confirmation() -> None:
 async def test_loopback_create_is_device_only() -> None:
     """Creating the device does not assign or address it; that stays manual."""
     client = _client()
-    _stub(client, {"search_item": {"rows": [], "total": 0}})
+    calls = _stub(client, {"search_item": {"rows": [], "total": 0}})
 
     result = await MkLoopbackTool(client).execute({"description": "PD holder"})
 
     assert result["status"] == "success"
+    assert result.get("unsupported") is not True
+    assert any("add_item" in call["endpoint"] for call in calls)
     assert "assign" in result["note"].lower()
+
+
+@pytest.mark.asyncio
+async def test_loopback_planned_static_address_behavior_is_unchanged() -> None:
+    """The existing planned-address path still creates and returns its manual step."""
+    client = _client()
+    calls = _stub(client, {})
+
+    result = await MkLoopbackTool(client).execute(
+        {
+            "description": "Static holder",
+            "planned_address": "2001:db8::1",
+            "planned_subnet_bits": 128,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result.get("unsupported") is not True
+    assert result["manual_step"]["address"] == "2001:db8::1"
+    assert result["manual_step"]["subnet_bits"] == 128
+    assert any("add_item" in call["endpoint"] for call in calls)
+
+
+@pytest.mark.asyncio
+async def test_loopback_refuses_track_interface_addressing_with_manual_steps() -> None:
+    """A PD holder cannot be partially created when its addressing is unavailable."""
+    client = _client()
+    calls = _stub(client, {})
+
+    result = await MkLoopbackTool(client).execute(
+        {
+            "description": "PD holder",
+            "ipaddrv6": "track6",
+            "track6-interface": "wan",
+            "track6-prefix-id": 9,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["unsupported"] is True
+    assert result["created"] is False
+    assert result["reason"]["code"] == "per_interface_ipv6_addressing_api_unavailable"
+    assert result["reason"]["availability"] == "UI or config.xml edit only"
+    assert result["requested"] == {
+        "ipaddrv6": "track6",
+        "track6-interface": "wan",
+        "track6-prefix-id": 9,
+    }
+    assert result["manual_steps"]
+    assert calls == []
 
 
 @pytest.mark.asyncio

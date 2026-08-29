@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from opnsense_mcp.utils.mvc_merge import merge_for_set
+from opnsense_mcp.utils.mvc_merge import is_enum_field, merge_for_set, selected_keys
 from opnsense_mcp.utils.shaper_write_helpers import (
     issue_delete_confirm_token,
     validate_delete_confirm_token,
@@ -44,6 +44,9 @@ DNSMASQ = {
 
 ROUTER_OPTION = "3"
 
+# The 18 fields get_range returns, plus uuid. Four of them (ra_mode,
+# ra_priority, constructor, domain_type) are MVC selects on read and bare
+# option keys on write, so both directions go through mvc_merge.
 _RANGE_FIELDS = (
     "uuid",
     "interface",
@@ -55,9 +58,51 @@ _RANGE_FIELDS = (
     "prefix_len",
     "lease_time",
     "domain",
+    "domain_type",
     "set_tag",
     "nosync",
     "description",
+    "ra_mode",
+    "ra_priority",
+    "ra_interval",
+    "ra_mtu",
+    "ra_router_lifetime",
+)
+
+# Fields a caller may write on a range, beyond the bounds and the interface.
+_RANGE_WRITE_FIELDS = (
+    "start_addr",
+    "end_addr",
+    "subnet_mask",
+    "constructor",
+    "mode",
+    "prefix_len",
+    "lease_time",
+    "domain",
+    "description",
+    "ra_mode",
+    "ra_priority",
+    "ra_interval",
+    "ra_mtu",
+    "ra_router_lifetime",
+)
+
+# Read live off the model. dnsmasq combines RA modes, so ra_mode is validated
+# token by token. The empty string is accepted for either select and means
+# "leave it at the model default": normal priority, and no RA mode set.
+RA_MODES = (
+    "ra-only",
+    "slaac",
+    "ra-names",
+    "ra-stateless",
+    "ra-advrouter",
+    "off-link",
+)
+RA_PRIORITIES = ("high", "low")
+
+_RA_MODE_HELP = f"One or more of: {', '.join(RA_MODES)}. Empty leaves it unset."
+_RA_PRIORITY_HELP = (
+    f"Router preference: {', '.join(RA_PRIORITIES)}, or empty for normal."
 )
 
 _OPTION_FIELDS = (
@@ -72,6 +117,63 @@ _OPTION_FIELDS = (
     "force",
     "description",
 )
+
+
+def _v6_schema_fields() -> dict[str, Any]:
+    """Return the IPv6/RA properties shared by the create and update schemas.
+
+    A function rather than a module constant so the two schemas do not share
+    one mutable dict.
+    """
+    return {
+        "constructor": {
+            "type": "string",
+            "description": (
+                "Interface key to take the IPv6 prefix from, e.g. opt13. This "
+                "is the field that makes an IPv6 range advertise; it is not a "
+                "relay setting."
+            ),
+            "optional": True,
+        },
+        "mode": {
+            "type": "string",
+            "description": "Range mode; empty for a plain DHCP range",
+            "optional": True,
+        },
+        "prefix_len": {
+            "type": "string",
+            "description": "Advertised prefix length, e.g. 64",
+            "optional": True,
+        },
+        "ra_mode": {
+            "type": "string",
+            "description": _RA_MODE_HELP,
+            "optional": True,
+        },
+        "ra_priority": {
+            "type": "string",
+            "description": _RA_PRIORITY_HELP,
+            "optional": True,
+        },
+        "ra_interval": {
+            "type": "string",
+            "description": "Router advertisement interval, in seconds",
+            "optional": True,
+        },
+        "ra_mtu": {
+            "type": "string",
+            "description": "MTU to advertise",
+            "optional": True,
+        },
+        "ra_router_lifetime": {
+            "type": "string",
+            "description": (
+                "Router lifetime, in seconds. The model has no preferred "
+                "lifetime for the advertised prefix."
+            ),
+            "optional": True,
+        },
+    }
 
 
 class _DnsmasqToolBase:
@@ -96,12 +198,70 @@ class _DnsmasqToolBase:
         )
 
 
+def _flat_value(value: Any) -> Any:
+    """Collapse an MVC select to its selected key, leaving scalars alone.
+
+    search_* rows hand back scalars, get_* nodes hand back
+    ``{option: {value, selected}}``. A reader that only handled the first shape
+    reported a select as an unreadable dict.
+    """
+    if is_enum_field(value):
+        return selected_keys(value)
+    return value
+
+
 def _project(row: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
     """Keep the real fields, and surface the display label under a plain name."""
-    out = {field: row.get(field, "") for field in fields}
+    out = {field: _flat_value(row.get(field, "")) for field in fields}
     if "%interface" in row:
         out["interface_label"] = row["%interface"]
     return out
+
+
+def _option_tokens(value: Any) -> list[str]:
+    """Split a select value into its option keys, dropping empties."""
+    if isinstance(value, (list, tuple)):
+        raw = [str(item) for item in value]
+    else:
+        raw = str(value or "").split(",")
+    return [token.strip() for token in raw if token.strip()]
+
+
+def _normalize_select(
+    field: str, value: Any, allowed: tuple[str, ...]
+) -> tuple[str, str | None]:
+    """Return the comma-joined option keys, or an error naming the bad ones.
+
+    Posting an option key the model does not have is accepted by the API and
+    silently stored as nothing, so an unknown ra_mode would read back as a
+    range that advertises differently than the caller asked for. Refuse it here
+    instead of finding out from the firewall's behaviour.
+    """
+    tokens = _option_tokens(value)
+    unknown = [token for token in tokens if token not in allowed]
+    if unknown:
+        return "", (
+            f"{field}: unknown value(s) {', '.join(unknown)}; "
+            f"valid options are {', '.join(allowed)} (or empty for the default)"
+        )
+    return ",".join(tokens), None
+
+
+def _validated_range_changes(
+    params: dict[str, Any], fields: tuple[str, ...]
+) -> tuple[dict[str, Any], str | None]:
+    """Collect the range fields present in *params*, validating the selects."""
+    changes: dict[str, Any] = {
+        field: params[field] for field in fields if field in params
+    }
+    for field, allowed in (("ra_mode", RA_MODES), ("ra_priority", RA_PRIORITIES)):
+        if field not in changes:
+            continue
+        normalized, error = _normalize_select(field, changes[field], allowed)
+        if error:
+            return {}, error
+        changes[field] = normalized
+    return changes, None
 
 
 class ListDhcpRangesTool(_DnsmasqToolBase):
@@ -143,6 +303,7 @@ class MkDhcpRangeTool(_DnsmasqToolBase):
             },
             "domain": {"type": "string", "optional": True},
             "description": {"type": "string", "optional": True},
+            **_v6_schema_fields(),
             "apply": {
                 "type": "boolean",
                 "description": "Reconfigure dnsmasq afterwards (default false)",
@@ -171,6 +332,10 @@ class MkDhcpRangeTool(_DnsmasqToolBase):
                 "error": f"{missing} is required; a range needs both bounds",
             }
 
+        extra, error = _validated_range_changes(params, _RANGE_WRITE_FIELDS)
+        if error:
+            return {"status": "error", "error": error}
+
         try:
             for row in await self._rows(DNSMASQ["search_range"]):
                 if row.get("interface") == interface and row.get("start_addr") == start:
@@ -190,6 +355,16 @@ class MkDhcpRangeTool(_DnsmasqToolBase):
                 "domain": params.get("domain", ""),
                 "description": params.get("description", ""),
             }
+            # Only the fields the caller asked for; the rest keep the model's
+            # own defaults rather than being posted as empty. merge_for_set
+            # over an empty node is used for its scalar stringifying.
+            payload.update(
+                {
+                    key: value
+                    for key, value in merge_for_set({}, extra).items()
+                    if key not in payload
+                }
+            )
             result = await self.client._make_request(
                 "POST",
                 DNSMASQ["add_range"],
@@ -225,6 +400,7 @@ class SetDhcpRangeTool(_DnsmasqToolBase):
             "lease_time": {"type": "string", "optional": True},
             "domain": {"type": "string", "optional": True},
             "description": {"type": "string", "optional": True},
+            **_v6_schema_fields(),
             "apply": {
                 "type": "boolean",
                 "optional": True,
@@ -239,7 +415,10 @@ class SetDhcpRangeTool(_DnsmasqToolBase):
 
         A partial POST to an MVC model blanks every field it omits. That is the
         defect that made set_fw_rule widen rules to any/any, and a range would
-        lose its bounds the same way.
+        lose its bounds, its constructor and its RA settings the same way.
+
+        ra_mode and ra_priority are validated before the write: the model
+        accepts an option key it does not have and stores nothing for it.
         """
         params = params or {}
         if not self.client:
@@ -248,19 +427,15 @@ class SetDhcpRangeTool(_DnsmasqToolBase):
         if not uuid:
             return {"status": "error", "error": "uuid is required"}
 
-        editable = (
-            "start_addr",
-            "end_addr",
-            "subnet_mask",
-            "lease_time",
-            "domain",
-            "description",
-        )
-        changes = {key: params[key] for key in editable if key in params}
+        changes, error = _validated_range_changes(params, _RANGE_WRITE_FIELDS)
+        if error:
+            return {"status": "error", "error": error}
         if not changes:
             return {
                 "status": "error",
-                "error": f"nothing to change; pass one of: {', '.join(editable)}",
+                "error": (
+                    f"nothing to change; pass one of: {', '.join(_RANGE_WRITE_FIELDS)}"
+                ),
             }
 
         try:

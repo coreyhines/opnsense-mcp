@@ -961,26 +961,33 @@ class DnsmasqProvider:
             return response
         return {}
 
-    def _flat_range_payload(
-        self, row: dict[str, Any], *, enabled: bool
-    ) -> dict[str, Any]:
-        """Build flat range payload for set_range (preserve pool fields)."""
-        return {
-            "uuid": str(row.get("uuid") or ""),
-            "interface": str(row.get("interface") or ""),
-            "set_tag": str(row.get("set_tag") or ""),
-            "start_addr": str(row.get("start_addr") or ""),
-            "end_addr": str(row.get("end_addr") or ""),
-            "domain": str(row.get("domain") or ""),
-            "domain_search_list": str(row.get("domain_search_list") or ""),
-            "nosync": str(row.get("nosync") or "0"),
-            "dhcpv4": str(row.get("dhcpv4") or "1"),
-            "dhcpv6": str(row.get("dhcpv6") or "0"),
-            "ra_mode": str(row.get("ra_mode") or ""),
-            "ra_priority": str(row.get("ra_priority") or ""),
-            "description": str(row.get("description") or ""),
-            "disabled": "0" if enabled else "1",
+    # The dnsmasq range model has no per-range enable or disable field. Captured
+    # live from OPNsense 26.7.3_8: `settings/get`, `settings/search_range` and
+    # `settings/get_range` all return the same 18 fields, none of them an enable
+    # flag. The only enable-shaped fields in the whole dnsmasq model are the
+    # global service `enable` and the global `dhcp.enable_ra`.
+    RANGE_MODEL_FIELDS: frozenset[str] = frozenset(
+        {
+            "constructor",
+            "description",
+            "domain",
+            "domain_type",
+            "end_addr",
+            "interface",
+            "lease_time",
+            "mode",
+            "nosync",
+            "prefix_len",
+            "ra_interval",
+            "ra_mode",
+            "ra_mtu",
+            "ra_priority",
+            "ra_router_lifetime",
+            "set_tag",
+            "start_addr",
+            "subnet_mask",
         }
+    )
 
     async def toggle_range(
         self,
@@ -991,7 +998,21 @@ class DnsmasqProvider:
         uuid: str | None = None,
         dry_run: bool = True,
     ) -> dict[str, Any]:
-        """Enable or disable a dnsmasq DHCP range and reconfigure."""
+        """Refuse: a dnsmasq range has no enable flag to toggle.
+
+        This used to build a payload containing ``disabled`` and POST it to
+        ``set_range``. No such field exists in the model, so the write changed
+        nothing and reported success. The same key was read back to decide
+        whether the toggle was a no-op, and a key the API never sends reads as
+        absent: every ``enabled=True`` call returned ``noop`` claiming the range
+        was already on, and every ``enabled=False`` call reported a disable that
+        never happened.
+
+        ``status: "error"`` rather than a success carrying an ``unsupported``
+        marker is deliberate. The operation did not run, and a caller that
+        cannot tell a refused toggle from a completed one is precisely what the
+        old behaviour got wrong.
+        """
         row = await self._find_range_row(subnet=subnet, interface=interface, uuid=uuid)
         if row is None:
             return {
@@ -1003,63 +1024,27 @@ class DnsmasqProvider:
                 "uuid": uuid,
             }
 
-        range_uuid = str(row.get("uuid") or "")
-        current_disabled = str(row.get("disabled") or "0") == "1"
-        target_enabled = enabled
-        if current_disabled == (not target_enabled):
-            return {
-                "status": "noop",
-                "backend": self.name,
-                "uuid": range_uuid,
-                "enabled": target_enabled,
-                "interface": row.get("interface"),
-                "start_addr": row.get("start_addr"),
-                "end_addr": row.get("end_addr"),
-            }
-
-        model = await self._get_range_model(range_uuid)
-        merged = {**row, **model} if model else dict(row)
-        payload = self._flat_range_payload(merged, enabled=target_enabled)
-        planned = {
-            "uuid": range_uuid,
-            "enabled": target_enabled,
-            "interface": payload.get("interface"),
-            "start_addr": payload.get("start_addr"),
-            "end_addr": payload.get("end_addr"),
-        }
-
-        if dry_run:
-            return {
-                "status": "dry_run",
-                "backend": self.name,
-                "planned": planned,
-                "note": "No changes applied. Re-run with apply=true to toggle.",
-            }
-
-        try:
-            await self._request(
-                "POST",
-                f"{self.RANGE_SET_ENDPOINT}/{range_uuid}",
-                json={"range": payload},
-                timeout=self.WRITE_TIMEOUT_SECONDS,
-            )
-            await self._reconfigure()
-        except Exception as exc:
-            logger.exception("dnsmasq range toggle failed")
-            return {
-                "status": "error",
-                "backend": self.name,
-                "planned": planned,
-                "error": str(exc),
-            }
-
         return {
-            "status": "success",
+            "status": "error",
             "backend": self.name,
-            "uuid": range_uuid,
-            "enabled": target_enabled,
-            "interface": payload.get("interface"),
-            "start_addr": payload.get("start_addr"),
-            "end_addr": payload.get("end_addr"),
-            "applied": True,
+            "error_code": "unsupported_by_model",
+            "unsupported": True,
+            "applied": False,
+            "requested_enabled": enabled,
+            "dry_run": dry_run,
+            "uuid": str(row.get("uuid") or ""),
+            "interface": row.get("interface"),
+            "start_addr": row.get("start_addr"),
+            "end_addr": row.get("end_addr"),
+            "error": (
+                "A dnsmasq DHCP range has no enable or disable field. The model "
+                "returns 18 fields and none of them is an enable flag, so there "
+                "is nothing for this action to set."
+            ),
+            "alternatives": [
+                "Delete the range with delete_range and recreate it when needed; "
+                "that is the only per-range removal the model supports.",
+                "Disable dnsmasq through the service's global enable flag. That "
+                "stops DHCP and DNS on every interface, not one range.",
+            ],
         }
