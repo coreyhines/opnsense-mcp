@@ -32,6 +32,11 @@ def _rows(name: str) -> list[dict[str, Any]]:
     return json.loads((FIXTURES / name).read_text())["rows"]
 
 
+def _fixture(name: str) -> dict[str, Any]:
+    """A captured API response fixture."""
+    return json.loads((FIXTURES / name).read_text())
+
+
 # --- searchRule ------------------------------------------------------------
 
 
@@ -98,6 +103,38 @@ async def test_every_captured_range_resolves_by_its_own_subnet() -> None:
         )
         assert scope.interface == row["interface"]
         assert scope.subnet == subnet
+
+
+def test_captured_v6_range_normalizes_to_a_non_empty_constructor() -> None:
+    """The prefix-from-interface selector must survive range normalization."""
+    from opnsense_mcp.tools.dhcp_ranges import _RANGE_FIELDS, _project
+
+    captured = _fixture("dnsmasq_v6_range_responses.json")
+    row = captured["search_range"]["rows"][0]
+    node = captured["get_range"]["range"]
+    mapped = _project(row, _RANGE_FIELDS)
+
+    selected = [key for key, option in node["constructor"].items() if option["selected"]]
+    assert selected == ["opt13"]
+    assert mapped["constructor"] == row["constructor"] == selected[0]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Bucket B1 will add the dnsmasq range RA fields to the normalizer",
+)
+def test_captured_v6_range_normalizes_ra_mode_value() -> None:
+    """The selected RA mode must not disappear from the normalized range."""
+    from opnsense_mcp.tools.dhcp_ranges import _RANGE_FIELDS, _project
+
+    captured = _fixture("dnsmasq_v6_range_responses.json")
+    row = captured["search_range"]["rows"][0]
+    node = captured["get_range"]["range"]
+    mapped = _project(row, _RANGE_FIELDS)
+
+    selected = [key for key, option in node["ra_mode"].items() if option["selected"]]
+    assert selected == ["slaac"]
+    assert mapped.get("ra_mode") == row["ra_mode"] == selected[0]
 
 
 # --- the mock cannot drift back to a shape the API never emits -------------
