@@ -37,6 +37,42 @@ ENVIRONMENT_EXAMPLE = DEPLOY / "environment.example"
 INSTALL_ROOT = "/opt/containerdata/opnsense-mcp"
 
 
+def _generated_unit() -> str:
+    """The app unit as `install.sh` actually writes it.
+
+    The example file is documentation. `verify_deploy_tree` checks it exists
+    and nothing ever reads it: `write_opnsense_mcp_quadlet` emits the unit from
+    its own printf lines. So every assertion against the example was checking a
+    file the installer ignores, which is why the example carried
+    OPNSENSE_BACKUP_DIR for months while installed units did not.
+
+    Extracted from the shell rather than executed: running install.sh needs
+    root, podman and a network.
+    """
+    body = INSTALL_SH.read_text()
+    start = body.index("write_opnsense_mcp_quadlet() {")
+    end = body.index("write_caddy_quadlet() {", start)
+    lines = []
+    for raw in body[start:end].splitlines():
+        stripped = raw.strip()
+        if not stripped.startswith("printf '%s\\n'"):
+            continue
+        value = stripped.split("printf '%s\\n'", 1)[1].strip()
+        if value.startswith(("'", '"')):
+            value = value[1:-1]
+        lines.append(value.replace("${INSTALL_ROOT}", INSTALL_ROOT))
+    return "\n".join(lines)
+
+
+def _generated_volumes() -> list[str]:
+    """The Volume= lines install.sh writes into the unit."""
+    return [
+        line.split("=", 1)[1].strip()
+        for line in _generated_unit().splitlines()
+        if line.startswith("Volume=")
+    ]
+
+
 def _volumes() -> list[str]:
     """The Volume= lines of the app quadlet."""
     return [
@@ -174,3 +210,50 @@ def test_the_install_script_in_this_repo_creates_the_backup_directory() -> None:
     assert re.search(
         r"mkdir -p .*\$\{INSTALL_ROOT\}/backups", INSTALL_SH.read_text()
     ), "install.sh does not create the backups directory"
+
+
+# --- the installer, not the example ----------------------------------------
+#
+# These are the assertions that would have caught D2a. Each one has a
+# counterpart above that reads the example and passed throughout.
+
+
+def test_the_installer_sets_the_backup_directory() -> None:
+    """The example carried this for months while installed units did not."""
+    assert f"Environment=OPNSENSE_BACKUP_DIR={INSTALL_ROOT}/backups" in (
+        _generated_unit()
+    ), "install.sh writes a unit with no OPNSENSE_BACKUP_DIR; download cannot work"
+
+
+def test_the_installer_mounts_the_backup_directory_writable() -> None:
+    """The install root is mounted ro, so backups need their own rw mount."""
+    mounts = [v for v in _generated_volumes() if v.split(":")[1].endswith("/backups")]
+    assert len(mounts) == 1, f"expected one backups mount, got {mounts}"
+    assert "ro" not in mounts[0].split(":")[2].split(","), (
+        f"backup volume is read-only: {mounts[0]}"
+    )
+
+
+def test_the_installer_mounts_the_ssh_directory() -> None:
+    """An unmounted key directory fails one SSH-backed tool call at a time."""
+    mounts = [v for v in _generated_volumes() if v.split(":")[1] == "/root/.ssh"]
+    assert len(mounts) == 1, f"expected one /root/.ssh mount, got {mounts}"
+    assert "ro" in mounts[0].split(":")[2].split(","), (
+        f"private key material should not be writable: {mounts[0]}"
+    )
+
+
+def test_the_installer_and_the_example_do_not_disagree() -> None:
+    """Two descriptions of one unit that drift are worse than one.
+
+    The example is what a reader consults; the installer is what runs. They
+    disagreed on three lines, and only the reader-facing one was tested.
+    """
+    generated = set(_generated_volumes())
+    documented = set(_volumes())
+    missing = {v.split(":")[1] for v in documented} - {
+        v.split(":")[1] for v in generated
+    }
+    assert not missing, (
+        f"the example documents mounts install.sh does not create: {sorted(missing)}"
+    )

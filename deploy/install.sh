@@ -254,8 +254,14 @@ write_opnsense_mcp_quadlet() {
     printf '%s\n' "ContainerName=${OPNSENSE_MCP_CONTAINER_NAME}"
     printf '%s\n' "Environment=OPNSENSE_MCP_INSTALL_ROOT=${INSTALL_ROOT}"
     printf '%s\n' "EnvironmentFile=${INSTALL_ROOT}/environment"
+    printf '%s\n' "Environment=OPNSENSE_BACKUP_DIR=${INSTALL_ROOT}/backups"
     printf '%s\n' "Volume=${INSTALL_ROOT}:${INSTALL_ROOT}:ro,Z"
     printf '%s\n' "Volume=${OPNSENSE_MCP_TLS_CERTS}:/opt/certs/wild:ro,Z"
+    # The install root is mounted ro, so backups need their own rw mount, and
+    # the SSH key directory needs mounting at all: without it every SSH-backed
+    # tool fails one call at a time against an empty /root/.ssh.
+    printf '%s\n' "Volume=${INSTALL_ROOT}/ssh:/root/.ssh:ro,Z"
+    printf '%s\n' "Volume=${INSTALL_ROOT}/backups:${INSTALL_ROOT}/backups:rw,Z"
     printf '%s\n' ''
     printf '%s\n' '[Service]'
     printf '%s\n' 'Restart=on-failure'
