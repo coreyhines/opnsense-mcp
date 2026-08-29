@@ -319,12 +319,14 @@ async def test_list_ranges_returns_the_ipv6_fields_flattened() -> None:
 
 
 @pytest.mark.asyncio
-async def test_toggle_range_preserves_the_constructor_and_ra_fields() -> None:
-    """Toggling used to blank every field its payload did not list.
+async def test_toggle_range_refuses_because_the_model_has_no_enable_flag() -> None:
+    """The toggle wrote a `disabled` key the dnsmasq range model does not have.
 
-    `constructor` is what makes an IPv6 range advertise, so a range that came
-    back enabled had silently stopped serving RAs. The payload is rebuilt from
-    the whole node now, so this asserts on the posted values themselves.
+    Captured live, `settings/get`, `search_range` and `get_range` all return the
+    same 18 fields and none is an enable flag. The write therefore changed
+    nothing while reporting success, and the same absent key was read back to
+    decide the no-op case, so every enable call claimed the range was already
+    on. It refuses now, and nothing is posted.
     """
     posted: list[dict[str, Any]] = []
 
@@ -338,29 +340,19 @@ async def test_toggle_range_preserves_the_constructor_and_ra_fields() -> None:
         return {"result": "saved"}
 
     provider = DnsmasqProvider(AsyncMock(side_effect=fake))
-    result = await provider.toggle_range(
-        enabled=False, uuid=V6_RANGE_UUID, dry_run=False
-    )
 
-    assert result["status"] == "success"
-    assert result["applied"] is True
-    payload = posted[0]
-    assert payload["constructor"] == "opt13"
-    assert payload["prefix_len"] == "64"
-    assert payload["ra_mode"] == "slaac"
-    assert payload["ra_priority"] == ""
-    assert payload["ra_interval"] == "600"
-    assert payload["ra_mtu"] == "1500"
-    assert payload["ra_router_lifetime"] == "1800"
-    assert payload["lease_time"] == "7200"
-    assert payload["domain_type"] == "range"
-    assert payload["disabled"] == "1"
-    # Selects go back as bare option keys, never as the read shape.
-    assert not [key for key, value in payload.items() if isinstance(value, dict)]
-    # Fields the model does not have were being invented by the old payload.
-    assert "dhcpv4" not in payload
-    assert "dhcpv6" not in payload
-    assert "domain_search_list" not in payload
+    for requested in (True, False):
+        result = await provider.toggle_range(
+            enabled=requested, uuid=V6_RANGE_UUID, dry_run=False
+        )
+        assert result["status"] == "error"
+        assert result["error_code"] == "unsupported_by_model"
+        assert result["unsupported"] is True
+        assert result["applied"] is False
+        assert result["requested_enabled"] is requested
+        assert result["alternatives"]
+
+    assert not posted, "a refused toggle must not POST to set_range"
 
 
 @pytest.mark.asyncio
