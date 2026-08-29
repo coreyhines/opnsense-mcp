@@ -128,3 +128,95 @@ def test_the_supported_versions_are_ordered_newest_first() -> None:
     assert list(SUPPORTED_PROTOCOL_VERSIONS) == sorted(
         SUPPORTED_PROTOCOL_VERSIONS, reverse=True
     )
+
+
+# --- HTTP transport ---------------------------------------------------------
+
+MODERN_META = {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientCapabilities": {},
+}
+
+
+async def _post(app: Any, method: str, params: dict[str, Any] | None) -> Any:
+    """One modern-era JSON-RPC call against the HTTP app, no handshake first."""
+    import httpx2 as hx
+
+    body: dict[str, Any] = {"jsonrpc": "2.0", "id": 1, "method": method}
+    if params is not None:
+        body["params"] = params
+    async with hx.AsyncClient(
+        transport=hx.ASGITransport(app=app), base_url="http://t", follow_redirects=True
+    ) as client:
+        return await client.post(
+            "/mcp/",
+            json=body,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "MCP-Protocol-Version": "2026-07-28",
+                "Mcp-Method": method,
+            },
+        )
+
+
+@pytest.fixture
+def http_app(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """The HTTP app with a stubbed client, so no test reaches the firewall."""
+    from opnsense_mcp import fastmcp_server
+
+    monkeypatch.setattr(fastmcp_server, "get_opnsense_client", lambda _cfg: None)
+    monkeypatch.setattr(fastmcp_server, "load_opnsense_env", lambda: None)
+    return fastmcp_server.build_mcp_server().http_app()
+
+
+@pytest.mark.asyncio
+async def test_http_discover_reports_the_2026_version(http_app: Any) -> None:
+    """The HTTP transport must speak the new era, not just stdio."""
+    async with http_app.router.lifespan_context(http_app):
+        reply = await _post(http_app, "server/discover", {"_meta": MODERN_META})
+
+    assert reply.status_code == 200
+    assert json.loads(reply.text)["result"]["supportedVersions"] == ["2026-07-28"]
+
+
+@pytest.mark.asyncio
+async def test_http_reports_our_build_version_not_the_sdk_version(
+    http_app: Any,
+) -> None:
+    """Without an explicit version FastMCP reported its own.
+
+    A client could not then tell which build of this server answered.
+    """
+    from opnsense_mcp.build_info import get_build_info
+
+    async with http_app.router.lifespan_context(http_app):
+        reply = await _post(http_app, "server/discover", {"_meta": MODERN_META})
+
+    info = json.loads(reply.text)["result"]["_meta"][
+        "io.modelcontextprotocol/serverInfo"
+    ]
+    assert info["name"] == "opnsense-mcp"
+    assert info["version"] == get_build_info()["package_version"]
+
+
+@pytest.mark.asyncio
+async def test_http_tools_list_needs_no_handshake(http_app: Any) -> None:
+    """Self-contained requests are the whole point of the new transport."""
+    async with http_app.router.lifespan_context(http_app):
+        reply = await _post(http_app, "tools/list", {"_meta": MODERN_META})
+
+    assert reply.status_code == 200
+    assert json.loads(reply.text)["result"]["tools"]
+
+
+@pytest.mark.asyncio
+async def test_http_rejects_a_request_without_the_meta_envelope(
+    http_app: Any,
+) -> None:
+    """The envelope carries what the handshake used to, so it is required."""
+    async with http_app.router.lifespan_context(http_app):
+        reply = await _post(http_app, "server/discover", {})
+
+    assert reply.status_code == 400
+    assert json.loads(reply.text)["error"]["code"] == -32602

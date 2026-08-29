@@ -18,6 +18,7 @@ from typing import Any
 from fastmcp import FastMCP
 from fastmcp.tools.function_tool import FunctionTool
 
+from opnsense_mcp.build_info import get_build_info
 from opnsense_mcp.server import get_opnsense_client
 from opnsense_mcp.tools.shaper_audit import (
     AuditShaperConfigTool,
@@ -140,7 +141,15 @@ def build_mcp_server() -> FastMCP:
     tools = build_tools(client, extra=build_shaper_tools(client))
     exposed = build_groups(tools)
 
-    mcp = FastMCP("opnsense-mcp", instructions=INSTRUCTIONS)
+    # Without an explicit version FastMCP reports its own, so `server/discover`
+    # answered serverInfo.version = "4.0.0b5" and a client could not tell which
+    # build of this server it was talking to.
+    build_info = get_build_info()
+    mcp = FastMCP(
+        "opnsense-mcp",
+        instructions=INSTRUCTIONS,
+        version=build_info["package_version"],
+    )
     register_tools(mcp, exposed)
     logger.info("Registered %d tools from %d operations", len(exposed), len(tools))
     return mcp
