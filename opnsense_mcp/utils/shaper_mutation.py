@@ -12,6 +12,7 @@ from opnsense_mcp.tools.shaper_settings import (
     search_shaper_queues,
     search_shaper_rules,
 )
+from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.shaper_normalize import (
     normalize_pipe,
     normalize_queue,
@@ -244,12 +245,26 @@ async def apply_snapshot_restore(
 
 
 async def reconfigure_shaper(client: ClientT) -> dict[str, Any]:
-    """POST service/reconfigure."""
+    """POST service/reconfigure, raising :class:`ApplyError` unless it applied.
+
+    The raw POST returned whatever document arrived at HTTP 200 and left it
+    to the callers to read, and a configd refusal has exactly that shape, so
+    a refused reload was indistinguishable from a completed one.
+    ``run_apply`` reads the ``status`` the service answers with. The
+    ``error``-key check the shaper already made stays on top of it, so
+    nothing that used to be refused now passes: a document carrying both a
+    healthy status and an error is still not an applied change.
+    """
     if not client:
         raise RuntimeError("No client available")
-    return await client._make_request(
-        "POST", "/trafficshaper/service/reconfigure", call_class="apply"
-    )
+    result = await run_apply(client, "/trafficshaper/service/reconfigure")
+    ok, detail = shaper_api_result_ok(result)
+    if not ok:
+        raise ApplyError(
+            "/trafficshaper/service/reconfigure answered "
+            f"{detail or result!r} rather than success"
+        )
+    return result
 
 
 def pipe_description_map(pipes: list[dict[str, Any]]) -> dict[str, str]:
@@ -359,11 +374,26 @@ async def finish_mutation(
     With ``verify_kernel``, an applied change is checked against the running
     shaper before it is reported as done. A delete used to report
     ``applied: true`` while the kernel still held the pipe.
+
+    A reconfigure that does not apply is reported, not raised: the change
+    stays staged, ``applied`` is false and ``apply_error`` carries the
+    reason, so the caller can tell a made change from a live one.
     """
     reconfigure_result: dict[str, Any] | None = None
+    apply_error = ""
     if apply:
-        reconfigure_result = await reconfigure_shaper(client)
+        try:
+            reconfigure_result = await reconfigure_shaper(client)
+        except ApplyError as exc:
+            # The writes this finishes already happened. Letting the apply
+            # failure escape would report a finished mutation as a failed
+            # one — for a delete, that invites a retry against a record
+            # that is already gone.
+            logger.warning("Shaper change staged but not applied: %s", exc)
+            apply_error = str(exc)
     merged = {**structured, **pending_apply_fields(apply, reconfigure_result)}
+    if apply_error:
+        merged["apply_error"] = apply_error
     final_status = status
     if apply and merged.get("pending_changes") and not merged.get("applied"):
         final_status = TOOL_STATUS_WARNING
