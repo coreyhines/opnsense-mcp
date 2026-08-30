@@ -63,6 +63,11 @@ _NOT_TOOLS = frozenset(
         # Config keys, params, device names, env vars — tool-shaped but not
         # tools. This is where false positives belong now that the check no
         # longer filters by verb (which blinded it to removed verb families).
+        # OPNsense's own MVC endpoints under /api/firewall/npt/. Named in
+        # CLAUDE.md because the NPT trackif defect is only describable in terms
+        # of which endpoint accepted the field and which one read it back.
+        "add_rule",
+        "search_rule",
         "api_key",
         "api_secret",
         "firewall_host",

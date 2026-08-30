@@ -25,7 +25,7 @@ The floor is lower than it should be for a reason worth knowing: MCP gives
 every tool a complete schema with no cross-tool reference, so `apply` is stored
 13 times no matter how canonical its definition is.
 
-Result: 115 operations behind 14 names.
+Result: 116 operations behind 14 names.
 """
 
 from __future__ import annotations
@@ -124,6 +124,7 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "list_npt": "list_npt_rules",
             "create_npt": "mk_npt_rule",
             "toggle_npt": "toggle_npt_rule",
+            "reconcile_npt": "reconcile_npt",
             "delete_npt": "rm_npt_rule",
             "list_vip": "list_vip",
             "create_vip": "mk_vip",

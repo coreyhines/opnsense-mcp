@@ -244,6 +244,14 @@ rather than only `enabled`, and both are falsified in
 as correct, and one of them ("stages without applying") passed for the wrong
 reason once the guard landed, because a refusal also makes no apply call.
 
+The literal external prefix that replaced it is a snapshot of the delegation,
+so `reconcile_npt` re-derives each rule's external `/64` from the interface
+that actually carries its internal prefix and rewrites what has drifted. Its
+own first re-read test had the same wrong-reason problem: asserting
+`verified is True` on a run where the write succeeded passes whether the code
+re-reads or hardcodes it, so the case that pins it is the one where the re-read
+still shows the old prefix.
+
 **Now enforced, not remembered.**
 `.claude/hooks/bash_guard.py` runs as a `PreToolUse` hook on every Bash call. It
 refuses the `;`-chained publish and the bare-cat heredoc, and warns on workspace
@@ -264,6 +272,9 @@ Nine more run as tests:
 | `test_ssh_known_hosts.py` | the host-key check accepts a listed name presenting the wrong key |
 | `test_shaper_kernel_sync.py` | an applied delete reports success while the kernel still holds the pipe |
 | `test_apply_ula_reports_verification_failure` | an applied RA change reports success while the serving daemon does not match |
+| `test_npt_refuses_trackif_as_the_external_side` | an NPT rule is written with no external prefix, so it loads and translates nothing |
+| `test_reconcile_npt_never_writes_an_empty_external_prefix` | reconcile blanks a rule whose interface has lost its delegation |
+| `test_reconcile_npt_reports_unverified_when_the_re_read_disagrees` | reconcile calls a rewrite verified without re-reading it |
 | `test_apply_discipline.py` | a call passes `call_class="apply"` without going through `run_apply`, so a configd refusal at HTTP 200 reads as applied |
 | `test_every_delete_either_confirms_or_says_why_not` | a tool whose class posts to a `del*` endpoint takes no confirm token and is not listed with a reason — matched on the endpoint, not the action name |
 | `test_schema_completeness.py` | `execute` reads a `params` key the tool's own `input_schema` never declares |

@@ -1859,6 +1859,27 @@
       "type": "object"
     }
   },
+  "reconcile_npt": {
+    "description": "Compare each NPTv6 rule's external prefix against the delegated prefix its interface currently holds, and optionally rewrite the drifted ones",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reload the filter after rewriting (default false). Ignored on a dry run",
+          "optional": true,
+          "type": "boolean"
+        },
+        "dry_run": {
+          "default": true,
+          "description": "Report drift without writing anything (default true). Set false to rewrite the drifted rules",
+          "optional": true,
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
   "restore_shaper_snapshot": {
     "description": "Restore traffic shaper config from a prior snapshot_id. Set remove_orphans=true to delete pipes/queues/rules not in the snapshot.",
     "inputSchema": {
