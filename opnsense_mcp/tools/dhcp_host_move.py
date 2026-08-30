@@ -29,12 +29,15 @@ class MoveDhcpHostTool:
                 "description": "Hostname or MAC of the reservation to move",
             },
             "ipv4": {
-                "type": ["integer", "string"],
-                "description": "New IPv4: last octet (e.g. 2) or full address",
+                # Cursor's MCP client rejects JSON Schema type unions written as
+                # ``"type": ["integer", "string"]`` under properties. Keep these
+                # plain strings; the tool still accepts an integer at runtime.
+                "type": "string",
+                "description": "New IPv4: last octet (e.g. '2') or full address",
             },
             "ipv6": {
-                "type": ["integer", "string"],
-                "description": "New IPv6 suffix: e.g. 2 -> ::2, or '::abcd'",
+                "type": "string",
+                "description": "New IPv6 suffix: e.g. '2' -> ::2, or '::abcd'",
             },
             "new_hostname": {
                 "type": "string",

@@ -48,9 +48,9 @@ KNOWN_MISSING_METADATA = frozenset(
 
 def test_golden_snapshot_exists() -> None:
     """Without the snapshot the other assertions prove nothing."""
-    assert GOLDEN.exists(), (
-        f"{GOLDEN} is missing; run: uv run python -m tests.regen_tool_surface"
-    )
+    assert (
+        GOLDEN.exists()
+    ), f"{GOLDEN} is missing; run: uv run python -m tests.regen_tool_surface"
 
 
 def test_no_tool_disappears() -> None:
@@ -159,5 +159,21 @@ def test_input_schemas_are_well_formed() -> None:
         for req in schema.get("required", []):
             if req not in props:
                 problems.append(f"{name}: required {req!r} is not in properties")
+        # Cursor's MCP client rejects JSON Schema type unions written as
+        # ``"type": ["integer", "string"]`` under properties (Zod: expected
+        # record). Use anyOf/oneOf with typed objects instead.
+        for prop_name, prop_schema in props.items():
+            if not isinstance(prop_schema, dict):
+                problems.append(
+                    f"{name}.{prop_name}: property schema is "
+                    f"{type(prop_schema).__name__}, expected object"
+                )
+                continue
+            prop_type = prop_schema.get("type")
+            if isinstance(prop_type, list):
+                problems.append(
+                    f"{name}.{prop_name}: type is a list {prop_type!r}; "
+                    "use anyOf/oneOf for Cursor MCP compatibility"
+                )
 
     assert not problems, "\n".join(problems)
