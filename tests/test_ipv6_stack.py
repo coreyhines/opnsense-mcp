@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from opnsense_mcp.tools.ipv6_stack import (
+    REASON_TRACKIF_DOES_NOT_TRANSLATE,
     ListLoopbackTool,
     ListNptRulesTool,
     ListVipTool,
@@ -98,21 +99,64 @@ def _stub(client: OPNsenseClient, responses: dict[str, Any]) -> list[dict[str, A
 
 
 @pytest.mark.asyncio
-async def test_npt_rejects_no_external_and_no_track() -> None:
-    """Without either, the rule cannot know the delegated prefix.
-
-    The forum guidance is explicit that this breaks WAN IPv6 listeners,
-    WireGuard among them.
-    """
+async def test_npt_rejects_no_external_prefix() -> None:
+    """Without one the rule cannot know the delegated prefix."""
     client = _client()
-    _stub(client, {"search_rule": {"rows": [], "total": 0}})
+    calls = _stub(client, {"search_rule": {"rows": [], "total": 0}})
 
     result = await MkNptRuleTool(client).execute(
         {"interface": "wan", "source_net": "fd0b:b022:1e5:2::/64"}
     )
 
     assert result["status"] == "error"
-    assert "trackif" in result["error"]
+    assert result["reason"] == REASON_TRACKIF_DOES_NOT_TRANSLATE
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_npt_refuses_trackif_as_the_external_side() -> None:
+    """trackif alone stores fine and translates nothing.
+
+    On 26.7.3 a rule with only `trackif` is accepted by add_rule, comes back
+    from search_rule with the field populated, and survives a filter reload --
+    and pf still holds no mapping for it. Nine such rules black-holed every
+    ULA VLAN's egress: a WAN capture showed the ULA source leaving
+    untranslated. Nothing in the rule's own read-back reveals this, so the
+    tool has to refuse the shape rather than report it.
+    """
+    client = _client()
+    calls = _stub(client, {"search_rule": {"rows": [], "total": 0}})
+
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "trackif": "lan",
+        }
+    )
+
+    assert result["status"] == "error"
+    assert result["reason"] == REASON_TRACKIF_DOES_NOT_TRANSLATE
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_npt_list_marks_a_rule_that_cannot_translate() -> None:
+    """An enabled rule is not necessarily a translating one.
+
+    NPT_ROWS holds the shape that caused the outage: enabled, trackif set,
+    destination_net empty. Listing must say so rather than echo the fields.
+    """
+    client = _client()
+    _stub(client, {"search_rule": NPT_ROWS})
+
+    result = await ListNptRulesTool(client).execute({})
+
+    rule = result["rules"][0]
+    assert rule["enabled"] == "1"
+    assert rule["translating"] is False
+    assert rule["reason"] == REASON_TRACKIF_DOES_NOT_TRANSLATE
+    assert "warning" in result
 
 
 @pytest.mark.asyncio
@@ -189,7 +233,7 @@ async def test_npt_creates_with_the_real_field_names() -> None:
         {
             "interface": "wan",
             "source_net": "fd0b:b022:1e5:2::/64",
-            "trackif": "lan",
+            "destination_net": "2001:db8:2::/64",
             "description": "wired VLAN",
         }
     )
@@ -197,7 +241,7 @@ async def test_npt_creates_with_the_real_field_names() -> None:
     assert result["status"] == "success"
     payload = next(c for c in calls if "add_rule" in c["endpoint"])["json"]["rule"]
     assert payload["source_net"] == "fd0b:b022:1e5:2::/64"
-    assert payload["trackif"] == "lan"
+    assert payload["destination_net"] == "2001:db8:2::/64"
     assert payload["interface"] == "wan"
     assert "internal_prefix" not in payload
 
@@ -208,7 +252,11 @@ async def test_npt_is_idempotent_on_interface_and_source() -> None:
     calls = _stub(client, {"search_rule": NPT_ROWS})
 
     result = await MkNptRuleTool(client).execute(
-        {"interface": "wan", "source_net": "fd0b:b022:1e5:2::/64", "trackif": "lan"}
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "destination_net": "2001:db8:2::/64",
+        }
     )
 
     assert result["created"] is False
@@ -222,10 +270,17 @@ async def test_npt_stages_without_applying_by_default() -> None:
     client = _client()
     calls = _stub(client, {"search_rule": {"rows": [], "total": 0}})
 
-    await MkNptRuleTool(client).execute(
-        {"interface": "wan", "source_net": "fd0b:b022:1e5:2::/64", "trackif": "lan"}
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "destination_net": "2001:db8:2::/64",
+        }
     )
 
+    # The write must land, or "no apply call" is satisfied by a refusal.
+    assert result["created"] is True
+    assert [c for c in calls if "add_rule" in c["endpoint"]]
     assert not [c for c in calls if "apply" in c["endpoint"]]
 
 
@@ -244,7 +299,7 @@ async def test_npt_apply_status_failed_keeps_successful_write_visible() -> None:
         {
             "interface": "wan",
             "source_net": "fd0b:b022:1e5:2::/64",
-            "trackif": "lan",
+            "destination_net": "2001:db8:2::/64",
             "apply": True,
         }
     )

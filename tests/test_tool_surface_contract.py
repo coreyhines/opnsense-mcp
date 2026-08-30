@@ -48,9 +48,9 @@ KNOWN_MISSING_METADATA = frozenset(
 
 def test_golden_snapshot_exists() -> None:
     """Without the snapshot the other assertions prove nothing."""
-    assert (
-        GOLDEN.exists()
-    ), f"{GOLDEN} is missing; run: uv run python -m tests.regen_tool_surface"
+    assert GOLDEN.exists(), (
+        f"{GOLDEN} is missing; run: uv run python -m tests.regen_tool_surface"
+    )
 
 
 def test_no_tool_disappears() -> None:

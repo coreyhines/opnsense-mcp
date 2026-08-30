@@ -231,6 +231,19 @@ three. The tests now parse the unit the installer generates. Separately, the
 installer only ever ran `systemctl start`, which is a no-op on an active unit,
 so a re-run rewrote the quadlet and left the old container running.
 
+**A field the API stores and reads back is not a field the API acts on.**
+`mk_npt_rule` accepted `trackif` as the external side of an NPT rule with no
+`destination_net`. `add_rule` accepted it, `search_rule` returned it populated,
+`list_npt` showed nine enabled rules, and a filter reload reported ok — and pf
+held no mapping for any of them. Every ULA VLAN's IPv6 egress was black-holed
+from the moment it was migrated: a WAN capture showed `fdc0:ffee:cafe:10::21`
+leaving untranslated. Nothing readable from the rule says this; only a capture
+does. The tool now refuses the shape, `list_npt` reports `translating` per rule
+rather than only `enabled`, and both are falsified in
+`tests/test_ipv6_stack.py`. Three existing tests had encoded the broken shape
+as correct, and one of them ("stages without applying") passed for the wrong
+reason once the guard landed, because a refusal also makes no apply call.
+
 **Now enforced, not remembered.**
 `.claude/hooks/bash_guard.py` runs as a `PreToolUse` hook on every Bash call. It
 refuses the `;`-chained publish and the bare-cat heredoc, and warns on workspace

@@ -56,6 +56,11 @@ VIP_MODES = ("ipalias", "carp", "proxyarp", "other")
 # shorter block.
 MIN_PREFIX_LEN = 64
 
+# A rule whose external side is only `trackif` loads without error and shows up
+# in search_rule, but pf holds no mapping for it, so the ULA source reaches WAN
+# untranslated. Callers key off this rather than the message wording.
+REASON_TRACKIF_DOES_NOT_TRANSLATE = "trackif_does_not_translate"
+
 
 class _V6ToolBase:
     """Shared client handling and lookups."""
@@ -162,19 +167,38 @@ class ListNptRulesTool(_V6ToolBase):
             logger.exception("Failed to list NPT rules")
             return {"status": "error", "error": str(exc)}
 
-        rules = [
-            {
+        rules = []
+        for row in rows:
+            destination_net = row.get("destination_net", "")
+            rule = {
                 "uuid": row.get("uuid", ""),
                 "interface": row.get("interface", ""),
                 "source_net": row.get("source_net", ""),
-                "destination_net": row.get("destination_net", ""),
+                "destination_net": destination_net,
                 "trackif": row.get("trackif", ""),
                 "enabled": row.get("enabled", ""),
                 "description": row.get("description", ""),
+                # An enabled rule is not necessarily a translating one.
+                "translating": bool(destination_net),
             }
-            for row in rows
-        ]
-        return {"status": "success", "count": len(rules), "rules": rules}
+            if not destination_net:
+                rule["reason"] = REASON_TRACKIF_DOES_NOT_TRANSLATE
+            rules.append(rule)
+
+        not_translating = [r["uuid"] for r in rules if not r["translating"]]
+        out: dict[str, Any] = {
+            "status": "success",
+            "count": len(rules),
+            "rules": rules,
+        }
+        if not_translating:
+            out["warning"] = (
+                f"{len(not_translating)} rule(s) carry no destination_net. They "
+                f"load and read back fine but pf holds no mapping for them, so "
+                f"traffic egresses WAN with its internal source. Give each one "
+                f"the delegated /64 as destination_net."
+            )
+        return out
 
 
 class MkNptRuleTool(_V6ToolBase):
@@ -197,12 +221,15 @@ class MkNptRuleTool(_V6ToolBase):
             },
             "destination_net": {
                 "type": "string",
-                "description": "External prefix; omit when using trackif",
-                "optional": True,
+                "description": "External prefix, the delegated /64 to translate onto",
             },
             "trackif": {
                 "type": "string",
-                "description": "Interface whose delegated prefix supplies the external side",
+                "description": (
+                    "Recognized and refused: interface whose delegated prefix would "
+                    "supply the external side. OPNsense stores it but generates no "
+                    "translation from it. Pass destination_net instead"
+                ),
                 "optional": True,
             },
             "description": {"type": "string", "optional": True},
@@ -234,14 +261,19 @@ class MkNptRuleTool(_V6ToolBase):
         if error:
             return {"status": "error", "error": error}
 
-        if not destination_net and not trackif:
+        if not destination_net:
             return {
                 "status": "error",
                 "error": (
-                    "Either destination_net or trackif is required. A rule with "
-                    "neither cannot learn the delegated prefix, and leaves WAN "
-                    "IPv6 listeners such as WireGuard broken."
+                    "destination_net is required. trackif on its own does not "
+                    "translate: OPNsense accepts the field and search_rule reads "
+                    "it back, but the generated ruleset carries no mapping, so "
+                    "packets leave WAN with their ULA source and are dropped "
+                    "upstream. Confirmed on 26.7.3 by capturing on WAN. Pass the "
+                    f"delegated /64 for {trackif or 'the tracked interface'} as "
+                    "destination_net."
                 ),
+                "reason": REASON_TRACKIF_DOES_NOT_TRANSLATE,
             }
 
         if source.prefixlen < MIN_PREFIX_LEN:
