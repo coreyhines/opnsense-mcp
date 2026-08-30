@@ -247,6 +247,13 @@ FIELD_ALIASES: dict[str, dict[str, str]] = {
     "get_logs": {"action": "log_action"},
     # start / stop / fetch.
     "packet_capture": {"action": "capture_action"},
+    # dnsmasq's own field is literally `constructor` (IPv6 prefix-from-interface).
+    # Advertising that key under inputSchema.properties breaks Cursor / the MCP
+    # TypeScript SDK: Zod's z.record() rejects objects that define `constructor`
+    # ("expected record, received object"), which left the whole server with
+    # zero usable tools. Alias it for callers; execute() maps it back.
+    "mk_dhcp_range": {"constructor": "prefix_constructor"},
+    "set_dhcp_range": {"constructor": "prefix_constructor"},
 }
 
 
