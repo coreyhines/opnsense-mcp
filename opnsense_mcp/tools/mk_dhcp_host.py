@@ -39,8 +39,13 @@ class MkDhcpHostTool:
                 "description": "IPv4 address to assign (e.g. '172.20.8.50')",
             },
             "ipv6": {
-                "type": ["integer", "string"],
-                "description": "IPv6 suffix: integer (e.g. 50 → ::50) or '::abcd'",
+                # Cursor's MCP client rejects JSON Schema type unions written as
+                # ``"type": ["integer", "string"]`` under properties. Keep this a
+                # plain string; the tool still accepts an integer at runtime.
+                "type": "string",
+                "description": (
+                    "IPv6 suffix: integer as a string (e.g. '50' → ::50) or '::abcd'"
+                ),
             },
             "client_id": {
                 "type": "string",

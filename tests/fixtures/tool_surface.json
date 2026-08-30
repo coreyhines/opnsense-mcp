@@ -1121,11 +1121,8 @@
           "type": "string"
         },
         "ipv6": {
-          "description": "IPv6 suffix: integer (e.g. 50 \u2192 ::50) or '::abcd'",
-          "type": [
-            "integer",
-            "string"
-          ]
+          "description": "IPv6 suffix: integer as a string (e.g. '50' \u2192 ::50) or '::abcd'",
+          "type": "string"
         },
         "mac": {
           "description": "MAC address (e.g. 'aa:bb:cc:dd:ee:ff')",
@@ -1685,18 +1682,12 @@
           "type": "string"
         },
         "ipv4": {
-          "description": "New IPv4: last octet (e.g. 2) or full address",
-          "type": [
-            "integer",
-            "string"
-          ]
+          "description": "New IPv4: last octet (e.g. '2') or full address",
+          "type": "string"
         },
         "ipv6": {
-          "description": "New IPv6 suffix: e.g. 2 -> ::2, or '::abcd'",
-          "type": [
-            "integer",
-            "string"
-          ]
+          "description": "New IPv6 suffix: e.g. '2' -> ::2, or '::abcd'",
+          "type": "string"
         },
         "new_hostname": {
           "description": "New dnsmasq host reservation name (optional rename)",
