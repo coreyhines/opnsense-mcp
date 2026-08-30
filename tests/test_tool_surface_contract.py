@@ -177,3 +177,31 @@ def test_input_schemas_are_well_formed() -> None:
                 )
 
     assert not problems, "\n".join(problems)
+
+
+def test_exposed_group_schemas_avoid_prototype_keys() -> None:
+    """Grouped tools are what HTTP clients see; keep their keys Zod-safe.
+
+    A property named ``constructor`` (dnsmasq's real field) shadows
+    Object.prototype and makes Zod's z.record() reject the whole properties
+    map — Cursor then loads zero tools. Alias before advertising.
+    """
+    from opnsense_mcp.fastmcp_server import build_shaper_tools
+    from opnsense_mcp.utils.registry import build_tools
+    from opnsense_mcp.utils.tool_groups import build_groups
+
+    class _Client:
+        pass
+
+    exposed = build_groups(build_tools(_Client(), extra=build_shaper_tools(_Client())))
+    forbidden = {"constructor", "__proto__", "prototype"}
+    problems = []
+    for name, tool in sorted(exposed.items()):
+        props = (getattr(tool, "input_schema", None) or {}).get("properties") or {}
+        bad = sorted(forbidden & set(props))
+        if bad:
+            problems.append(f"{name}: {bad}")
+    assert not problems, (
+        "exposed tool schemas must not advertise prototype-shadowing keys: "
+        + "; ".join(problems)
+    )
