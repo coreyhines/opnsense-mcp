@@ -1390,8 +1390,7 @@
           "type": "string"
         },
         "destination_net": {
-          "description": "External prefix; omit when using trackif",
-          "optional": true,
+          "description": "External prefix, the delegated /64 to translate onto",
           "type": "string"
         },
         "interface": {
@@ -1403,7 +1402,7 @@
           "type": "string"
         },
         "trackif": {
-          "description": "Interface whose delegated prefix supplies the external side",
+          "description": "Recognized and refused: interface whose delegated prefix would supply the external side. OPNsense stores it but generates no translation from it. Pass destination_net instead",
           "optional": true,
           "type": "string"
         }
@@ -1857,6 +1856,27 @@
         "gua_prefix",
         "ula_prefix"
       ],
+      "type": "object"
+    }
+  },
+  "reconcile_npt": {
+    "description": "Compare each NPTv6 rule's external prefix against the delegated prefix its interface currently holds, and optionally rewrite the drifted ones",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reload the filter after rewriting (default false). Ignored on a dry run",
+          "optional": true,
+          "type": "boolean"
+        },
+        "dry_run": {
+          "default": true,
+          "description": "Report drift without writing anything (default true). Set false to rewrite the drifted rules",
+          "optional": true,
+          "type": "boolean"
+        }
+      },
+      "required": [],
       "type": "object"
     }
   },

@@ -56,6 +56,14 @@ VIP_MODES = ("ipalias", "carp", "proxyarp", "other")
 # shorter block.
 MIN_PREFIX_LEN = 64
 
+# RFC 4193. Used to tell a rule's internal side from its delegated side.
+UNIQUE_LOCAL = ipaddress.ip_network("fc00::/7")
+
+# A rule whose external side is only `trackif` loads without error and shows up
+# in search_rule, but pf holds no mapping for it, so the ULA source reaches WAN
+# untranslated. Callers key off this rather than the message wording.
+REASON_TRACKIF_DOES_NOT_TRANSLATE = "trackif_does_not_translate"
+
 
 class _V6ToolBase:
     """Shared client handling and lookups."""
@@ -162,19 +170,38 @@ class ListNptRulesTool(_V6ToolBase):
             logger.exception("Failed to list NPT rules")
             return {"status": "error", "error": str(exc)}
 
-        rules = [
-            {
+        rules = []
+        for row in rows:
+            destination_net = row.get("destination_net", "")
+            rule = {
                 "uuid": row.get("uuid", ""),
                 "interface": row.get("interface", ""),
                 "source_net": row.get("source_net", ""),
-                "destination_net": row.get("destination_net", ""),
+                "destination_net": destination_net,
                 "trackif": row.get("trackif", ""),
                 "enabled": row.get("enabled", ""),
                 "description": row.get("description", ""),
+                # An enabled rule is not necessarily a translating one.
+                "translating": bool(destination_net),
             }
-            for row in rows
-        ]
-        return {"status": "success", "count": len(rules), "rules": rules}
+            if not destination_net:
+                rule["reason"] = REASON_TRACKIF_DOES_NOT_TRANSLATE
+            rules.append(rule)
+
+        not_translating = [r["uuid"] for r in rules if not r["translating"]]
+        out: dict[str, Any] = {
+            "status": "success",
+            "count": len(rules),
+            "rules": rules,
+        }
+        if not_translating:
+            out["warning"] = (
+                f"{len(not_translating)} rule(s) carry no destination_net. They "
+                f"load and read back fine but pf holds no mapping for them, so "
+                f"traffic egresses WAN with its internal source. Give each one "
+                f"the delegated /64 as destination_net."
+            )
+        return out
 
 
 class MkNptRuleTool(_V6ToolBase):
@@ -197,12 +224,15 @@ class MkNptRuleTool(_V6ToolBase):
             },
             "destination_net": {
                 "type": "string",
-                "description": "External prefix; omit when using trackif",
-                "optional": True,
+                "description": "External prefix, the delegated /64 to translate onto",
             },
             "trackif": {
                 "type": "string",
-                "description": "Interface whose delegated prefix supplies the external side",
+                "description": (
+                    "Recognized and refused: interface whose delegated prefix would "
+                    "supply the external side. OPNsense stores it but generates no "
+                    "translation from it. Pass destination_net instead"
+                ),
                 "optional": True,
             },
             "description": {"type": "string", "optional": True},
@@ -234,14 +264,19 @@ class MkNptRuleTool(_V6ToolBase):
         if error:
             return {"status": "error", "error": error}
 
-        if not destination_net and not trackif:
+        if not destination_net:
             return {
                 "status": "error",
                 "error": (
-                    "Either destination_net or trackif is required. A rule with "
-                    "neither cannot learn the delegated prefix, and leaves WAN "
-                    "IPv6 listeners such as WireGuard broken."
+                    "destination_net is required. trackif on its own does not "
+                    "translate: OPNsense accepts the field and search_rule reads "
+                    "it back, but the generated ruleset carries no mapping, so "
+                    "packets leave WAN with their ULA source and are dropped "
+                    "upstream. Confirmed on 26.7.3 by capturing on WAN. Pass the "
+                    f"delegated /64 for {trackif or 'the tracked interface'} as "
+                    "destination_net."
                 ),
+                "reason": REASON_TRACKIF_DOES_NOT_TRANSLATE,
             }
 
         if source.prefixlen < MIN_PREFIX_LEN:
@@ -421,6 +456,260 @@ class RmNptRuleTool(_V6ToolBase):
             logger.exception("Failed to delete NPT rule")
             return {"status": "error", "error": str(exc)}
         return {"status": "success", "uuid": uuid, "deleted": True}
+
+
+class ReconcileNptTool(_V6ToolBase):
+    """Re-derive NPT external prefixes from live interface state.
+
+    NPT rules here carry a literal external prefix, because `trackif` does not
+    translate (see MkNptRuleTool). That literal is a snapshot of the delegated
+    prefix at the time the rule was written, so a new delegation from the ISP
+    leaves every rule pointing at a block that is no longer routed: traffic is
+    still translated, onto an address the upstream drops. Nothing in the rule
+    or its read-back shows this.
+
+    This walks the other way. For each rule it finds the interface that
+    actually carries the rule's internal prefix, reads the delegated /64 that
+    interface holds right now, and compares. Drift is derived from observed
+    state rather than from a field the rule claims.
+    """
+
+    name = "reconcile_npt"
+    description = (
+        "Compare each NPTv6 rule's external prefix against the delegated prefix "
+        "its interface currently holds, and optionally rewrite the drifted ones"
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "dry_run": {
+                "type": "boolean",
+                "description": (
+                    "Report drift without writing anything (default true). Set "
+                    "false to rewrite the drifted rules"
+                ),
+                "optional": True,
+                "default": True,
+            },
+            "apply": {
+                "type": "boolean",
+                "description": (
+                    "Reload the filter after rewriting (default false). Ignored "
+                    "on a dry run"
+                ),
+                "optional": True,
+                "default": False,
+            },
+        },
+        "required": [],
+    }
+
+    @staticmethod
+    def _interface_prefixes(entry: dict[str, Any]) -> tuple[list[Any], list[Any]]:
+        """Split one interface's IPv6 addresses into (unique-local, global).
+
+        Link-local is dropped: every interface has one and it never identifies
+        which VLAN a rule belongs to.
+        """
+        unique_local: list[Any] = []
+        global_: list[Any] = []
+        for item in entry.get("ipv6") or []:
+            raw = (item or {}).get("ipaddr") or ""
+            if not raw:
+                continue
+            try:
+                network = ipaddress.ip_interface(raw).network
+            except ValueError:
+                continue
+            if (
+                network.version != 6
+                or network.is_link_local
+                or network.is_multicast
+                or network.is_loopback
+            ):
+                continue
+            # Membership of fc00::/7, not is_private: ipaddress also calls the
+            # documentation and 6to4 ranges private, and the delegated side of
+            # a rule is simply "the address that is not the ULA".
+            if network.subnet_of(UNIQUE_LOCAL):
+                unique_local.append(network)
+            else:
+                global_.append(network)
+        return unique_local, global_
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Report, and optionally correct, external prefixes that have drifted."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        dry_run = params.get("dry_run", True)
+
+        # Imported here: interface_list pulls in the tool registry, and importing
+        # it at module scope makes this module and that one mutually dependent.
+        from opnsense_mcp.tools.interface_list import InterfaceListTool
+
+        try:
+            rows = await self._rows(NPT["search"])
+            listing = await InterfaceListTool(self.client).execute({})
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to read NPT rules or interfaces")
+            return {"status": "error", "error": str(exc)}
+
+        if listing.get("status") != "success":
+            return {
+                "status": "error",
+                "error": (
+                    "could not read interface addresses, so drift cannot be "
+                    f"judged: {listing.get('error') or 'interface_list failed'}"
+                ),
+            }
+
+        carriers = []
+        for entry in (listing.get("interfaces") or {}).values():
+            if not isinstance(entry, dict):
+                continue
+            unique_local, global_ = self._interface_prefixes(entry)
+            if unique_local:
+                carriers.append(
+                    {
+                        "identifier": entry.get("identifier", ""),
+                        "description": entry.get("description", ""),
+                        "unique_local": unique_local,
+                        "global": global_,
+                    }
+                )
+
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            source_net = row.get("source_net", "")
+            result: dict[str, Any] = {
+                "uuid": row.get("uuid", ""),
+                "source_net": source_net,
+                "destination_net": row.get("destination_net", ""),
+                "description": row.get("description", ""),
+            }
+            source, error = _parse_v6_network(source_net, "source_net")
+            if error:
+                result["outcome"] = "unreadable_source"
+                result["detail"] = error
+                results.append(result)
+                continue
+
+            owners = [c for c in carriers if source in c["unique_local"]]
+            if not owners:
+                result["outcome"] = "no_interface"
+                result["detail"] = (
+                    f"no interface carries {source_net}; leaving the rule alone "
+                    f"rather than guessing its external prefix"
+                )
+            elif len(owners) > 1:
+                result["outcome"] = "ambiguous_interface"
+                result["detail"] = (
+                    f"{source_net} is carried by "
+                    f"{', '.join(o['identifier'] for o in owners)}"
+                )
+            else:
+                owner = owners[0]
+                result["interface"] = owner["identifier"]
+                delegated = [
+                    g for g in owner["global"] if g.prefixlen == source.prefixlen
+                ]
+                if not delegated:
+                    result["outcome"] = "no_delegated_prefix"
+                    result["detail"] = (
+                        f"{owner['identifier']} holds no global /{source.prefixlen}; "
+                        f"the rule keeps its current external prefix"
+                    )
+                elif len(delegated) > 1:
+                    result["outcome"] = "ambiguous_prefix"
+                    result["detail"] = (
+                        f"{owner['identifier']} holds "
+                        f"{', '.join(str(d) for d in delegated)}"
+                    )
+                else:
+                    expected = str(delegated[0])
+                    result["expected"] = expected
+                    if result["destination_net"] == expected:
+                        result["outcome"] = "current"
+                    else:
+                        result["outcome"] = "drifted"
+            results.append(result)
+
+        drifted = [r for r in results if r["outcome"] == "drifted"]
+        unresolved = [r for r in results if r["outcome"] not in ("current", "drifted")]
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "dry_run": bool(dry_run),
+            "checked": len(results),
+            "counts": {
+                "current": sum(1 for r in results if r["outcome"] == "current"),
+                "drifted": len(drifted),
+                "unresolved": len(unresolved),
+            },
+            "results": results,
+        }
+
+        if dry_run:
+            out["rewritten"] = 0
+            out["note"] = (
+                "Nothing was written. Call again with dry_run=false to correct "
+                "the drifted rules."
+            )
+            return out
+
+        rewritten = 0
+        for result in drifted:
+            row = next(r for r in rows if r.get("uuid") == result["uuid"])
+            payload = {
+                "interface": row.get("interface", ""),
+                "source_net": row.get("source_net", ""),
+                "destination_net": result["expected"],
+                "trackif": row.get("trackif", ""),
+                "description": row.get("description", ""),
+                "enabled": row.get("enabled", "1"),
+            }
+            try:
+                await self.client._make_request(
+                    "POST",
+                    f"{NPT['set']}/{result['uuid']}",
+                    call_class="write",
+                    json={"rule": payload},
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Failed to rewrite NPT rule %s", result["uuid"])
+                result["rewritten"] = False
+                result["error"] = str(exc)
+                continue
+            result["rewritten"] = True
+            result["destination_net"] = result["expected"]
+            rewritten += 1
+
+        out["rewritten"] = rewritten
+        # Re-read rather than trusting the writes: a rule that still reads back
+        # with the old prefix has not moved, whatever set_rule returned.
+        try:
+            after = {r.get("uuid"): r for r in await self._rows(NPT["search"])}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not re-read NPT rules after rewriting: %s", exc)
+            out["verified"] = False
+        else:
+            out["verified"] = all(
+                after.get(r["uuid"], {}).get("destination_net") == r["expected"]
+                for r in drifted
+                if r.get("rewritten")
+            )
+
+        applied = False
+        if rewritten and params.get("apply", False):
+            try:
+                await run_apply(self.client, "/api/firewall/filter/apply")
+                applied = True
+            except ApplyError as exc:
+                logger.warning("NPT rules rewritten but filter reload failed: %s", exc)
+                out["apply_error"] = str(exc)
+        out["applied"] = applied
+        return out
 
 
 class ListVipTool(_V6ToolBase):

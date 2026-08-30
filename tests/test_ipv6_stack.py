@@ -23,12 +23,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from opnsense_mcp.tools.ipv6_stack import (
+    REASON_TRACKIF_DOES_NOT_TRANSLATE,
     ListLoopbackTool,
     ListNptRulesTool,
     ListVipTool,
     MkLoopbackTool,
     MkNptRuleTool,
     MkVipTool,
+    ReconcileNptTool,
     RmNptRuleTool,
     RmVipTool,
     ToggleNptRuleTool,
@@ -98,21 +100,64 @@ def _stub(client: OPNsenseClient, responses: dict[str, Any]) -> list[dict[str, A
 
 
 @pytest.mark.asyncio
-async def test_npt_rejects_no_external_and_no_track() -> None:
-    """Without either, the rule cannot know the delegated prefix.
-
-    The forum guidance is explicit that this breaks WAN IPv6 listeners,
-    WireGuard among them.
-    """
+async def test_npt_rejects_no_external_prefix() -> None:
+    """Without one the rule cannot know the delegated prefix."""
     client = _client()
-    _stub(client, {"search_rule": {"rows": [], "total": 0}})
+    calls = _stub(client, {"search_rule": {"rows": [], "total": 0}})
 
     result = await MkNptRuleTool(client).execute(
         {"interface": "wan", "source_net": "fd0b:b022:1e5:2::/64"}
     )
 
     assert result["status"] == "error"
-    assert "trackif" in result["error"]
+    assert result["reason"] == REASON_TRACKIF_DOES_NOT_TRANSLATE
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_npt_refuses_trackif_as_the_external_side() -> None:
+    """trackif alone stores fine and translates nothing.
+
+    On 26.7.3 a rule with only `trackif` is accepted by add_rule, comes back
+    from search_rule with the field populated, and survives a filter reload --
+    and pf still holds no mapping for it. Nine such rules black-holed every
+    ULA VLAN's egress: a WAN capture showed the ULA source leaving
+    untranslated. Nothing in the rule's own read-back reveals this, so the
+    tool has to refuse the shape rather than report it.
+    """
+    client = _client()
+    calls = _stub(client, {"search_rule": {"rows": [], "total": 0}})
+
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "trackif": "lan",
+        }
+    )
+
+    assert result["status"] == "error"
+    assert result["reason"] == REASON_TRACKIF_DOES_NOT_TRANSLATE
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_npt_list_marks_a_rule_that_cannot_translate() -> None:
+    """An enabled rule is not necessarily a translating one.
+
+    NPT_ROWS holds the shape that caused the outage: enabled, trackif set,
+    destination_net empty. Listing must say so rather than echo the fields.
+    """
+    client = _client()
+    _stub(client, {"search_rule": NPT_ROWS})
+
+    result = await ListNptRulesTool(client).execute({})
+
+    rule = result["rules"][0]
+    assert rule["enabled"] == "1"
+    assert rule["translating"] is False
+    assert rule["reason"] == REASON_TRACKIF_DOES_NOT_TRANSLATE
+    assert "warning" in result
 
 
 @pytest.mark.asyncio
@@ -189,7 +234,7 @@ async def test_npt_creates_with_the_real_field_names() -> None:
         {
             "interface": "wan",
             "source_net": "fd0b:b022:1e5:2::/64",
-            "trackif": "lan",
+            "destination_net": "2001:db8:2::/64",
             "description": "wired VLAN",
         }
     )
@@ -197,7 +242,7 @@ async def test_npt_creates_with_the_real_field_names() -> None:
     assert result["status"] == "success"
     payload = next(c for c in calls if "add_rule" in c["endpoint"])["json"]["rule"]
     assert payload["source_net"] == "fd0b:b022:1e5:2::/64"
-    assert payload["trackif"] == "lan"
+    assert payload["destination_net"] == "2001:db8:2::/64"
     assert payload["interface"] == "wan"
     assert "internal_prefix" not in payload
 
@@ -208,7 +253,11 @@ async def test_npt_is_idempotent_on_interface_and_source() -> None:
     calls = _stub(client, {"search_rule": NPT_ROWS})
 
     result = await MkNptRuleTool(client).execute(
-        {"interface": "wan", "source_net": "fd0b:b022:1e5:2::/64", "trackif": "lan"}
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "destination_net": "2001:db8:2::/64",
+        }
     )
 
     assert result["created"] is False
@@ -222,10 +271,17 @@ async def test_npt_stages_without_applying_by_default() -> None:
     client = _client()
     calls = _stub(client, {"search_rule": {"rows": [], "total": 0}})
 
-    await MkNptRuleTool(client).execute(
-        {"interface": "wan", "source_net": "fd0b:b022:1e5:2::/64", "trackif": "lan"}
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "destination_net": "2001:db8:2::/64",
+        }
     )
 
+    # The write must land, or "no apply call" is satisfied by a refusal.
+    assert result["created"] is True
+    assert [c for c in calls if "add_rule" in c["endpoint"]]
     assert not [c for c in calls if "apply" in c["endpoint"]]
 
 
@@ -244,7 +300,7 @@ async def test_npt_apply_status_failed_keeps_successful_write_visible() -> None:
         {
             "interface": "wan",
             "source_net": "fd0b:b022:1e5:2::/64",
-            "trackif": "lan",
+            "destination_net": "2001:db8:2::/64",
             "apply": True,
         }
     )
@@ -529,3 +585,194 @@ async def test_loopback_list_returns_rows() -> None:
     result = await ListLoopbackTool(client).execute({})
 
     assert result["count"] == 1
+
+
+# --- NPT reconcile: drift between the rule and the live delegation ----------
+
+
+def _iface(identifier: str, addresses: list[str], device: str = "") -> dict[str, Any]:
+    """One /api/interfaces/overview/export row, trimmed to what reconcile reads."""
+    return {
+        "device": device or identifier,
+        "identifier": identifier,
+        "description": f"{identifier} description",
+        "ipv6": [{"ipaddr": a} for a in addresses],
+    }
+
+
+# The delegation moved from b501 to c001; the interface has already re-derived,
+# and the rule still names the old block.
+DRIFTED_IFACES = [
+    _iface(
+        "opt13",
+        [
+            "fd0b:b022:1e5:10::1/64",
+            "2001:db8:1e5:c001::1/64",
+            "fe80::1/64",
+        ],
+        device="vlan01",
+    )
+]
+DRIFTED_RULE = {
+    "rows": [
+        {
+            "uuid": NPT_UUID,
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:10::/64",
+            "destination_net": "2001:db8:1e5:b501::/64",
+            "trackif": "",
+            "enabled": "1",
+            "description": "ULA VLAN10 Podman",
+        }
+    ],
+    "total": 1,
+}
+
+
+@pytest.mark.asyncio
+async def test_reconcile_npt_reports_a_prefix_that_has_drifted() -> None:
+    """A new delegation leaves every literal external prefix stale.
+
+    The rule still translates, onto a block the upstream no longer routes, so
+    egress fails while the rule reads as correct. Drift has to come from the
+    interface, which is the only thing that tracks the delegation.
+    """
+    client = _client()
+    calls = _stub(
+        client,
+        {"search_rule": DRIFTED_RULE, "overview/export": DRIFTED_IFACES},
+    )
+
+    result = await ReconcileNptTool(client).execute({})
+
+    assert result["counts"] == {"current": 0, "drifted": 1, "unresolved": 0}
+    row = result["results"][0]
+    assert row["outcome"] == "drifted"
+    assert row["destination_net"] == "2001:db8:1e5:b501::/64"
+    assert row["expected"] == "2001:db8:1e5:c001::/64"
+    assert row["interface"] == "opt13"
+    assert result["rewritten"] == 0
+    assert not [c for c in calls if "set_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_npt_says_current_when_the_rule_still_matches() -> None:
+    client = _client()
+    matching = {
+        "rows": [
+            dict(DRIFTED_RULE["rows"][0], destination_net="2001:db8:1e5:c001::/64")
+        ],
+        "total": 1,
+    }
+    calls = _stub(client, {"search_rule": matching, "overview/export": DRIFTED_IFACES})
+
+    result = await ReconcileNptTool(client).execute({})
+
+    assert result["counts"]["drifted"] == 0
+    assert result["results"][0]["outcome"] == "current"
+    assert not [c for c in calls if "set_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_npt_re_reads_instead_of_trusting_the_write() -> None:
+    """set_rule returning ok is not evidence the rule moved."""
+    client = _client()
+    calls: list[dict[str, Any]] = []
+    searches = {"n": 0}
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        calls.append({"endpoint": endpoint, "json": kwargs.get("json")})
+        if "overview/export" in endpoint:
+            return DRIFTED_IFACES
+        if "search_rule" in endpoint:
+            searches["n"] += 1
+            if searches["n"] == 1:
+                return DRIFTED_RULE
+            return {
+                "rows": [
+                    dict(
+                        DRIFTED_RULE["rows"][0],
+                        destination_net="2001:db8:1e5:c001::/64",
+                    )
+                ],
+                "total": 1,
+            }
+        return {"result": "saved"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ReconcileNptTool(client).execute({"dry_run": False})
+
+    assert result["rewritten"] == 1
+    assert result["verified"] is True
+    written = next(c for c in calls if "set_rule" in c["endpoint"])["json"]["rule"]
+    assert written["destination_net"] == "2001:db8:1e5:c001::/64"
+    assert written["source_net"] == "fd0b:b022:1e5:10::/64"
+
+
+@pytest.mark.asyncio
+async def test_reconcile_npt_leaves_a_rule_whose_interface_it_cannot_find() -> None:
+    """Guessing is worse than reporting: the rule keeps working as configured."""
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "search_rule": DRIFTED_RULE,
+            "overview/export": [_iface("opt2", ["fd0b:b022:1e5:2::1/64"])],
+        },
+    )
+
+    result = await ReconcileNptTool(client).execute({"dry_run": False})
+
+    assert result["results"][0]["outcome"] == "no_interface"
+    assert result["counts"]["unresolved"] == 1
+    assert result["rewritten"] == 0
+    assert not [c for c in calls if "set_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_npt_never_writes_an_empty_external_prefix() -> None:
+    """An interface that has lost its delegation must not blank the rule.
+
+    Writing "" here would turn a stale-but-translating rule into the exact
+    silent no-op this whole guard exists to prevent.
+    """
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "search_rule": DRIFTED_RULE,
+            "overview/export": [_iface("opt13", ["fd0b:b022:1e5:10::1/64"])],
+        },
+    )
+
+    result = await ReconcileNptTool(client).execute({"dry_run": False})
+
+    assert result["results"][0]["outcome"] == "no_delegated_prefix"
+    assert result["rewritten"] == 0
+    assert not [c for c in calls if "set_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_npt_reports_unverified_when_the_re_read_disagrees() -> None:
+    """set_rule can return ok and leave the rule where it was.
+
+    Without this case the re-read is untestable: a run where the write really
+    landed reports verified=True whether the code checked or just said so.
+    """
+    client = _client()
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "overview/export" in endpoint:
+            return DRIFTED_IFACES
+        if "search_rule" in endpoint:
+            # Unchanged before and after: the write did not take.
+            return DRIFTED_RULE
+        return {"result": "saved"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ReconcileNptTool(client).execute({"dry_run": False})
+
+    assert result["rewritten"] == 1
+    assert result["verified"] is False
