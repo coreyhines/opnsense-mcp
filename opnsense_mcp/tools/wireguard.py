@@ -311,3 +311,126 @@ class ListWgInstancesTool(_WgToolBase):
             )
 
         return {"status": "success", "count": len(instances), "instances": instances}
+
+
+def runtime_by_name(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Kernel peer state keyed by peer name.
+
+    `service/show` returns one array holding two row schemas discriminated by
+    `type`, and the missing keys are absent rather than empty. The interface row
+    carries peer-status 'offline' and a name that looks like a peer's, so it has
+    to be filtered out before anything else reads the array.
+
+    Kernel rows carry no uuid, so name is the only join back to a config row.
+    """
+    runtime = {}
+    for row in rows:
+        if row.get("type") != "peer":
+            continue
+        handshake = row.get("latest-handshake") or 0
+        runtime[str(row.get("name", ""))] = {
+            "device": row.get("if", ""),
+            "endpoint": row.get("endpoint", ""),
+            "kernel_allowed_ips": split_list(row.get("allowed-ips")),
+            "handshake_epoch": handshake,
+            "handshake_age": row.get("latest-handshake-age"),
+            "transfer_rx": row.get("transfer-rx", 0),
+            "transfer_tx": row.get("transfer-tx", 0),
+            # The only field that separates a peer which has never connected
+            # from one that connected and went idle. Transfer counters do not:
+            # every never-connected peer here has a non-zero tx.
+            "connected": bool(handshake),
+            # Reported, not interpreted. Only two of the three values were ever
+            # observed, so the enum is not encoded anywhere.
+            "peer_status_raw": row.get("peer-status", ""),
+        }
+    return runtime
+
+
+class ListWgPeersTool(_WgToolBase):
+    """List WireGuard peers, config joined to runtime state."""
+
+    name = "list_wg_peers"
+    description = (
+        "List WireGuard peers with their server-side allowed IPs, instance "
+        "membership and last handshake"
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "instance": {
+                "type": "string",
+                "description": "Only peers of this instance, by name or uuid",
+                "optional": True,
+            },
+            "name": {
+                "type": "string",
+                "description": "Only the peer with this name",
+                "optional": True,
+            },
+        },
+        "required": [],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """List peers, optionally narrowed to one instance."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        wanted_instance = str(params.get("instance") or "")
+        wanted_name = str(params.get("name") or "")
+
+        try:
+            servers = rows_or_refuse(
+                await self._search(WG_SERVER["search"]), "wireguard instances"
+            )
+            body: dict[str, Any] = {}
+            if wanted_instance:
+                # `servers` is the filter key and must be an array. `server_uuid`
+                # is accepted and ignored, and a bare string returns HTTP 500.
+                match = [
+                    str(s.get("uuid", ""))
+                    for s in servers
+                    if wanted_instance in (s.get("name", ""), s.get("uuid", ""))
+                ]
+                body["servers"] = match
+            clients = rows_or_refuse(
+                await self._search(WG_CLIENT["search"], body), "wireguard peers"
+            )
+            show = rows_or_refuse(await self._search(WG_SERVICE["show"]), "wg runtime")
+        except TruncatedListing as exc:
+            return {"status": "error", "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to read WireGuard peers")
+            return {"status": "error", "error": str(exc)}
+
+        enabled = {
+            str(s.get("uuid", "")): str(s.get("enabled", "0")) == "1" for s in servers
+        }
+        runtime = runtime_by_name(show)
+
+        peers = []
+        for row in clients:
+            if wanted_name and row.get("name") != wanted_name:
+                continue
+            name = str(row.get("name", ""))
+            state = runtime.get(name)
+            absent = ""
+            if state is None:
+                members = split_list(row.get("servers"))
+                if members and not any(enabled.get(u, False) for u in members):
+                    absent = "every instance this peer belongs to is disabled"
+                else:
+                    absent = "no kernel peer with this name"
+            peers.append(public_peer(row, runtime=state, runtime_absent=absent))
+
+        return {
+            "status": "success",
+            "count": len(peers),
+            "peers": peers,
+            "note": (
+                "Allowed IPs here are the addresses belonging to each peer, which "
+                "fixes routing to that peer. What a peer sends through the tunnel "
+                "lives in its own client config, which this API cannot read."
+            ),
+        }

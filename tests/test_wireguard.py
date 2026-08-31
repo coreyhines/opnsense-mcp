@@ -323,3 +323,117 @@ async def test_no_listing_call_sends_a_rowcount() -> None:
 
     for _method, _endpoint, body in client.calls:
         assert "rowCount" not in (body or {})
+
+
+@pytest.mark.asyncio
+async def test_list_peers_returns_every_peer() -> None:
+    from opnsense_mcp.tools.wireguard import ListWgPeersTool
+
+    result = await ListWgPeersTool(instance_client()).execute({})
+
+    assert result["status"] == "success"
+    assert len(result["peers"]) == 11
+
+
+def test_an_interface_row_is_not_reported_as_a_peer() -> None:
+    """service/show returns one array with two row schemas keyed by `type`.
+
+    The interface row carries a plausible name and peer-status 'offline', so a
+    normalizer that skips the type check reports the instance itself as an extra
+    permanently-offline peer.
+
+    Asserted on `runtime_by_name` rather than on the tool's output. The tool
+    lists config rows and joins runtime onto them by name, so an unfiltered
+    interface row lands in the runtime map with nothing to match it and the
+    tool's peer names do not change: the leak is only visible one layer down.
+    """
+    from opnsense_mcp.tools.wireguard import runtime_by_name
+
+    rows = fixture("wg_service_show_rows")["rows"]
+    interfaces = [r for r in rows if r.get("type") == "interface"]
+    assert interfaces, "fixture no longer carries the interface row being guarded"
+
+    runtime = runtime_by_name(rows)
+
+    assert [r["name"] for r in interfaces] == ["wg0HomeVpn"]
+    assert "wg0HomeVpn" not in runtime
+    assert len(runtime) == len(rows) - len(interfaces)
+
+
+@pytest.mark.asyncio
+async def test_a_peer_that_never_connected_is_not_reported_as_connected() -> None:
+    """Every never-connected peer carries non-zero transfer-tx against zero rx,
+    so a `tx > 0` health check calls all of them healthy. Only the handshake
+    separates 'never connected' from 'connected and now idle'."""
+    from opnsense_mcp.tools.wireguard import ListWgPeersTool
+
+    result = await ListWgPeersTool(instance_client()).execute({})
+    by_name = {p["name"]: p for p in result["peers"]}
+
+    quiet = by_name["peerB"]
+    assert quiet["runtime"]["transfer_tx"] > 0
+    assert quiet["runtime"]["connected"] is False
+
+    live = by_name["peerA"]
+    assert live["runtime"]["connected"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_peer_on_a_disabled_instance_reports_no_runtime_with_a_reason() -> None:
+    from opnsense_mcp.tools.wireguard import ListWgPeersTool
+
+    result = await ListWgPeersTool(instance_client()).execute({})
+    s2s = next(p for p in result["peers"] if p["name"] == "wg2SiteToSite")
+
+    assert s2s["runtime"] is None
+    assert s2s["runtime_absent"]
+
+
+@pytest.mark.asyncio
+async def test_peers_can_be_filtered_by_instance_and_the_filter_is_verified() -> None:
+    """A 200 is not evidence a filter applied: unknown parameters are accepted
+    and ignored on every grid. The filter key is `servers`, and it must be an
+    array; a bare string returns HTTP 500."""
+    from opnsense_mcp.tools.wireguard import ListWgPeersTool
+
+    client = instance_client()
+    await ListWgPeersTool(client).execute({"instance": "wg0HomeVpn"})
+
+    bodies = [body for _m, endpoint, body in client.calls if "searchClient" in endpoint]
+    assert any(isinstance((b or {}).get("servers"), list) for b in bodies)
+
+
+@pytest.mark.asyncio
+async def test_list_peers_never_returns_key_material() -> None:
+    """No key field survives the allowlist, and no key value appears anywhere.
+
+    Asserted on the keys and on the secrets' own values rather than on the
+    substring "psk", which `has_psk` legitimately contains.
+    """
+    import json as _json
+
+    from opnsense_mcp.tools.wireguard import ListWgPeersTool
+
+    secrets = {
+        row[field]
+        for row in fixture("wg_searchclient_rows")["rows"]
+        for field in ("pubkey", "psk", "privkey")
+        if row.get(field)
+    }
+    secrets |= {
+        row["public-key"]
+        for row in fixture("wg_service_show_rows")["rows"]
+        if row.get("public-key")
+    }
+    assert secrets, "fixtures no longer carry the fields being guarded"
+
+    result = await ListWgPeersTool(instance_client()).execute({})
+    text = _json.dumps(result)
+
+    for peer in result["peers"]:
+        assert "privkey" not in peer
+        assert "psk" not in peer
+        assert "pubkey" not in peer
+        assert "public-key" not in (peer["runtime"] or {})
+    for secret in secrets:
+        assert secret not in text
