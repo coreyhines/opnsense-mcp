@@ -124,6 +124,11 @@ from opnsense_mcp.tools.ula_migration import (
     SetHostOverrideTool,
     SetRouterAdvertTool,
 )
+from opnsense_mcp.tools.wireguard import (
+    ListWgInstancesTool,
+    ListWgPeersTool,
+    ReconcileWgTool,
+)
 
 
 class Tool(Protocol):
@@ -174,6 +179,8 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListSnapshotsTool,
     ListVlansTool,
     ListVipTool,
+    ListWgInstancesTool,
+    ListWgPeersTool,
     LLDPTool,
     MkDhcpHostTool,
     MkDhcpRangeTool,
@@ -197,6 +204,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     PfStatesTool,
     PfStatisticsTool,
     ReconcileNptTool,
+    ReconcileWgTool,
     RmAliasTool,
     RmBgpNeighborTool,
     RmDhcpHostTool,

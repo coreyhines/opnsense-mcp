@@ -63,3 +63,33 @@ def test_every_checkout_job_can_run_node() -> None:
         "these jobs run actions/checkout on an image without node and install "
         "none before it: " + ", ".join(offenders)
     )
+
+
+def test_no_job_runs_an_unpinned_container_image() -> None:
+    """A `:latest` image makes CI non-reproducible and silently mutable.
+
+    `deploy/lib.sh::validate_pinned_image_tag` already refuses `latest` for the
+    deploy image, so holding CI to a weaker standard was an inconsistency, not a
+    considered choice. It also bites in a specific way here: the semgrep job's
+    own comment says rulesets are pinned "so runs stay reproducible" while the
+    image underneath them rolled forward on every pull.
+
+    A digest would be stricter still. Version tags are what this repo uses
+    elsewhere (`caddy:2.9.1-alpine`, `gitleaks:v8.30.1`, `python:3.12-alpine`),
+    so that is the bar enforced here.
+    """
+    unpinned = []
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        for name, job in _jobs(path).items():
+            image = job.get("container") or {}
+            image = image.get("image") if isinstance(image, dict) else image
+            if not isinstance(image, str):
+                continue
+            tag = image.rsplit(":", 1)[-1] if ":" in image.rsplit("/", 1)[-1] else ""
+            if tag in ("", "latest"):
+                unpinned.append(f"{path.name}:{name} -> {image}")
+
+    assert not unpinned, (
+        "container images must be pinned to a version tag, not `latest` or an "
+        "implicit tag: " + ", ".join(unpinned)
+    )

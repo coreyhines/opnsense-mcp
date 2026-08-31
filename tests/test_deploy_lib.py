@@ -125,3 +125,51 @@ def test_compute_image_tag_uses_pyproject_dev_suffix() -> None:
     tag = result.stdout.strip()
     assert tag.startswith("1.0.0-dev.")
     assert len(tag.split(".")[-1]) >= 7
+
+
+def test_is_interactive_shell_says_no_without_a_controlling_terminal() -> None:
+    """The case a non-interactive `ssh host 'cmd'` install hits.
+
+    `/dev/tty` exists and passes -e and -r there, while opening it fails with
+    ENXIO. The old test answered yes, so install.sh ran six `read </dev/tty`
+    prompts that each failed with "No such device or address", `|| true`
+    swallowed them, and every prompted setting silently took its default.
+
+    `start_new_session` puts the child in its own session with no controlling
+    terminal, which is what reproduces it, and is portable where `setsid(1)` is
+    not. stdin is redirected as well, so the -t 0 fallback cannot mask the
+    result.
+    """
+    script = f'source "{LIB_SH}"\nis_interactive_shell && echo yes || echo no'
+    result = subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+    assert result.stdout.strip() == "no", result.stderr
+
+
+def test_is_interactive_shell_says_yes_on_a_real_terminal() -> None:
+    """The other direction, or the fix would just be "always answer no"."""
+    import os
+    import pty
+
+    pid, fd = pty.fork()
+    if pid == 0:  # pragma: no cover - child replaces itself
+        os.execvp(
+            "bash",
+            [
+                "bash",
+                "-c",
+                f'source "{LIB_SH}"\nis_interactive_shell && exit 0 || exit 1',
+            ],
+        )
+
+    _, status = os.waitpid(pid, 0)
+    os.close(fd)
+
+    assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0

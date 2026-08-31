@@ -216,14 +216,29 @@ class TestShapeSourcesDeclareKinds:
             else:
                 assert source.root_key is None, filename
 
-    def test_four_node_fixtures_are_registered(self) -> None:
-        node_files = {name for name, src in SHAPE_SOURCES.items() if src.kind == "node"}
-        assert node_files == {
-            "radvd_get_entry.json",
-            "unbound_gethostoverride.json",
-            "npt_get_rule_blank.json",
-            "vip_get_item_blank.json",
-        }
+    def test_every_captured_fixture_is_registered(self) -> None:
+        """A count of node fixtures made an unregistered capture invisible.
+
+        Five WireGuard captures sat in the directory with no entry, and the
+        assertion that was standing in for this one — a hard-coded set of four
+        node filenames — failed when the omission was corrected. What matters
+        is that a capture nothing tracks fails on arrival.
+        """
+        fixture_dir = pathlib.Path(__file__).parent / "fixtures" / "opnsense-26.7.3"
+        # One file holds two responses (`search_range` and `get_range`) under
+        # one root, which `ShapeSource` cannot address: it names one endpoint.
+        multi_response = {"dnsmasq_v6_range_responses.json"}
+        captured = {p.name for p in fixture_dir.glob("*.json")} - multi_response
+
+        assert not captured - set(SHAPE_SOURCES), (
+            "captured fixtures with no SHAPE_SOURCES entry, so --check-shapes "
+            "never diffs them against the firewall: "
+            + ", ".join(sorted(captured - set(SHAPE_SOURCES)))
+        )
+        assert not set(SHAPE_SOURCES) - captured, (
+            "SHAPE_SOURCES names a fixture that does not exist: "
+            + ", ".join(sorted(set(SHAPE_SOURCES) - captured))
+        )
 
     def test_captured_fixtures_yield_keys_under_declared_root(self) -> None:
         fixture_dir = pathlib.Path(__file__).parent / "fixtures" / "opnsense-26.7.3"
@@ -334,3 +349,44 @@ class TestDispatchRoutesNodeSourcesToNodeKeys:
 
         assert keys is None
         assert err is not None
+
+
+def test_a_scoped_fixture_still_reports_a_key_the_firewall_stopped_sending() -> None:
+    """Scoping must not turn the check off.
+
+    `wg_interfaces_info_wg0.json` keeps one device out of nineteen, so the union
+    of live keys always holds bridge and VLAN fields it cannot have. Only the
+    stale direction is meaningless for such a fixture; drift still matters, and
+    a scoped source that reported nothing at all would be worse than not being
+    registered, because the listing would say OK.
+    """
+    findings = compare_shape_keys(
+        {"device", "ipv6", "routes"},
+        {"device", "ipv6", "media", "members"},
+        kind="rows",
+        scoped=True,
+    )
+    statuses = {status for status, _ in findings}
+
+    assert "drift" in statuses, "a key the fixture holds and the firewall dropped"
+    assert "stale" not in statuses, "another interface's keys are not a gap"
+    assert [d for s, d in findings if s == "drift"][0].endswith("routes")
+
+
+def test_an_unscoped_fixture_still_reports_both_directions() -> None:
+    """The default is unchanged, so scoping is opt-in per source."""
+    findings = compare_shape_keys(
+        {"device", "routes"},
+        {"device", "media"},
+        kind="rows",
+    )
+    statuses = {status for status, _ in findings}
+
+    assert statuses == {"drift", "stale"}
+
+
+def test_only_the_slice_fixture_is_scoped() -> None:
+    """Recorded so scoping stays the exception it was argued for."""
+    scoped = {name for name, source in SHAPE_SOURCES.items() if source.scoped}
+
+    assert scoped == {"wg_interfaces_info_wg0.json"}

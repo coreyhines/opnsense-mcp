@@ -127,6 +127,58 @@ _NOT_TOOLS = frozenset(
         "package_manager",
         "ax0_vlan2",
         "ax0_vlan100",
+        # WireGuard design docs name API fields, reconcile outcome labels,
+        # parsing helpers and test fixtures. None is a tool, and each is
+        # worth naming precisely in a spec. The three tool names and the two
+        # group actions those docs introduce are deliberately absent: they
+        # become real when the group is registered, and allowlisting them
+        # would blind this check to their later removal.
+        "allowed_ips",
+        "carp_depend_on",
+        "classify_entry",
+        "dangling_peer",
+        "dangling_peers",
+        "handshake_age",
+        "handshake_epoch",
+        "has_privkey",
+        "has_psk",
+        "instance_client",
+        "instance_disabled",
+        "interfaces_info",
+        "kernel_matches_config",
+        "missing_route",
+        "no_interface",
+        "no_prefix_length",
+        "no_runtime",
+        "peer_status_raw",
+        "public_peer",
+        "regex_rules",
+        "road_warrior",
+        "routed_prefix",
+        "runtime_absent",
+        "runtime_by_peer",
+        "search_server",
+        "selected_option_keys",
+        "server_uuid",
+        "site_to_site",
+        "split_list",
+        "stale_route",
+        "subnet_of",
+        "transfer_rx",
+        "transfer_tx",
+        "unreadable_address",
+        # More of the same: reconcile outcome labels, response fields and one
+        # parsing helper, added when the design was corrected to name the
+        # eleven outcomes the code emits rather than the six it first guessed.
+        "covered_by",
+        "device_absent",
+        "device_status",
+        "missing_address",
+        "route_covered_by_prefix",
+        "rows_or_refuse",
+        "running_disagrees",
+        "runtime_absent_reason",
+        "unaccounted_address",
     }
 )
 

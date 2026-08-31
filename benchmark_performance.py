@@ -304,6 +304,13 @@ class ShapeSource:
     body: dict[str, Any] | None = None
     kind: Literal["rows", "node"] = "rows"
     root_key: str | None = None
+    # A fixture that deliberately keeps only some of the rows the endpoint
+    # returns. `interfaces_info` sends every interface on the box and the
+    # WireGuard capture keeps one device, so the union of live keys always
+    # contains bridge and VLAN fields the slice cannot have. Only the drift
+    # direction means anything for such a fixture: a key it holds must still
+    # exist, while a key it lacks may simply belong to another row.
+    scoped: bool = False
 
 
 # Bootgrid search endpoints return ``{"rows": [...]}`` — ``_row_keys`` unions
@@ -311,10 +318,16 @@ class ShapeSource:
 # ``_node_keys`` takes the field names of that single node. Declaring the
 # kind here is what stops a node fixture from comparing empty-to-empty.
 SHAPE_SOURCES: dict[str, ShapeSource] = {
+    # No rowCount: the union is only as good as the rows sampled, and this grid
+    # does not have one key set. Five rows came back all-automatic, and
+    # automatic rows are hand-built rather than produced by the model grid, so
+    # they carry neither `interface` nor `sequence`. The check reported both as
+    # keys the firewall had stopped sending while every user rule still carried
+    # them. Omitting rowCount returns every row.
     "filter_searchrule_rows.json": ShapeSource(
         "POST",
         "/api/firewall/filter/searchRule",
-        {"current": 1, "rowCount": 5},
+        {"current": 1},
         kind="rows",
     ),
     "dnsmasq_search_range_rows.json": ShapeSource(
@@ -350,6 +363,46 @@ SHAPE_SOURCES: dict[str, ShapeSource] = {
         None,
         kind="node",
         root_key="vip",
+    ),
+    "wg_searchserver_rows.json": ShapeSource(
+        "POST",
+        "/api/wireguard/server/searchServer",
+        None,
+        kind="rows",
+    ),
+    "wg_searchclient_rows.json": ShapeSource(
+        "POST",
+        "/api/wireguard/client/searchClient",
+        None,
+        kind="rows",
+    ),
+    "wg_service_show_rows.json": ShapeSource(
+        "POST",
+        "/api/wireguard/service/show",
+        None,
+        kind="rows",
+    ),
+    # Scoped: the capture keeps the one WireGuard device, so a live key the
+    # slice lacks belongs to some other interface rather than being a gap.
+    # What still matters is that every key it does hold still exists.
+    "wg_interfaces_info_wg0.json": ShapeSource(
+        "GET",
+        "/api/interfaces/overview/interfaces_info",
+        None,
+        kind="rows",
+        scoped=True,
+    ),
+    # The uuid is the instance the capture was taken from. On a firewall that
+    # does not have it, getServer answers 200 with the blank new-instance
+    # template, whose field names are the same ones: that is the shape being
+    # tracked, and `get_path` exists because the blank is indistinguishable
+    # from a record.
+    "wg_getserver_dangling.json": ShapeSource(
+        "GET",
+        "/api/wireguard/server/getServer/00524b42-93b5-455f-982f-8c7c4174ab73",
+        None,
+        kind="node",
+        root_key="server",
     ),
 }
 
@@ -410,6 +463,7 @@ def compare_shape_keys(
     kind: Literal["rows", "node"],
     expected_error: str | None = None,
     live_error: str | None = None,
+    scoped: bool = False,
 ) -> list[tuple[str, str]]:
     """Compare extracted key sets for one shape source.
 
@@ -452,7 +506,7 @@ def compare_shape_keys(
         findings.append(
             ("drift", f"fixture keys the firewall no longer sends: {', '.join(gone)}")
         )
-    if added:
+    if added and not scoped:
         findings.append(
             ("stale", f"firewall keys missing from the fixture: {', '.join(added)}")
         )
@@ -504,6 +558,7 @@ async def check_response_shapes(verbose: bool = False) -> int:
             kind=source.kind,
             expected_error=expected_err,
             live_error=live_err,
+            scoped=source.scoped,
         )
         for status, detail in findings:
             if status == "ok":

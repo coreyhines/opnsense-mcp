@@ -425,7 +425,14 @@ if [[ "$RUNTIME" == "podman" ]]; then
     elif [[ "${verb}" == "start" ]] && systemctl enable --now "${sname}" 2>/dev/null; then
       :
     else
-      echo "warning: systemctl enable failed for ${sname}; ${verb}ing without enable (quadlet)." >&2
+      # A quadlet unit is generated, and systemd refuses to enable a generated
+      # unit: `is-enabled` answers "generated" and boot start comes from the
+      # [Install] section inside the .pod/.container file, which the generator
+      # honours. Warning about that on every run for every unit is noise, and
+      # this script's warnings are the only signal that something real broke.
+      if [[ "$(systemctl is-enabled "${sname}" 2>/dev/null)" != "generated" ]]; then
+        echo "warning: systemctl enable failed for ${sname}; ${verb}ing without enable (quadlet)." >&2
+      fi
       systemctl "${verb}" "${sname}" || true
     fi
   }

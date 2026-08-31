@@ -23,7 +23,7 @@ arp
 arp mac="aa:bb:cc:dd:ee:ff"
 
 # Search for a specific host
-arp search="trogdor"
+arp search="dualStackPeer"
 ```
 
 **What it returns**: List of devices with IP addresses, MAC addresses, and interface information.
