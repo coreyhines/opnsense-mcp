@@ -190,7 +190,7 @@ DHCP Leases:
 Active Leases:
 - 192.168.1.100 - aa:bb:cc:dd:ee:ff - coreymbp - Expires: 2024-12-15 14:30:00
 - 192.168.1.101 - 52:54:00:f9:68:7f - flathead - Expires: 2024-12-15 15:45:00
-- 192.168.1.102 - aa:bb:cc:dd:ee:ff - trogdor - Expires: 2024-12-15 16:20:00
+- 192.168.1.102 - aa:bb:cc:dd:ee:ff - dualStackPeer - Expires: 2024-12-15 16:20:00
 
 Expired Leases:
 - 192.168.1.103 - aa:bb:cc:dd:ee:ff - guest-laptop - Expired: 2024-12-15 10:15:00

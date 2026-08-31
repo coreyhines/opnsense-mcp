@@ -3,7 +3,7 @@
     "enabled": "0",
     "interface": {
       "opt1": {
-        "value": "720xpmgmt",
+        "value": "switchmgmt",
         "selected": 0
       },
       "opt11": {
@@ -11,19 +11,19 @@
         "selected": 0
       },
       "opt2": {
-        "value": "VLAN2wired",
+        "value": "VLAN2office",
         "selected": 0
       },
       "opt3": {
-        "value": "VLAN3LAB",
+        "value": "VLAN3workshop",
         "selected": 0
       },
       "opt6": {
-        "value": "VLAN4guest_wifi",
+        "value": "VLAN4visitors",
         "selected": 0
       },
       "opt4": {
-        "value": "VLAN5LAB",
+        "value": "VLAN5studio",
         "selected": 0
       },
       "opt10": {
@@ -31,7 +31,7 @@
         "selected": 0
       },
       "opt7": {
-        "value": "VLAN6SolarDMZ",
+        "value": "VLAN6dmz",
         "selected": 0
       },
       "opt8": {
@@ -43,7 +43,7 @@
         "selected": 1
       },
       "opt5": {
-        "value": "VLAN81wifi",
+        "value": "VLAN81wireless",
         "selected": 0
       },
       "wan": {
@@ -61,7 +61,7 @@
         "selected": 1
       },
       "opt1": {
-        "value": "720xpmgmt",
+        "value": "switchmgmt",
         "selected": 0
       },
       "opt11": {
@@ -69,19 +69,19 @@
         "selected": 0
       },
       "opt2": {
-        "value": "VLAN2wired",
+        "value": "VLAN2office",
         "selected": 0
       },
       "opt3": {
-        "value": "VLAN3LAB",
+        "value": "VLAN3workshop",
         "selected": 0
       },
       "opt6": {
-        "value": "VLAN4guest_wifi",
+        "value": "VLAN4visitors",
         "selected": 0
       },
       "opt4": {
-        "value": "VLAN5LAB",
+        "value": "VLAN5studio",
         "selected": 0
       },
       "opt10": {
@@ -89,7 +89,7 @@
         "selected": 0
       },
       "opt7": {
-        "value": "VLAN6SolarDMZ",
+        "value": "VLAN6dmz",
         "selected": 0
       },
       "opt8": {
@@ -101,7 +101,7 @@
         "selected": 0
       },
       "opt5": {
-        "value": "VLAN81wifi",
+        "value": "VLAN81wireless",
         "selected": 0
       },
       "wan": {

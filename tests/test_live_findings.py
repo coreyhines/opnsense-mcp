@@ -279,7 +279,7 @@ DNSMASQ_RANGE_ROW = {
     "%interface": "",
     "%set_tag": "",
     "constructor": "",
-    "description": "VLAN3LAB",
+    "description": "VLAN3workshop",
     "domain": "",
     "domain_type": "",
     "end_addr": "192.0.2.200",
@@ -327,7 +327,7 @@ async def test_subnet_selector_matches_a_dnsmasq_range_row() -> None:
 
     assert scope.interface == "opt3"
     assert scope.subnet == "192.0.2.0/24"
-    assert scope.description == "VLAN3LAB"
+    assert scope.description == "VLAN3workshop"
 
 
 @pytest.mark.asyncio
