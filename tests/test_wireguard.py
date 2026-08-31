@@ -640,3 +640,37 @@ async def test_a_disabled_instance_absent_from_the_kernel_is_not_a_fault() -> No
 
     assert all(r["outcome"] != "drifted" for r in rows)
     assert any(r["outcome"] == "instance_disabled" for r in rows)
+
+
+def test_the_wireguard_group_exposes_every_tool() -> None:
+    from opnsense_mcp.utils.tool_groups import GROUPS
+
+    description, actions = GROUPS["wireguard"]
+
+    assert description
+    assert actions == {
+        "list_instances": "list_wg_instances",
+        "list_peers": "list_wg_peers",
+        "reconcile": "reconcile_wg",
+    }
+
+
+def test_no_wireguard_member_declares_a_field_named_action() -> None:
+    """The group pops `action` to pick the member, so a member declaring its own
+    would never receive one."""
+    from opnsense_mcp.tools.wireguard import (
+        ListWgInstancesTool,
+        ListWgPeersTool,
+        ReconcileWgTool,
+    )
+
+    for tool in (ListWgInstancesTool, ListWgPeersTool, ReconcileWgTool):
+        assert "action" not in tool.input_schema["properties"]
+
+
+def test_every_wireguard_tool_is_registered() -> None:
+    from opnsense_mcp.utils.registry import TOOL_CLASSES
+
+    names = {getattr(cls, "name", "") for cls in TOOL_CLASSES}
+
+    assert {"list_wg_instances", "list_wg_peers", "reconcile_wg"} <= names

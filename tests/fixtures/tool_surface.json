@@ -976,6 +976,39 @@
       "type": "object"
     }
   },
+  "list_wg_instances": {
+    "description": "List WireGuard instances with their tunnel addresses, peers and running state",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "description": "Only the instance with this name",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "list_wg_peers": {
+    "description": "List WireGuard peers with their server-side allowed IPs, instance membership and last handshake",
+    "inputSchema": {
+      "properties": {
+        "instance": {
+          "description": "Only peers of this instance, by name or uuid",
+          "optional": true,
+          "type": "string"
+        },
+        "name": {
+          "description": "Only the peer with this name",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
   "lldp": {
     "description": "Show LLDP neighbor table",
     "inputSchema": {
@@ -1876,6 +1909,14 @@
           "type": "boolean"
         }
       },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "reconcile_wg": {
+    "description": "Report drift between WireGuard config and the running kernel: peer addresses outside their tunnel network, interface addresses no config accounts for, and routes that do not match the loaded allowed IPs",
+    "inputSchema": {
+      "properties": {},
       "required": [],
       "type": "object"
     }

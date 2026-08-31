@@ -8,7 +8,7 @@ Groups are subsystems, not resources. An earlier cut grouped per resource and
 produced 31 names, which still had `route`, `gateway`, `vip`, `vlan` and
 `loopback` sitting next to each other as separate tools: exactly the
 near-identical neighbours grouping was meant to remove. Merging by subsystem
-instead gives 14.
+instead gives 15.
 
 `arp` and `system` stay top-level. They are the two most frequently called
 tools here, usually as a one-line question, so a `diagnostics(action=...)` hop
@@ -25,7 +25,7 @@ The floor is lower than it should be for a reason worth knowing: MCP gives
 every tool a complete schema with no cross-tool reference, so `apply` is stored
 13 times no matter how canonical its definition is.
 
-Result: 116 operations behind 14 names.
+Result: 119 operations behind 15 names.
 """
 
 from __future__ import annotations
@@ -216,6 +216,15 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
             "audit": "audit_shaper_config",
             "explain": "explain_shaper_config",
             "statistics": "shaper_statistics",
+        },
+    ),
+    "wireguard": (
+        "WireGuard overlay: instances, peers, and drift between the stored "
+        "config and the running kernel state",
+        {
+            "list_instances": "list_wg_instances",
+            "list_peers": "list_wg_peers",
+            "reconcile": "reconcile_wg",
         },
     ),
 }
