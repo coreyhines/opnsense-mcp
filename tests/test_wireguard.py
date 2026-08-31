@@ -9,6 +9,7 @@ and both read paths hand back the instance private key unasked.
 
 from __future__ import annotations
 
+import collections
 import json
 import pathlib
 
@@ -405,14 +406,52 @@ async def test_a_peer_on_a_disabled_instance_reports_no_runtime_with_a_reason() 
 async def test_peers_can_be_filtered_by_instance_and_the_filter_is_verified() -> None:
     """A 200 is not evidence a filter applied: unknown parameters are accepted
     and ignored on every grid. The filter key is `servers`, and it must be an
-    array; a bare string returns HTTP 500."""
+    array; a bare string returns HTTP 500.
+
+    Asserted on the resolved uuid rather than on the key's type, because `[]` is
+    a list too and is what a name lookup that resolved nothing sends.
+    """
     from opnsense_mcp.tools.wireguard import ListWgPeersTool
 
     client = instance_client()
     await ListWgPeersTool(client).execute({"instance": "wg0HomeVpn"})
 
     bodies = [body for _m, endpoint, body in client.calls if "searchClient" in endpoint]
-    assert any(isinstance((b or {}).get("servers"), list) for b in bodies)
+    assert [b["servers"] for b in bodies] == [["6975c926-5a06-4b5c-aa6e-86e14f39cd76"]]
+
+
+@pytest.mark.asyncio
+async def test_a_filter_the_grid_ignored_still_narrows_the_answer() -> None:
+    """FakeClient answers by endpoint and ignores the body, which is exactly the
+    grid that accepts a filter parameter and applies nothing. The filtered count
+    has to differ from the unfiltered one, or the tool is reporting every peer
+    on the firewall as one instance's."""
+    from opnsense_mcp.tools.wireguard import ListWgPeersTool
+
+    everything = await ListWgPeersTool(instance_client()).execute({})
+    filtered = await ListWgPeersTool(instance_client()).execute(
+        {"instance": "wg2SiteToSite"}
+    )
+
+    assert everything["count"] == 11
+    assert filtered["count"] == 1
+    assert [p["name"] for p in filtered["peers"]] == ["wg2SiteToSite"]
+
+
+@pytest.mark.asyncio
+async def test_an_instance_name_that_resolves_to_nothing_is_refused() -> None:
+    """An empty `servers` array is the idiom for no filter, so sending one for a
+    name that matched no instance asks for every peer on the box and reports the
+    answer as that instance's peers."""
+    from opnsense_mcp.tools.wireguard import ListWgPeersTool
+
+    client = instance_client()
+    result = await ListWgPeersTool(client).execute({"instance": "wg9NoSuchInstance"})
+
+    assert result["status"] == "error"
+    assert "peers" not in result
+    bodies = [body for _m, endpoint, body in client.calls if "searchClient" in endpoint]
+    assert not [b for b in bodies if (b or {}).get("servers") == []]
 
 
 @pytest.mark.asyncio
@@ -493,6 +532,26 @@ def test_classify_entry_reports_a_family_the_instance_does_not_carry() -> None:
     assert classify_entry("fd0b:cafe:f::2/128", nets)[0] == "no_interface"
 
 
+def test_classify_entry_cannot_judge_a_tunnel_address_with_no_prefix_length() -> None:
+    """A bare address states an address, not a network. Read as a /32 it makes
+    every peer of that instance a host route outside its own tunnel, which is
+    drift manufactured from a healthy config."""
+    from opnsense_mcp.tools.wireguard import bare_networks, classify_entry, networks_of
+
+    entries = ["192.168.11.1"]
+    nets, bare = networks_of(entries), bare_networks(entries)
+
+    assert classify_entry("192.168.11.5/32", nets, bare)[0] == "no_prefix_length"
+    assert classify_entry("192.168.11.1/32", nets, bare)[0] == "current"
+
+    # An instance that also carries a real network is judged against that one.
+    both = ["192.168.11.1", "192.168.10.1/24"]
+    assert (
+        classify_entry("192.168.11.5/32", networks_of(both), bare_networks(both))[0]
+        == "drifted"
+    )
+
+
 def test_classify_entry_reports_an_unreadable_address() -> None:
     from opnsense_mcp.tools.wireguard import classify_entry, networks_of
 
@@ -538,6 +597,97 @@ async def test_reconcile_status_says_the_audit_ran_not_what_it_found() -> None:
 
     assert result["status"] == "success"
     assert "counts" in result
+
+
+@pytest.mark.asyncio
+async def test_the_counts_are_the_rows_they_summarise() -> None:
+    """`counts` is what a caller reads to decide whether there is drift, and a
+    constant `{"current": 0, "drifted": 0}` satisfies both `drifted == 0` and
+    `"counts" in result`. Asserted against the rows, and by name on every
+    outcome the captured state produces."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+
+    tallied = collections.Counter(r["outcome"] for r in result["results"])
+    tallied.setdefault("current", 0)
+    tallied.setdefault("drifted", 0)
+
+    assert result["checked"] == len(result["results"])
+    assert result["counts"] == dict(tallied)
+    assert result["counts"] == {
+        "current": 26,
+        "routed_prefix": 1,
+        "unaccounted_address": 1,
+        "instance_disabled": 4,
+        "stale_route": 2,
+        "missing_route": 1,
+        "drifted": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_no_peer_of_an_instance_with_a_bare_address_is_reported_as_drift() -> (
+    None
+):
+    """wg1RemoteLabUsers carries `192.168.11.1`, with no prefix length, as its
+    whole tunnel address. Read as a /32, every peer of it is a host route
+    outside its own tunnel and a healthy road-warrior instance produces one
+    fabricated drift finding per peer.
+
+    `enabled` stays at the captured `0`: containment joins on membership and
+    never reads it, so one client row is all that stands between this and a
+    wrong report. Today that row does not exist, which is the only reason the
+    captured state looks clean."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    clients = fixture("wg_searchclient_rows")
+    lab = {
+        **clients["rows"][0],
+        "uuid": "4b0d2c17-8f31-4a55-9d20-1f6a7c3e5b8a",
+        "name": "labUserA",
+        "servers": "00524b42-93b5-455f-982f-8c7c4174ab73",
+        "%servers": "wg1RemoteLabUsers",
+        "tunneladdress": "192.168.11.5/32",
+    }
+    payload = {"rows": [*clients["rows"], lab], "total": clients["total"] + 1}
+
+    result = await ReconcileWgTool(reconcile_client(searchClient=payload)).execute({})
+    rows = [r for r in result["results"] if r.get("peer") == "labUserA"]
+
+    assert [r["outcome"] for r in rows] == ["no_prefix_length"]
+    assert result["counts"]["drifted"] == 0
+
+
+@pytest.mark.asyncio
+async def test_reconcile_never_returns_key_material() -> None:
+    """The one tool that holds all four raw payloads at once: instance rows
+    carrying `privkey`, peer rows carrying `psk`, and kernel rows carrying
+    `public-key`. Every finding is a free-form detail string built from row
+    content, so this is where a whole row reaches the output."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    secrets = {
+        row[field]
+        for name in ("wg_searchserver_rows", "wg_searchclient_rows")
+        for row in fixture(name)["rows"]
+        for field in ("privkey", "pubkey", "psk")
+        if row.get(field)
+    }
+    secrets |= {
+        row["public-key"]
+        for row in fixture("wg_service_show_rows")["rows"]
+        if row.get("public-key")
+    }
+    assert secrets, "fixtures no longer carry the fields being guarded"
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+    text = json.dumps(result)
+
+    for secret in secrets:
+        assert secret not in text
+    for field in ("privkey", "pubkey", "psk", "public-key"):
+        assert f'"{field}"' not in text
 
 
 @pytest.mark.asyncio

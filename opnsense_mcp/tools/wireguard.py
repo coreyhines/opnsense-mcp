@@ -162,6 +162,17 @@ def networks_of(entries: list[str]) -> list[Any]:
     return networks
 
 
+def bare_networks(entries: list[str]) -> list[Any]:
+    """The networks of the entries that carry no prefix length.
+
+    Those entries state an address, not a network, so nothing can be judged
+    contained in them: `networks_of` turns one into a host network and every
+    peer of that instance then reads as outside its own tunnel. Kept separate so
+    containment can say so rather than report drift it cannot know about.
+    """
+    return networks_of([entry for entry in entries if "/" not in entry])
+
+
 def public_instance(row: dict[str, Any], **extra: Any) -> dict[str, Any]:
     """One instance as a caller sees it. Allowlisted; no key material."""
     public: dict[str, Any] = {field: row.get(field, "") for field in INSTANCE_PUBLIC}
@@ -385,6 +396,7 @@ class ListWgPeersTool(_WgToolBase):
                 await self._search(WG_SERVER["search"]), "wireguard instances"
             )
             body: dict[str, Any] = {}
+            match: list[str] = []
             if wanted_instance:
                 # `servers` is the filter key and must be an array. `server_uuid`
                 # is accepted and ignored, and a bare string returns HTTP 500.
@@ -393,6 +405,18 @@ class ListWgPeersTool(_WgToolBase):
                     for s in servers
                     if wanted_instance in (s.get("name", ""), s.get("uuid", ""))
                 ]
+                if not match:
+                    # An empty array is the grid's idiom for "no filter", so a
+                    # name that resolves to nothing would return every peer on
+                    # the firewall and report them as this instance's.
+                    return {
+                        "status": "error",
+                        "error": (
+                            f"no WireGuard instance is named {wanted_instance!r}; "
+                            f"refusing rather than sending an empty filter, which "
+                            f"asks for every peer on the firewall"
+                        ),
+                    }
                 body["servers"] = match
             clients = rows_or_refuse(
                 await self._search(WG_CLIENT["search"], body), "wireguard peers"
@@ -409,8 +433,16 @@ class ListWgPeersTool(_WgToolBase):
         }
         runtime = runtime_by_name(show)
 
+        # Narrowed again here, on the rows that came back. Unknown parameters
+        # are accepted and ignored on every grid, so a filter the firewall did
+        # not apply is invisible in a 200 and the whole box would be reported as
+        # one instance's peers.
+        wanted_uuids = set(match)
+
         peers = []
         for row in clients:
+            if wanted_uuids and not wanted_uuids & set(split_list(row.get("servers"))):
+                continue
             if wanted_name and row.get("name") != wanted_name:
                 continue
             name = str(row.get("name", ""))
@@ -436,7 +468,9 @@ class ListWgPeersTool(_WgToolBase):
         }
 
 
-def classify_entry(entry: str, networks: list[Any]) -> tuple[str, str]:
+def classify_entry(
+    entry: str, networks: list[Any], bare: list[Any] | None = None
+) -> tuple[str, str]:
     """Classify one server-side allowed-IP entry against its instance networks.
 
     Prefix width carries the meaning, not membership alone. A host route belongs
@@ -444,12 +478,19 @@ def classify_entry(entry: str, networks: list[Any]) -> tuple[str, str]:
     network routed through the tunnel and is expected to sit outside it. Without
     that distinction a site-to-site instance's remote LAN reads as drift, and
     the only alternative is an exception carved out for one instance.
+
+    *bare* names the networks that came from a tunnel address written with no
+    prefix length. An entry whose whole family is bare is unjudgeable, not
+    drifted: one instance here carries `192.168.11.1` as its entire tunnel
+    address, and measuring peers against the resulting /32 reports every one of
+    them as a host route outside its own tunnel.
     """
     try:
         network = ipaddress.ip_network(entry, strict=False)
     except ValueError as exc:
         return "unreadable_address", f"{entry!r} is not a network: {exc}"
 
+    bare = bare or []
     family = [n for n in networks if n.version == network.version]
     if not family:
         return (
@@ -460,6 +501,13 @@ def classify_entry(entry: str, networks: list[Any]) -> tuple[str, str]:
     if any(network.subnet_of(n) for n in family):
         return "current", ""
     carried = ", ".join(str(n) for n in family)
+    if all(n in bare for n in family):
+        return (
+            "no_prefix_length",
+            f"the instance's IPv{network.version} tunnel address carries no "
+            f"prefix length, so {carried} states an address rather than a "
+            f"network and {entry} cannot be judged against it",
+        )
     if network.prefixlen == network.max_prefixlen:
         return "drifted", f"{entry} is a host route outside {carried}"
     return (
@@ -531,11 +579,11 @@ class ReconcileWgTool(_WgToolBase):
             members = [
                 by_uuid[u] for u in split_list(peer.get("servers")) if u in by_uuid
             ]
-            networks = networks_of(
-                [a for s in members for a in split_list(s.get("tunneladdress"))]
-            )
+            addresses = [a for s in members for a in split_list(s.get("tunneladdress"))]
+            networks = networks_of(addresses)
+            bare = bare_networks(addresses)
             for entry in split_list(peer.get("tunneladdress")):
-                outcome, detail = classify_entry(entry, networks)
+                outcome, detail = classify_entry(entry, networks, bare)
                 results.append(
                     {
                         "check": "peer_containment",

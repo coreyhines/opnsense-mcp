@@ -167,7 +167,10 @@ filters, `server_uuid` is silently ignored and returns everything, and passing
 silent no-op and a hard 500, with nothing in between.
 
 Any filter the tools promise is verified in the test suite by comparing the
-filtered total against the unfiltered total.
+filtered total against the unfiltered total. The tool narrows again on the rows
+that come back, because a filter the grid ignored is invisible in a 200, and an
+instance name that matches no row is refused: an empty `servers` array is the
+idiom for no filter, so sending one asks for every peer on the firewall.
 
 ## `list_wg_instances`
 
@@ -297,7 +300,12 @@ peer, which is the only one where it matters.
 
 Per item, following `reconcile_npt`'s vocabulary: `current`, `drifted`, or an
 unresolved kind. Unresolved kinds are `instance_disabled`, `no_runtime`,
-`dangling_peer`, `unreadable_address`, `no_interface`.
+`dangling_peer`, `unreadable_address`, `no_interface`, `no_prefix_length`.
+
+`no_prefix_length` is the road-warrior instance whose whole tunnel address is
+`192.168.11.1`, with no prefix length. Read as a network that is a single /32,
+every peer of it is a host route outside its own tunnel, so containment says it
+cannot judge the entry rather than reporting drift it has no basis for.
 
 `instance_disabled` matters because absence from the kernel view has two causes.
 Disabled instances are absent from `service/show`, from the interface list and

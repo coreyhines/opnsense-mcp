@@ -148,6 +148,7 @@ _NOT_TOOLS = frozenset(
         "kernel_matches_config",
         "missing_route",
         "no_interface",
+        "no_prefix_length",
         "no_runtime",
         "peer_status_raw",
         "public_peer",
