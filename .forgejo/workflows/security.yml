@@ -35,7 +35,10 @@ jobs:
   gitguardian:
     runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
-      image: docker.io/gitguardian/ggshield:latest
+      # Pinned to what `latest` resolved to when this was pinned, so the
+      # pin changed no behaviour. deploy/lib.sh rejects `latest` for the
+      # deploy image; CI should not be held to a weaker standard.
+      image: docker.io/gitguardian/ggshield:v1.51.0
     steps:
       - name: Install git and node
         run: |
@@ -84,7 +87,7 @@ jobs:
     # --config auto, so runs stay reproducible and offline-registry friendly.
     runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
-      image: docker.io/semgrep/semgrep:latest
+      image: docker.io/semgrep/semgrep:1.173.0
     steps:
       - name: Install git and node
         run: |
@@ -185,7 +188,7 @@ jobs:
     # Repo filesystem, HIGH/CRITICAL only.
     runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
-      image: docker.io/aquasec/trivy:latest
+      image: docker.io/aquasec/trivy:0.72.0
       options: --entrypoint ""
     steps:
       - name: Install git and node
