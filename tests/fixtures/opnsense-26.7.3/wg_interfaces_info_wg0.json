@@ -1,0 +1,85 @@
+{
+  "rows": [
+    {
+      "flags": [
+        "up",
+        "running",
+        "noarp",
+        "multicast",
+        "lower_up"
+      ],
+      "capabilities": [
+        "linkstate"
+      ],
+      "options": [
+        "linkstate"
+      ],
+      "macaddr": "00:00:00:00:00:00",
+      "supported_media": [],
+      "is_physical": false,
+      "device": "wg0",
+      "mtu": "1420",
+      "groups": [
+        "wg",
+        "wireguard",
+        "novisitors",
+        "innerNets"
+      ],
+      "nd6": {
+        "flags": [
+          "performnud"
+        ]
+      },
+      "routes": [
+        "192.168.10.0/24",
+        "192.168.10.2",
+        "192.168.10.3",
+        "192.168.10.4",
+        "192.168.10.5",
+        "192.168.10.6",
+        "192.168.10.7",
+        "192.168.10.8",
+        "192.168.10.9",
+        "192.168.10.11",
+        "192.168.10.12",
+        "2001:db8:5eed:b7ef::80",
+        "2001:db8:5eed:b50f::/64",
+        "fd0b:cafe:f::/64"
+      ],
+      "config": {
+        "if": "wg0",
+        "descr": "wg0",
+        "enable": "1",
+        "lock": "1",
+        "spoofmac": "",
+        "identifier": "opt9"
+      },
+      "status": "up",
+      "identifier": "opt9",
+      "description": "wg0",
+      "enabled": true,
+      "link_type": "none",
+      "link_typev6": "none",
+      "addr4": "192.168.10.1/24",
+      "addr6": "2001:db8:5eed:b50f::1/64",
+      "ipv4": [
+        {
+          "ipaddr": "192.168.10.1/24"
+        }
+      ],
+      "ipv6": [
+        {
+          "ipaddr": "2001:db8:5eed:b50f::1/64"
+        },
+        {
+          "ipaddr": "fd0b:cafe:f::1/64"
+        }
+      ],
+      "vlan_tag": null,
+      "gateways": []
+    }
+  ],
+  "total": 1,
+  "rowCount": 1,
+  "current": 1
+}

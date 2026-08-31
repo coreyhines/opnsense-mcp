@@ -49,7 +49,8 @@ no client, no async, and no mock.
 
 ---
 
-### Task 1: Fixtures, sanitisation, and the key-material guard
+### Task 1: Fixtures, sanitisation, and the key-material guard  
+**Status: steps 1 to 4 are done.** The rules are in `.site-identifiers.json`, the five fixtures are written and sanitised, and `test_no_site_identifiers.py` passes. Steps 5 to 7, the key-material guard, remain.
 
 Nothing can be tested until captured responses exist in the repository, and
 nothing may be committed until the sanitiser knows about the site's current
@@ -69,7 +70,7 @@ existing checks cannot see.
 - Consumes: nothing.
 - Produces: the five fixture paths above, loaded by every later task.
 
-- [ ] **Step 1: Add the missing sanitiser rules**
+- [x] **Step 1: Add the missing sanitiser rules**
 
 `.site-identifiers.json` is git-ignored and holds the real values. Its existing
 ULA rule predates the site's current prefix and does not match it, so a captured
@@ -92,23 +93,17 @@ its first three groups for `<ula-48>` below (the pattern captures the fourth):
 }
 ```
 
-Add to `literals`, so peer and instance names do not identify people:
+Add to `literals`, so peer and instance names do not identify people. One entry
+per real peer and instance name, mapping to a neutral one. The sanitised names
+this plan's tests refer to are `wg2SiteToSite`, `dualStackPeer` and `peerA`
+through `peerI`; the left-hand side of each mapping is the real name, read off
+the `searchServer` and `searchClient` captures.
 
-```json
-"freeblizzS2S": "wg2SiteToSite",
-"trogdor": "dualStackPeer",
-"coreyIphone": "peerA",
-"coreyIpad": "peerB",
-"nilaIphone": "peerC",
-"sulaIphone": "peerD",
-"jamesIphone": "peerE",
-"jamesIpad": "peerF",
-"macbookProArista": "peerG",
-"dadiPad": "peerH",
-"sulalaptop": "peerI"
-```
+Note the sanitiser rewrites every file under its include roots, not only new
+ones, so running it will also clean any literal that was named but never
+applied. Review that as its own diff.
 
-- [ ] **Step 2: Capture the five responses**
+- [x] **Step 2: Capture the five responses**
 
 Read-only. Run each against the firewall and save the `response` object (not the
 probe wrapper) as the fixture file.
@@ -130,7 +125,7 @@ capture. It must be that instance specifically. It is the
 one whose `peers` node map holds eleven keys with zero selected while its search
 row claims one peer, which is the disagreement two later tests pin.
 
-- [ ] **Step 3: Replace key material with same-length placeholders**
+- [x] **Step 3: Replace key material with same-length placeholders**
 
 Every `privkey`, `pubkey`, `psk` and `public-key` value becomes a 44-character
 placeholder, so the shape stays honest and the secret does not exist in the
@@ -153,7 +148,7 @@ for path in pathlib.Path("tests/fixtures/opnsense-26.7.3").glob("wg_*.json"):
     path.write_text(json.dumps(scrub(json.loads(path.read_text())), indent=2) + "\n")
 ```
 
-- [ ] **Step 4: Run the sanitiser and verify**
+- [x] **Step 4: Run the sanitiser and verify**
 
 ```bash
 uv run python scripts/sanitize_site_identifiers.py && uv run pytest tests/test_no_site_identifiers.py -q

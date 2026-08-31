@@ -127,6 +127,45 @@ _NOT_TOOLS = frozenset(
         "package_manager",
         "ax0_vlan2",
         "ax0_vlan100",
+        # WireGuard design docs name API fields, reconcile outcome labels,
+        # parsing helpers and test fixtures. None is a tool, and each is
+        # worth naming precisely in a spec. The three tool names and the two
+        # group actions those docs introduce are deliberately absent: they
+        # become real when the group is registered, and allowlisting them
+        # would blind this check to their later removal.
+        "allowed_ips",
+        "carp_depend_on",
+        "classify_entry",
+        "dangling_peer",
+        "dangling_peers",
+        "handshake_age",
+        "handshake_epoch",
+        "has_privkey",
+        "has_psk",
+        "instance_client",
+        "instance_disabled",
+        "interfaces_info",
+        "kernel_matches_config",
+        "missing_route",
+        "no_interface",
+        "no_runtime",
+        "peer_status_raw",
+        "public_peer",
+        "regex_rules",
+        "road_warrior",
+        "routed_prefix",
+        "runtime_absent",
+        "runtime_by_name",
+        "search_server",
+        "selected_keys",
+        "server_uuid",
+        "site_to_site",
+        "split_list",
+        "stale_route",
+        "subnet_of",
+        "transfer_rx",
+        "transfer_tx",
+        "unreadable_address",
     }
 )
 
