@@ -553,3 +553,90 @@ async def test_reconcile_makes_no_write_call() -> None:
             verb in endpoint
             for verb in ("/add", "/set", "/del", "/toggle", "/apply", "/reconfigure")
         )
+
+
+@pytest.mark.asyncio
+async def test_an_address_no_config_accounts_for_is_reported() -> None:
+    """The captured device holds an address that neither the instance's tunnel
+    address nor the interface assignment claims."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+    rows = [
+        r
+        for r in result["results"]
+        if r["check"] == "address_liveness" and r["outcome"] == "unaccounted_address"
+    ]
+
+    assert [r["entry"] for r in rows] == ["2001:db8:5eed:b50f::1/64"]
+
+
+@pytest.mark.asyncio
+async def test_the_check_is_not_keyed_on_what_a_prefix_looks_like() -> None:
+    """The delegated prefix is live and nine interfaces track it. A rule keyed
+    on the prefix would flag all of them and miss the real defect, so a device
+    whose config claims its address is current whatever the prefix is."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    fixture_rows = fixture("wg_interfaces_info_wg0")
+    device = fixture_rows["rows"][0]
+    device["ipv6"] = [{"ipaddr": "2001:db8:5eed:b50f::1/64"}]
+    device["config"] = dict(device["config"], ipaddrv6="2001:db8:5eed:b50f::1/64")
+
+    result = await ReconcileWgTool(
+        reconcile_client(interfaces_info=fixture_rows)
+    ).execute({})
+
+    assert not [r for r in result["results"] if r["outcome"] == "unaccounted_address"]
+
+
+@pytest.mark.asyncio
+async def test_a_route_with_no_allowed_ip_behind_it_is_reported() -> None:
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+    rows = [r for r in result["results"] if r["outcome"] == "stale_route"]
+
+    assert "2001:db8:5eed:b7ef::80" in {r["entry"] for r in rows}
+
+
+@pytest.mark.asyncio
+async def test_an_allowed_ip_with_no_route_is_reported() -> None:
+    """The mirror-image defect. Checking one direction finds the stale route and
+    misses the missing one, and the captured state holds one of each."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+    rows = [r for r in result["results"] if r["outcome"] == "missing_route"]
+
+    assert "fd0b:cafe:f::2/128" in {r["entry"] for r in rows}
+
+
+@pytest.mark.asyncio
+async def test_kernel_and_config_allowed_ips_compare_as_sets() -> None:
+    """The kernel emits v6 first and the config preserves entry order, so a
+    string comparator passes all nine single-stack peers and fails only on the
+    dual-stack one."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+    rows = [
+        r
+        for r in result["results"]
+        if r["check"] == "kernel_matches_config" and r["peer"] == "dualStackPeer"
+    ]
+
+    assert rows and rows[0]["outcome"] == "current"
+
+
+@pytest.mark.asyncio
+async def test_a_disabled_instance_absent_from_the_kernel_is_not_a_fault() -> None:
+    """Disabled instances are absent from every runtime view with no
+    placeholder, so absence has two causes and only `enabled` separates them."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+    rows = [r for r in result["results"] if r.get("instance") == "wg2SiteToSite"]
+
+    assert all(r["outcome"] != "drifted" for r in rows)
+    assert any(r["outcome"] == "instance_disabled" for r in rows)

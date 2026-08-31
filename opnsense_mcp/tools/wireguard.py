@@ -469,6 +469,27 @@ def classify_entry(entry: str, networks: list[Any]) -> tuple[str, str]:
     )
 
 
+def _parses(entry: str) -> bool:
+    """True when the entry reads as an address with an optional prefix length."""
+    try:
+        ipaddress.ip_interface(entry)
+    except ValueError:
+        return False
+    return True
+
+
+def _as_network(destination: str) -> Any:
+    """A route destination or allowed IP as a network.
+
+    Route destinations omit the prefix length on host routes, so a bare address
+    means the family maximum rather than a parse failure.
+    """
+    try:
+        return ipaddress.ip_network(destination, strict=False)
+    except ValueError:
+        return None
+
+
 class ReconcileWgTool(_WgToolBase):
     """Report where the stored WireGuard config and the running kernel disagree.
 
@@ -548,19 +569,284 @@ class ReconcileWgTool(_WgToolBase):
         counts.setdefault("drifted", 0)
         return counts
 
+    @staticmethod
+    def _config_networks(device: dict[str, Any], tunnel: list[str]) -> list[Any]:
+        """Every network a device's configuration accounts for.
+
+        Two sources, because the tunnel device is the only interface whose
+        address comes from a WireGuard tunnel address rather than from an
+        interface assignment or an ipalias virtual IP.
+        """
+        config = device.get("config") or {}
+        assigned = [
+            str(config.get(key, ""))
+            for key in ("ipaddr", "ipaddrv6")
+            if str(config.get(key, "")) not in ("", "none", "dhcp", "dhcp6", "track6")
+        ]
+        return networks_of([*tunnel, *assigned])
+
+    def _address_liveness(
+        self, servers: list[dict[str, Any]], devices: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Check B: kernel addresses against config, in both directions.
+
+        The predicate is "no config accounts for this address", never "this
+        prefix looks retired". The delegated prefix is live and carried by many
+        interfaces, so a rule keyed on the prefix flags the healthy ones and
+        misses the orphan.
+        """
+        by_name = {str(d.get("device", "")): d for d in devices}
+        results = []
+        # Iterate the config, not the devices. A disabled instance has no device
+        # at all, so a loop over devices emits nothing for it and the caller
+        # cannot tell "disabled" from "never checked".
+        for server in servers:
+            name = str(server.get("interface", ""))
+            instance = str(server.get("name", ""))
+            if str(server.get("enabled", "0")) != "1":
+                results.append(
+                    {
+                        "check": "address_liveness",
+                        "instance": instance,
+                        "device": name,
+                        "entry": "",
+                        "outcome": "instance_disabled",
+                        "detail": (
+                            "the instance is disabled, so it holds no kernel state "
+                            "and absence is not a fault"
+                        ),
+                    }
+                )
+                continue
+            device = by_name.get(name)
+            if device is None:
+                results.append(
+                    {
+                        "check": "address_liveness",
+                        "instance": instance,
+                        "device": name,
+                        "entry": "",
+                        "outcome": "device_absent",
+                        "detail": (
+                            f"{instance} is enabled and no device named {name} "
+                            f"exists, so the kernel never brought it up"
+                        ),
+                    }
+                )
+                continue
+
+            tunnel = split_list(server.get("tunneladdress"))
+            accounted = self._config_networks(device, tunnel)
+            held = [
+                str(item.get("ipaddr", ""))
+                for family in ("ipv4", "ipv6")
+                for item in (device.get(family) or [])
+                if item.get("ipaddr")
+            ]
+
+            for entry in held:
+                try:
+                    address = ipaddress.ip_interface(entry)
+                except ValueError:
+                    results.append(
+                        {
+                            "check": "address_liveness",
+                            "instance": instance,
+                            "device": name,
+                            "entry": entry,
+                            "outcome": "unreadable_address",
+                            "detail": f"{entry!r} is not an address",
+                        }
+                    )
+                    continue
+                if address.network.is_link_local:
+                    continue
+                outcome = (
+                    "current"
+                    if any(address.ip in n for n in accounted)
+                    else "unaccounted_address"
+                )
+                results.append(
+                    {
+                        "check": "address_liveness",
+                        "instance": instance,
+                        "device": name,
+                        "entry": entry,
+                        "outcome": outcome,
+                        "detail": ""
+                        if outcome == "current"
+                        else (
+                            f"{name} holds {entry}, which neither the instance "
+                            f"tunnel address nor the interface assignment accounts "
+                            f"for"
+                        ),
+                    }
+                )
+
+            held_addresses = {ipaddress.ip_interface(e).ip for e in held if _parses(e)}
+            for entry in tunnel:
+                if not _parses(entry):
+                    continue
+                if ipaddress.ip_interface(entry).ip not in held_addresses:
+                    results.append(
+                        {
+                            "check": "address_liveness",
+                            "instance": instance,
+                            "device": name,
+                            "entry": entry,
+                            "outcome": "missing_address",
+                            "detail": (
+                                f"the instance configures {entry} and {name} does "
+                                f"not hold it"
+                            ),
+                        }
+                    )
+        return results
+
+    def _route_crosscheck(
+        self,
+        servers: list[dict[str, Any]],
+        show: list[dict[str, Any]],
+        devices: list[dict[str, Any]],
+        clients: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Check C: routes against the allowed IPs the kernel actually holds.
+
+        Both directions, because the captured state holds one defect of each
+        kind: a route whose allowed IP is gone, and an allowed IP whose route
+        was never created.
+
+        Route destinations omit the prefix length on host routes, so the implied
+        maximum is supplied before comparison.
+        """
+        by_name = {str(d.get("device", "")): d for d in devices}
+        config_by_name = {str(c.get("name", "")): c for c in clients}
+        results = []
+
+        # Same reason as check B: driven by the config, so a disabled instance
+        # is reported as disabled rather than skipped silently.
+        for server in servers:
+            name = str(server.get("interface", ""))
+            instance = str(server.get("name", ""))
+            if str(server.get("enabled", "0")) != "1":
+                results.append(
+                    {
+                        "check": "route_crosscheck",
+                        "instance": instance,
+                        "device": name,
+                        "entry": "",
+                        "outcome": "instance_disabled",
+                        "detail": "the instance is disabled, so it holds no routes",
+                    }
+                )
+                continue
+            device = by_name.get(name)
+            if device is None:
+                continue
+            tunnel = networks_of(split_list(server.get("tunneladdress")))
+
+            loaded: set[Any] = set()
+            for row in show:
+                if row.get("type") != "peer" or row.get("if") != name:
+                    continue
+                for entry in split_list(row.get("allowed-ips")):
+                    if _parses(entry):
+                        loaded.add(ipaddress.ip_network(entry, strict=False))
+
+            routed = set()
+            for destination in device.get("routes") or []:
+                network = _as_network(str(destination))
+                if network is None:
+                    continue
+                routed.add(network)
+                if network in loaded or network in tunnel:
+                    continue
+                results.append(
+                    {
+                        "check": "route_crosscheck",
+                        "instance": instance,
+                        "device": name,
+                        "entry": str(destination),
+                        "outcome": "stale_route",
+                        "detail": (
+                            f"{name} routes {destination}, and no allowed IP or "
+                            f"tunnel network behind it"
+                        ),
+                    }
+                )
+
+            for network in sorted(loaded, key=str):
+                if network in routed:
+                    continue
+                results.append(
+                    {
+                        "check": "route_crosscheck",
+                        "instance": instance,
+                        "device": name,
+                        "entry": str(network),
+                        "outcome": "missing_route",
+                        "detail": (
+                            f"the kernel holds {network} as an allowed IP on {name} "
+                            f"and no route reaches it"
+                        ),
+                    }
+                )
+
+        for row in show:
+            if row.get("type") != "peer":
+                continue
+            peer = str(row.get("name", ""))
+            config = config_by_name.get(peer)
+            if config is None:
+                results.append(
+                    {
+                        "check": "kernel_matches_config",
+                        "peer": peer,
+                        "entry": "",
+                        "outcome": "dangling_peer",
+                        "detail": (
+                            f"the kernel holds peer {peer!r} and no config row does"
+                        ),
+                    }
+                )
+                continue
+            # Sets, not strings. The kernel emits v6 first while the config keeps
+            # entry order, so a string comparison fails only on a dual-stack peer.
+            kernel = {_as_network(e) for e in split_list(row.get("allowed-ips"))}
+            stored = {_as_network(e) for e in split_list(config.get("tunneladdress"))}
+            results.append(
+                {
+                    "check": "kernel_matches_config",
+                    "peer": peer,
+                    "entry": "",
+                    "outcome": "current" if kernel == stored else "drifted",
+                    "detail": ""
+                    if kernel == stored
+                    else (
+                        f"kernel {sorted(map(str, kernel))} "
+                        f"config {sorted(map(str, stored))}"
+                    ),
+                }
+            )
+        return results
+
     async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Run every check and report. Writes nothing."""
         if not self.client:
             return self._no_client()
         try:
-            servers, clients, _show, _devices = await self._read()
+            servers, clients, show, devices = await self._read()
         except TruncatedListing as exc:
             return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to read WireGuard state")
             return {"status": "error", "error": str(exc)}
 
-        results = self._peer_containment(servers, clients)
+        results = [
+            *self._peer_containment(servers, clients),
+            *self._address_liveness(servers, devices),
+            *self._route_crosscheck(servers, show, devices, clients),
+        ]
 
         return {
             "status": "success",
