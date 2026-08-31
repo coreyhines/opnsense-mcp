@@ -205,3 +205,109 @@ class _WgToolBase:
         return await self.client._make_request(
             "POST", endpoint, json=body if body is not None else {}
         )
+
+
+def instance_shape(
+    row: dict[str, Any], peers: list[dict[str, Any]]
+) -> tuple[str, list[str]]:
+    """A label for a human reader, always returned with its evidence.
+
+    Never used as a gate anywhere. A site-to-site instance and a road-warrior
+    one differ only in how they happen to be configured, so a wrong guess must
+    not change what any check does.
+    """
+    evidence: list[str] = []
+    if str(row.get("disableroutes", "")) == "1":
+        evidence.append("disableroutes=1")
+    if row.get("gateway"):
+        evidence.append(f"gateway={row['gateway']}")
+    wide = [
+        entry
+        for peer in peers
+        for entry in split_list(peer.get("tunneladdress"))
+        if not is_host_route(entry)
+    ]
+    if wide:
+        evidence.append(f"peer networks {', '.join(sorted(wide))}")
+    if evidence:
+        return "site_to_site", evidence
+    if peers:
+        return "road_warrior", [f"{len(peers)} peers, all host routes"]
+    return "unknown", ["no resolvable peers"]
+
+
+class ListWgInstancesTool(_WgToolBase):
+    """List WireGuard instances, config joined to runtime state."""
+
+    name = "list_wg_instances"
+    description = (
+        "List WireGuard instances with their tunnel addresses, peers and running state"
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Only the instance with this name",
+                "optional": True,
+            },
+        },
+        "required": [],
+    }
+
+    async def _running_uuids(self) -> set[str]:
+        """Server uuids the service manager reports as running.
+
+        `/api/wireguard/service/status` cannot answer this: the plugin declares
+        no configd status action, so it returns the literal string "unknown"
+        while the interface is up and moving traffic. The core service grid
+        embeds the server uuid in its row id and is the reliable signal.
+        """
+        payload = await self._search(CORE_SERVICE)
+        running = set()
+        for row in rows_or_refuse(payload, "services"):
+            identifier = str(row.get("id", ""))
+            if identifier.startswith("wireguard/") and str(row.get("running")) == "1":
+                running.add(identifier.split("/", 1)[1])
+        return running
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """List instances, or the one named."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        try:
+            servers = rows_or_refuse(
+                await self._search(WG_SERVER["search"]), "wireguard instances"
+            )
+            clients = rows_or_refuse(
+                await self._search(WG_CLIENT["search"]), "wireguard peers"
+            )
+            running = await self._running_uuids()
+        except TruncatedListing as exc:
+            return {"status": "error", "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to read WireGuard instances")
+            return {"status": "error", "error": str(exc)}
+
+        by_uuid = {str(c.get("uuid", "")): c for c in clients}
+        wanted = str(params.get("name") or "")
+
+        instances = []
+        for row in servers:
+            if wanted and row.get("name") != wanted:
+                continue
+            peer_uuids = split_list(row.get("peers"))
+            members = [by_uuid[u] for u in peer_uuids if u in by_uuid]
+            shape, evidence = instance_shape(row, members)
+            instances.append(
+                public_instance(
+                    row,
+                    dangling_peers=[u for u in peer_uuids if u not in by_uuid],
+                    running=str(row.get("uuid", "")) in running,
+                    shape=shape,
+                    shape_evidence=evidence,
+                )
+            )
+
+        return {"status": "success", "count": len(instances), "instances": instances}

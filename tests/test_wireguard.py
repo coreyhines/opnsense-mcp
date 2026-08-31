@@ -171,3 +171,155 @@ def test_the_server_field_named_allowed_ips_is_empty_on_every_row() -> None:
     """Recorded so nobody reaches for it later believing it holds something."""
     rows = rows_or_refuse(fixture("wg_searchserver_rows"), "instances")
     assert all(row.get("allowed_ips", "") == "" for row in rows)
+
+
+class FakeClient:
+    """Answers each endpoint from a fixture, and records what was asked.
+
+    A dict of endpoint substring to payload rather than a mock, so a test that
+    changes which endpoint a tool calls fails on the missing key instead of
+    silently receiving a default.
+    """
+
+    def __init__(self, responses: dict[str, object]) -> None:
+        self.responses = responses
+        self.calls: list[tuple[str, str, object]] = []
+
+    async def _make_request(self, method, endpoint, json=None, **kwargs):
+        self.calls.append((method, endpoint, json))
+        for fragment, payload in self.responses.items():
+            if fragment in endpoint:
+                return payload
+        raise AssertionError(f"unexpected endpoint {endpoint}")
+
+
+def instance_client(**overrides):
+    responses = {
+        "searchServer": fixture("wg_searchserver_rows"),
+        "searchClient": fixture("wg_searchclient_rows"),
+        "service/show": fixture("wg_service_show_rows"),
+        "core/service/search": {
+            "rows": [
+                {
+                    "id": "wireguard/6975c926-5a06-4b5c-aa6e-86e14f39cd76",
+                    "running": 1,
+                    "name": "wireguard",
+                }
+            ],
+            "total": 1,
+        },
+    }
+    responses.update(overrides)
+    return FakeClient(responses)
+
+
+@pytest.mark.asyncio
+async def test_list_instances_returns_every_instance() -> None:
+    from opnsense_mcp.tools.wireguard import ListWgInstancesTool
+
+    result = await ListWgInstancesTool(instance_client()).execute({})
+
+    assert result["status"] == "success"
+    assert len(result["instances"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_list_instances_never_returns_a_private_key() -> None:
+    """No key field survives the allowlist, and no key value appears anywhere.
+
+    Asserted on the keys and on the secret's own value rather than on the
+    substring "privkey", which `has_privkey` legitimately contains.
+    """
+    import json as _json
+
+    from opnsense_mcp.tools.wireguard import ListWgInstancesTool
+
+    secret = fixture("wg_searchserver_rows")["rows"][0]["privkey"]
+    assert secret, "fixture no longer carries the field being guarded"
+
+    result = await ListWgInstancesTool(instance_client()).execute({})
+    text = _json.dumps(result)
+
+    for instance in result["instances"]:
+        assert "privkey" not in instance
+        assert "pubkey" not in instance
+    assert secret not in text
+    assert all(i["has_privkey"] is True for i in result["instances"])
+
+
+@pytest.mark.asyncio
+async def test_list_instances_reports_a_dangling_peer_rather_than_dropping_it() -> None:
+    """One instance names a peer uuid that no client record matches.
+
+    Search reports one peer, get reports zero, and getClient on the uuid returns
+    an empty array. All three answer HTTP 200 with no error, so a join that
+    assumes 1:1 loses the reference silently.
+    """
+    from opnsense_mcp.tools.wireguard import ListWgInstancesTool
+
+    result = await ListWgInstancesTool(instance_client()).execute({})
+    wg1 = next(i for i in result["instances"] if i["name"] == "wg1RemoteLabUsers")
+
+    assert wg1["peer_uuids"] == ["9d08d591-4556-4df2-bf87-dcf1679e2776"]
+    assert wg1["dangling_peers"] == ["9d08d591-4556-4df2-bf87-dcf1679e2776"]
+
+
+@pytest.mark.asyncio
+async def test_membership_survives_a_missing_resolved_key() -> None:
+    """`%peers` is absent, not empty, on the instance whose peer resolves to
+    nothing. Indexing it raises on exactly the instance most worth reporting."""
+    from opnsense_mcp.tools.wireguard import ListWgInstancesTool
+
+    result = await ListWgInstancesTool(instance_client()).execute({})
+    wg1 = next(i for i in result["instances"] if i["name"] == "wg1RemoteLabUsers")
+
+    assert wg1["peer_names"] == []
+    assert wg1["peer_uuids"]
+
+
+@pytest.mark.asyncio
+async def test_only_the_enabled_instance_reports_running() -> None:
+    """Disabled instances are absent from every runtime view, so absence has two
+    causes and only the config's `enabled` separates them."""
+    from opnsense_mcp.tools.wireguard import ListWgInstancesTool
+
+    result = await ListWgInstancesTool(instance_client()).execute({})
+    by_name = {i["name"]: i for i in result["instances"]}
+
+    assert by_name["wg0HomeVpn"]["running"] is True
+    assert by_name["wg1RemoteLabUsers"]["running"] is False
+    assert by_name["wg1RemoteLabUsers"]["enabled"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_the_site_to_site_instance_is_labelled_with_its_evidence() -> None:
+    from opnsense_mcp.tools.wireguard import ListWgInstancesTool
+
+    result = await ListWgInstancesTool(instance_client()).execute({})
+    s2s = next(i for i in result["instances"] if i["name"] == "wg2SiteToSite")
+
+    assert s2s["shape"] == "site_to_site"
+    assert s2s["shape_evidence"], "a label without its evidence is a guess"
+
+
+@pytest.mark.asyncio
+async def test_a_truncated_listing_is_refused_rather_than_returned() -> None:
+    from opnsense_mcp.tools.wireguard import ListWgInstancesTool
+
+    client = instance_client(searchServer={"rows": [], "total": 3})
+    result = await ListWgInstancesTool(client).execute({})
+
+    assert result["status"] == "error"
+    assert "truncated" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_no_listing_call_sends_a_rowcount() -> None:
+    """Sending one is what makes total exceed the rows returned."""
+    from opnsense_mcp.tools.wireguard import ListWgInstancesTool
+
+    client = instance_client()
+    await ListWgInstancesTool(client).execute({})
+
+    for _method, _endpoint, body in client.calls:
+        assert "rowCount" not in (body or {})
