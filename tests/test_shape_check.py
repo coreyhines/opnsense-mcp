@@ -349,3 +349,44 @@ class TestDispatchRoutesNodeSourcesToNodeKeys:
 
         assert keys is None
         assert err is not None
+
+
+def test_a_scoped_fixture_still_reports_a_key_the_firewall_stopped_sending() -> None:
+    """Scoping must not turn the check off.
+
+    `wg_interfaces_info_wg0.json` keeps one device out of nineteen, so the union
+    of live keys always holds bridge and VLAN fields it cannot have. Only the
+    stale direction is meaningless for such a fixture; drift still matters, and
+    a scoped source that reported nothing at all would be worse than not being
+    registered, because the listing would say OK.
+    """
+    findings = compare_shape_keys(
+        {"device", "ipv6", "routes"},
+        {"device", "ipv6", "media", "members"},
+        kind="rows",
+        scoped=True,
+    )
+    statuses = {status for status, _ in findings}
+
+    assert "drift" in statuses, "a key the fixture holds and the firewall dropped"
+    assert "stale" not in statuses, "another interface's keys are not a gap"
+    assert [d for s, d in findings if s == "drift"][0].endswith("routes")
+
+
+def test_an_unscoped_fixture_still_reports_both_directions() -> None:
+    """The default is unchanged, so scoping is opt-in per source."""
+    findings = compare_shape_keys(
+        {"device", "routes"},
+        {"device", "media"},
+        kind="rows",
+    )
+    statuses = {status for status, _ in findings}
+
+    assert statuses == {"drift", "stale"}
+
+
+def test_only_the_slice_fixture_is_scoped() -> None:
+    """Recorded so scoping stays the exception it was argued for."""
+    scoped = {name for name, source in SHAPE_SOURCES.items() if source.scoped}
+
+    assert scoped == {"wg_interfaces_info_wg0.json"}
