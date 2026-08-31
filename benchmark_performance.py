@@ -351,6 +351,42 @@ SHAPE_SOURCES: dict[str, ShapeSource] = {
         kind="node",
         root_key="vip",
     ),
+    "wg_searchserver_rows.json": ShapeSource(
+        "POST",
+        "/api/wireguard/server/searchServer",
+        None,
+        kind="rows",
+    ),
+    "wg_searchclient_rows.json": ShapeSource(
+        "POST",
+        "/api/wireguard/client/searchClient",
+        None,
+        kind="rows",
+    ),
+    "wg_service_show_rows.json": ShapeSource(
+        "POST",
+        "/api/wireguard/service/show",
+        None,
+        kind="rows",
+    ),
+    "wg_interfaces_info_wg0.json": ShapeSource(
+        "GET",
+        "/api/interfaces/overview/interfaces_info",
+        None,
+        kind="rows",
+    ),
+    # The uuid is the instance the capture was taken from. On a firewall that
+    # does not have it, getServer answers 200 with the blank new-instance
+    # template, whose field names are the same ones: that is the shape being
+    # tracked, and `get_path` exists because the blank is indistinguishable
+    # from a record.
+    "wg_getserver_dangling.json": ShapeSource(
+        "GET",
+        "/api/wireguard/server/getServer/00524b42-93b5-455f-982f-8c7c4174ab73",
+        None,
+        kind="node",
+        root_key="server",
+    ),
 }
 
 

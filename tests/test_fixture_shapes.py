@@ -170,3 +170,106 @@ def test_the_captured_rule_rows_carry_no_key_the_normalizer_ignores() -> None:
         "fw_rules reads keys the captured response does not contain, so the "
         "fixture cannot prove the normalizer works: " + ", ".join(missing)
     )
+
+
+def test_the_captured_wireguard_rows_carry_every_key_the_tool_reads() -> None:
+    """The mirror check, for the WireGuard read path.
+
+    Every key `wireguard.py` reads off a response must appear in one of the
+    captured responses, so a rename upstream — or a key guessed rather than
+    observed — fails here instead of turning into an always-empty column on
+    the firewall. The read keys are swept out of the source rather than
+    listed, so a newly-read key is checked on arrival; what is listed instead
+    is the far smaller set of keys this module puts into dicts it builds
+    itself, and the three keys nothing in the repository captures.
+    """
+    import re
+
+    from opnsense_mcp.tools import wireguard
+
+    source = pathlib.Path(wireguard.__file__).read_text()
+
+    def _keys(value: Any, depth: int = 3) -> set[str]:
+        """Keys of a row and of the nested shapes the tool reaches into.
+
+        Three levels deep, because a `get*` node map is
+        `field -> option key -> {value, selected}` and `selected` is the flag
+        membership is carried by.
+        """
+        if depth == 0:
+            return set()
+        if isinstance(value, dict):
+            return set(value).union(*(_keys(v, depth - 1) for v in value.values()))
+        if isinstance(value, list):
+            return set().union(*(_keys(v, depth - 1) for v in value), set())
+        return set()
+
+    captured: set[str] = set()
+    for name in (
+        "wg_searchserver_rows.json",
+        "wg_searchclient_rows.json",
+        "wg_service_show_rows.json",
+        "wg_interfaces_info_wg0.json",
+    ):
+        for row in _rows(name):
+            captured |= _keys(row)
+    captured |= _keys(_fixture("wg_getserver_dangling.json")["server"])
+    # The captured wg0 device has no interface assignment — its `config` holds
+    # `if`, `descr`, `enable`, `lock`, `spoofmac`, `identifier` and nothing
+    # else — so the assignment keys are pinned by the other captured
+    # interfaces_info in the repository, which does carry one.
+    assigned = json.loads(
+        (
+            pathlib.Path(__file__).parent
+            / "fixtures"
+            / "phase0-diagnostics"
+            / "interface_list_sample.json"
+        ).read_text()
+    )
+    for row in assigned.values():
+        if isinstance(row, dict):
+            captured |= _keys(row)
+
+    read_keys = set(re.findall(r'\.get\(\s*"([^"]+)"', source))
+    # Subscripts, but only where something is being indexed: a bare `["x"]` is
+    # a list literal, not a key.
+    read_keys |= set(re.findall(r'(?<=[\w)])\[\s*"([^"]+)"\s*\]', source))
+    # The assignment pair is read through a variable, so the sweep cannot see
+    # it. Named here because getting it wrong is exactly the defect this file
+    # exists for: the width lives in its own key, not on the address.
+    read_keys |= {"ipaddr", "subnet", "ipaddrv6", "subnetv6"}
+
+    # Keys of dicts this module builds itself, plus the two endpoint maps and
+    # the bootgrid envelope. None of these is read off a row.
+    internal = {
+        "get",
+        "search",
+        "show",
+        "rows",
+        "total",
+        "outcome",
+        "has_privkey",
+        "has_psk",
+        "instance_names",
+        "instance_uuids",
+        "peer_names",
+        "peer_uuids",
+        "tunnel_addresses",
+    }
+    # Keys no capture in this repository pins, recorded rather than left
+    # invisible. `id` and `running` come from `/api/core/service/search`, which
+    # nothing has captured; capturing it is what closes those two. `subnetv6`
+    # is absent for a different reason: every captured v6 assignment is
+    # `track6`, which the code skips before it reads a width, so the key is
+    # taken from the model and from `interface_address.py`, which writes it.
+    uncaptured = {"id", "running", "subnetv6"}
+
+    missing = sorted(read_keys - captured - internal - uncaptured)
+    assert not missing, (
+        "wireguard.py reads keys no captured response contains, so the "
+        "fixtures cannot prove the normalizer works: " + ", ".join(missing)
+    )
+    assert uncaptured <= read_keys, (
+        "an exempted key is no longer read; drop it from the exemption rather "
+        "than leaving it unexplained"
+    )

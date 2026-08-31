@@ -984,6 +984,11 @@
           "description": "Only the instance with this name",
           "optional": true,
           "type": "string"
+        },
+        "uuid": {
+          "description": "Only the instance with this uuid",
+          "optional": true,
+          "type": "string"
         }
       },
       "required": [],

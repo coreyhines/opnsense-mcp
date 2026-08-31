@@ -156,9 +156,9 @@ _NOT_TOOLS = frozenset(
         "road_warrior",
         "routed_prefix",
         "runtime_absent",
-        "runtime_by_name",
+        "runtime_by_peer",
         "search_server",
-        "selected_keys",
+        "selected_option_keys",
         "server_uuid",
         "site_to_site",
         "split_list",
@@ -167,6 +167,18 @@ _NOT_TOOLS = frozenset(
         "transfer_rx",
         "transfer_tx",
         "unreadable_address",
+        # More of the same: reconcile outcome labels, response fields and one
+        # parsing helper, added when the design was corrected to name the
+        # eleven outcomes the code emits rather than the six it first guessed.
+        "covered_by",
+        "device_absent",
+        "device_status",
+        "missing_address",
+        "route_covered_by_prefix",
+        "rows_or_refuse",
+        "running_disagrees",
+        "runtime_absent_reason",
+        "unaccounted_address",
     }
 )
 

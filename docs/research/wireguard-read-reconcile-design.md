@@ -182,10 +182,14 @@ Per instance: `uuid`, `name`, `enabled`, `instance` index, `interface` device,
 `shape`.
 
 `running` comes from `/api/core/service/search`, whose row id embeds the server
-uuid, cross-checked against the `service/show` interface row's `status`. It does
-not come from `/api/wireguard/service/status`, which returns the literal string
-`unknown` while the interface is up and moving traffic, because the plugin
-declares no configd status action.
+uuid, cross-checked against the `service/show` interface row's `status` and
+reported alongside it: `device_status` is that status and `running_disagrees`
+says the two signals do not match. Nothing captures the core-service row, so a
+change in the id format would otherwise report every instance as stopped with
+nothing in the payload saying so. `running` does not come from
+`/api/wireguard/service/status`, which returns the literal string `unknown`
+while the interface is up and moving traffic, because the plugin declares no
+configd status action.
 
 `shape` is `road_warrior`, `site_to_site` or `unknown`, and always ships with
 the evidence it was derived from (`disableroutes`, a set `gateway`, peer entries
@@ -282,11 +286,18 @@ Every route on a wg device maps to a kernel allowed-IP or to a connected tunnel
 network, and every kernel allowed-IP has a route. Both directions, because
 discovery found one defect of each kind on the same interface.
 
-`/api/diagnostics/interface/get_routes` returns a bare top-level array with no
-`rows`/`total` wrapper, unlike every WireGuard endpoint, so a shared response
-normalizer cannot be used on it. Route destinations omit the prefix length on
-host routes, so the implied `/32` or `/128` is supplied by the caller before
-comparison.
+Routes come from `/api/interfaces/overview/interfaces_info`, not from
+`/api/diagnostics/interface/get_routes` as this design first said: the
+interfaces_info row carries `routes`, `ipv4`, `ipv6` and `config` together, so
+one call feeds checks B and C and the shared `rows_or_refuse` guard applies to
+it. Route destinations omit the prefix length on host routes, so the implied
+`/32` or `/128` is supplied by the caller before comparison.
+
+An allowed-IP with no route of its own is not necessarily unreachable: a wider
+route on the same device covers it, and crypto-routing then dispatches on the
+allowed IP. That case is `route_covered_by_prefix`, carrying the covering
+route in `covered_by`; `missing_route` is reserved for the case nothing on the
+device reaches.
 
 ### Comparing kernel to config
 
@@ -299,8 +310,13 @@ peer, which is the only one where it matters.
 ### Outcomes
 
 Per item, following `reconcile_npt`'s vocabulary: `current`, `drifted`, or an
-unresolved kind. Unresolved kinds are `instance_disabled`, `no_runtime`,
-`dangling_peer`, `unreadable_address`, `no_interface`, `no_prefix_length`.
+unresolved kind. Unresolved kinds are `instance_disabled`, `dangling_peer`,
+`unreadable_address`, `no_interface`, `no_prefix_length`, `device_absent`,
+`missing_address`, `unaccounted_address`, `stale_route`, `missing_route`,
+`route_covered_by_prefix` and `routed_prefix`. This is the list a caller
+switches on, so it is the eleven the code emits rather than the six this design
+first named; `no_runtime` is not among them, because a peer with no kernel row
+is reported by `list_wg_peers` as `runtime_absent_reason`, not by reconcile.
 
 `no_prefix_length` is the road-warrior instance whose whole tunnel address is
 `192.168.11.1`, with no prefix length. Read as a network that is a single /32,
@@ -368,7 +384,7 @@ Captured from 26.7.3 into `tests/fixtures/opnsense-26.7.3/`:
 | `wg_getserver_dangling.json` | search and get disagreeing about the same instance |
 | `wg_searchclient_rows.json` | eleven peers, ten host routes and one site-to-site set |
 | `wg_service_show_rows.json` | both row types, the dual-stack peer's reordered allowed-IPs |
-| `wg_get_routes_wg0.json` | the bare-array route shape, including both route defects |
+| `wg_interfaces_info_wg0.json` | the device's addresses, routes and config in one row, including both route defects |
 
 Two prerequisites before any of these land.
 

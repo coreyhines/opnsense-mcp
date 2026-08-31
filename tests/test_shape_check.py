@@ -216,14 +216,29 @@ class TestShapeSourcesDeclareKinds:
             else:
                 assert source.root_key is None, filename
 
-    def test_four_node_fixtures_are_registered(self) -> None:
-        node_files = {name for name, src in SHAPE_SOURCES.items() if src.kind == "node"}
-        assert node_files == {
-            "radvd_get_entry.json",
-            "unbound_gethostoverride.json",
-            "npt_get_rule_blank.json",
-            "vip_get_item_blank.json",
-        }
+    def test_every_captured_fixture_is_registered(self) -> None:
+        """A count of node fixtures made an unregistered capture invisible.
+
+        Five WireGuard captures sat in the directory with no entry, and the
+        assertion that was standing in for this one — a hard-coded set of four
+        node filenames — failed when the omission was corrected. What matters
+        is that a capture nothing tracks fails on arrival.
+        """
+        fixture_dir = pathlib.Path(__file__).parent / "fixtures" / "opnsense-26.7.3"
+        # One file holds two responses (`search_range` and `get_range`) under
+        # one root, which `ShapeSource` cannot address: it names one endpoint.
+        multi_response = {"dnsmasq_v6_range_responses.json"}
+        captured = {p.name for p in fixture_dir.glob("*.json")} - multi_response
+
+        assert not captured - set(SHAPE_SOURCES), (
+            "captured fixtures with no SHAPE_SOURCES entry, so --check-shapes "
+            "never diffs them against the firewall: "
+            + ", ".join(sorted(captured - set(SHAPE_SOURCES)))
+        )
+        assert not set(SHAPE_SOURCES) - captured, (
+            "SHAPE_SOURCES names a fixture that does not exist: "
+            + ", ".join(sorted(set(SHAPE_SOURCES) - captured))
+        )
 
     def test_captured_fixtures_yield_keys_under_declared_root(self) -> None:
         fixture_dir = pathlib.Path(__file__).parent / "fixtures" / "opnsense-26.7.3"

@@ -5,8 +5,10 @@ Field names come from the firmware model (`OPNsense/Wireguard/Server.xml` and
 read paths disagree in ways a normalizer cannot notice. `dns`, `tunneladdress`,
 `carp_depend_on` and `peers` are comma-joined strings in a search row and
 `{key: {value, selected}}` maps in a get, while the other eighteen fields are
-identical in both. So everything here lists from the search grid, and uses a get
-only to read one record.
+identical in both. So everything here lists from the search grid. The get path
+(`WG_SERVER["get"]`, `get_path`, `record_or_none`, `selected_option_keys`) is
+characterised by tests against a captured `getServer`, but no tool calls it
+yet: nothing here reads a single record.
 
 Two names are traps worth stating once. A peer's server-side Allowed-IPs live in
 `tunneladdress`; the field literally named `allowed_ips` exists only on servers
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -52,11 +55,21 @@ INSTANCE_PUBLIC = (
 )
 PEER_PUBLIC = ("uuid", "name", "enabled", "keepalive")
 
+# Key material never belongs in an error string either. The transport folds a
+# response body into the exception text by design, so a body with no named
+# message key arrives here whole. Same predicate as tests/test_no_key_material.
+_KEY_SHAPED = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{43}=(?![A-Za-z0-9+/=])")
+REDACTED = "<redacted key>"
 
-# N818 wants an Error suffix. The name is fixed by the spec and by every test
-# and tool that imports it, so the rule is silenced here rather than the name
-# changed out from under them.
-class TruncatedListing(Exception):  # noqa: N818
+
+def redact_keys(text: Any) -> str:
+    """*text* with anything shaped like a Curve25519 key replaced."""
+    # PHP's json_encode escapes '/', so a key can arrive spelled `a\/b`. The
+    # escape is undone first or the character class stops at the backslash.
+    return _KEY_SHAPED.sub(REDACTED, str(text).replace("\\/", "/"))
+
+
+class TruncatedListingError(Exception):
     """A search returned fewer rows than it says exist."""
 
 
@@ -68,15 +81,15 @@ def rows_or_refuse(payload: Any, what: str) -> list[dict[str, Any]]:
     default into a failure rather than a silently short list.
     """
     if not isinstance(payload, dict):
-        raise TruncatedListing(
+        raise TruncatedListingError(
             f"the {what} listing returned {type(payload).__name__}, not a search result"
         )
     rows = payload.get("rows")
     if not isinstance(rows, list):
-        raise TruncatedListing(f"the {what} listing carries no rows")
+        raise TruncatedListingError(f"the {what} listing carries no rows")
     total = payload.get("total")
     if isinstance(total, int) and total != len(rows):
-        raise TruncatedListing(
+        raise TruncatedListingError(
             f"the {what} listing is truncated ({len(rows)} of {total}); refusing "
             f"rather than acting on a partial view"
         )
@@ -120,8 +133,12 @@ def split_list(value: Any) -> list[str]:
     return [part.strip() for part in str(value or "").split(",") if part.strip()]
 
 
-def selected_keys(node: Any) -> list[str]:
+def selected_option_keys(node: Any) -> list[str]:
     """Option keys a node map marks selected, dropping the empty-key entry.
+
+    Named apart from `utils.mvc_merge.selected_keys`, which has a different
+    contract: it comma-joins and keeps the empty-key sentinel, which is what a
+    `set*` POST wants and the opposite of what membership needs.
 
     The map enumerates every candidate on the box with membership carried only
     by the flag, so the keys alone report every peer as belonging to every
@@ -173,6 +190,32 @@ def bare_networks(entries: list[str]) -> list[Any]:
     return networks_of([entry for entry in entries if "/" not in entry])
 
 
+# The computed fields each public shape accepts. `**extra` is allowlisted for
+# the same reason the row fields are: without it, one caller splatting a raw row
+# puts the private key straight back into the output the allowlist above exists
+# to keep it out of.
+INSTANCE_EXTRA = frozenset(
+    {
+        "dangling_peers",
+        "running",
+        "running_signal",
+        "device_status",
+        "running_disagrees",
+        "shape",
+        "shape_evidence",
+    }
+)
+PEER_EXTRA = frozenset({"runtime", "runtime_absent", "runtime_absent_reason"})
+
+
+def _computed(extra: dict[str, Any], allowed: frozenset[str], what: str) -> dict:
+    """The extras a public shape declares, dropping anything else."""
+    unknown = sorted(set(extra) - allowed)
+    if unknown:
+        logger.warning("dropping undeclared %s field(s) %s", what, ", ".join(unknown))
+    return {key: value for key, value in extra.items() if key in allowed}
+
+
 def public_instance(row: dict[str, Any], **extra: Any) -> dict[str, Any]:
     """One instance as a caller sees it. Allowlisted; no key material."""
     public: dict[str, Any] = {field: row.get(field, "") for field in INSTANCE_PUBLIC}
@@ -183,7 +226,7 @@ def public_instance(row: dict[str, Any], **extra: Any) -> dict[str, Any]:
     # rather than empty when nothing resolves. Display only.
     public["peer_names"] = split_list(row.get("%peers", ""))
     public["has_privkey"] = bool(row.get("privkey"))
-    public.update(extra)
+    public.update(_computed(extra, INSTANCE_EXTRA, "instance"))
     return public
 
 
@@ -196,7 +239,7 @@ def public_peer(row: dict[str, Any], **extra: Any) -> dict[str, Any]:
     public["instance_uuids"] = split_list(row.get("servers"))
     public["instance_names"] = split_list(row.get("%servers", ""))
     public["has_psk"] = bool(row.get("psk"))
-    public.update(extra)
+    public.update(_computed(extra, PEER_EXTRA, "peer"))
     return public
 
 
@@ -262,6 +305,11 @@ class ListWgInstancesTool(_WgToolBase):
                 "description": "Only the instance with this name",
                 "optional": True,
             },
+            "uuid": {
+                "type": "string",
+                "description": "Only the instance with this uuid",
+                "optional": True,
+            },
         },
         "required": [],
     }
@@ -295,27 +343,47 @@ class ListWgInstancesTool(_WgToolBase):
                 await self._search(WG_CLIENT["search"]), "wireguard peers"
             )
             running = await self._running_uuids()
-        except TruncatedListing as exc:
-            return {"status": "error", "error": str(exc)}
+            show = rows_or_refuse(await self._search(WG_SERVICE["show"]), "wg runtime")
+        except TruncatedListingError as exc:
+            return {"status": "error", "error": redact_keys(exc)}
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to read WireGuard instances")
-            return {"status": "error", "error": str(exc)}
+            # Not `logger.exception`: the traceback carries the same body the
+            # message does, and only the message can be redacted.
+            logger.error("Failed to read WireGuard instances: %s", redact_keys(exc))
+            return {"status": "error", "error": redact_keys(exc)}
 
         by_uuid = {str(c.get("uuid", "")): c for c in clients}
         wanted = str(params.get("name") or "")
+        wanted_uuid = str(params.get("uuid") or "")
+        # The one independent signal for `running`. The core-service row id is
+        # an uncaptured shape, so a change in it silently reports every
+        # instance as stopped; the interface row's status is what says so.
+        status_by_device = {
+            str(row.get("if", "")): str(row.get("status", ""))
+            for row in show
+            if row.get("type") == "interface"
+        }
 
         instances = []
         for row in servers:
             if wanted and row.get("name") != wanted:
                 continue
+            if wanted_uuid and str(row.get("uuid", "")) != wanted_uuid:
+                continue
             peer_uuids = split_list(row.get("peers"))
             members = [by_uuid[u] for u in peer_uuids if u in by_uuid]
             shape, evidence = instance_shape(row, members)
+            is_running = str(row.get("uuid", "")) in running
+            device_status = status_by_device.get(str(row.get("interface", "")), "")
             instances.append(
                 public_instance(
                     row,
                     dangling_peers=[u for u in peer_uuids if u not in by_uuid],
-                    running=str(row.get("uuid", "")) in running,
+                    running=is_running,
+                    running_signal=CORE_SERVICE,
+                    device_status=device_status,
+                    running_disagrees=bool(device_status)
+                    and is_running != (device_status == "up"),
                     shape=shape,
                     shape_evidence=evidence,
                 )
@@ -324,24 +392,35 @@ class ListWgInstancesTool(_WgToolBase):
         return {"status": "success", "count": len(instances), "instances": instances}
 
 
-def runtime_by_name(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Kernel peer state keyed by peer name.
+def runtime_by_peer(
+    rows: list[dict[str, Any]],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    """Kernel peer state keyed by (device, peer name).
 
     `service/show` returns one array holding two row schemas discriminated by
     `type`, and the missing keys are absent rather than empty. The interface row
     carries peer-status 'offline' and a name that looks like a peer's, so it has
     to be filtered out before anything else reads the array.
 
-    Kernel rows carry no uuid, so name is the only join back to a config row.
+    Keyed on the device as well as the name. Kernel rows carry no uuid, and
+    peer names are unique per instance at most: two same-named peers on two
+    instances collapse under a name-only key, and the survivor is then reported
+    as the live state of a peer on a device it is not on. The public key is on
+    both sides and would be the better join, but every captured fixture
+    redacts it to one placeholder, so it cannot be tested here.
     """
-    runtime = {}
+    runtime: dict[tuple[str, str], dict[str, Any]] = {}
     for row in rows:
         if row.get("type") != "peer":
             continue
         handshake = row.get("latest-handshake") or 0
-        runtime[str(row.get("name", ""))] = {
-            "device": row.get("if", ""),
-            "endpoint": row.get("endpoint", ""),
+        device = str(row.get("if", ""))
+        endpoint = str(row.get("endpoint", ""))
+        runtime[device, str(row.get("name", ""))] = {
+            "device": device,
+            # `wg show` writes "(none)" for a peer that has never been reached,
+            # and a non-empty string reads as an endpoint to every caller.
+            "endpoint": "" if endpoint == "(none)" else endpoint,
             "kernel_allowed_ips": split_list(row.get("allowed-ips")),
             "handshake_epoch": handshake,
             "handshake_age": row.get("latest-handshake-age"),
@@ -422,16 +501,20 @@ class ListWgPeersTool(_WgToolBase):
                 await self._search(WG_CLIENT["search"], body), "wireguard peers"
             )
             show = rows_or_refuse(await self._search(WG_SERVICE["show"]), "wg runtime")
-        except TruncatedListing as exc:
-            return {"status": "error", "error": str(exc)}
+        except TruncatedListingError as exc:
+            return {"status": "error", "error": redact_keys(exc)}
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to read WireGuard peers")
-            return {"status": "error", "error": str(exc)}
+            # Not `logger.exception`: see ListWgInstancesTool.
+            logger.error("Failed to read WireGuard peers: %s", redact_keys(exc))
+            return {"status": "error", "error": redact_keys(exc)}
 
         enabled = {
             str(s.get("uuid", "")): str(s.get("enabled", "0")) == "1" for s in servers
         }
-        runtime = runtime_by_name(show)
+        device_of = {
+            str(s.get("uuid", "")): str(s.get("interface", "")) for s in servers
+        }
+        runtime = runtime_by_peer(show)
 
         # Narrowed again here, on the rows that came back. Unknown parameters
         # are accepted and ignored on every grid, so a filter the firewall did
@@ -446,15 +529,34 @@ class ListWgPeersTool(_WgToolBase):
             if wanted_name and row.get("name") != wanted_name:
                 continue
             name = str(row.get("name", ""))
-            state = runtime.get(name)
+            members = split_list(row.get("servers"))
+            # Only the devices this peer's own instances carry. A name-keyed
+            # lookup would hand it the state of a same-named peer elsewhere.
+            state = next(
+                (
+                    runtime[device_of[u], name]
+                    for u in members
+                    if (device_of.get(u, ""), name) in runtime
+                ),
+                None,
+            )
             absent = ""
+            reason = ""
             if state is None:
-                members = split_list(row.get("servers"))
                 if members and not any(enabled.get(u, False) for u in members):
+                    reason = "instance_disabled"
                     absent = "every instance this peer belongs to is disabled"
                 else:
-                    absent = "no kernel peer with this name"
-            peers.append(public_peer(row, runtime=state, runtime_absent=absent))
+                    reason = "no_kernel_peer"
+                    absent = "no kernel peer with this name on this peer's devices"
+            peers.append(
+                public_peer(
+                    row,
+                    runtime=state,
+                    runtime_absent=absent,
+                    runtime_absent_reason=reason,
+                )
+            )
 
         return {
             "status": "success",
@@ -469,7 +571,10 @@ class ListWgPeersTool(_WgToolBase):
 
 
 def classify_entry(
-    entry: str, networks: list[Any], bare: list[Any] | None = None
+    entry: str,
+    networks: list[Any],
+    bare: list[Any] | None = None,
+    has_instance: bool = True,
 ) -> tuple[str, str]:
     """Classify one server-side allowed-IP entry against its instance networks.
 
@@ -495,8 +600,15 @@ def classify_entry(
     if not family:
         return (
             "no_interface",
-            f"the instance carries no IPv{network.version} tunnel address, so "
-            f"{entry} cannot be judged",
+            (
+                f"the instance carries no IPv{network.version} tunnel address, "
+                f"so {entry} cannot be judged"
+            )
+            if has_instance
+            else (
+                f"this peer belongs to no instance that exists, so {entry} "
+                f"cannot be judged"
+            ),
         )
     if any(network.subnet_of(n) for n in family):
         return "current", ""
@@ -538,6 +650,19 @@ def _as_network(destination: str) -> Any:
         return None
 
 
+def _networks_and_rest(entries: list[str]) -> tuple[set[Any], list[str]]:
+    """The entries that read as networks, and the raw strings that do not."""
+    networks: set[Any] = set()
+    unreadable: list[str] = []
+    for entry in entries:
+        network = _as_network(entry)
+        if network is None:
+            unreadable.append(entry)
+        else:
+            networks.add(network)
+    return networks, unreadable
+
+
 class ReconcileWgTool(_WgToolBase):
     """Report where the stored WireGuard config and the running kernel disagree.
 
@@ -558,7 +683,20 @@ class ReconcileWgTool(_WgToolBase):
         "required": [],
     }
 
-    async def _read(self) -> tuple[list, list, list, list]:
+    async def _read(
+        self,
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
+        """The four reads every check runs on: servers, clients, kernel, devices.
+
+        Reads only. Nothing in this tool may reach a write or a service verb,
+        which `test_reconcile_calls_only_the_four_read_endpoints` pins as an
+        allowlist rather than a list of forbidden verbs.
+        """
         servers = rows_or_refuse(
             await self._search(WG_SERVER["search"]), "wireguard instances"
         )
@@ -572,8 +710,14 @@ class ReconcileWgTool(_WgToolBase):
     def _peer_containment(
         self, servers: list[dict[str, Any]], clients: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Check A: every peer address against its instance's tunnel networks."""
+        """Check A: every peer address against its instance's tunnel networks.
+
+        Membership is checked in both directions. A peer naming an instance
+        that does not exist and an instance naming a peer that does not exist
+        are different defects, and only the first is visible from the peer row.
+        """
         by_uuid = {str(s.get("uuid", "")): s for s in servers}
+        known_peers = {str(c.get("uuid", "")) for c in clients}
         results = []
         for peer in clients:
             members = [
@@ -582,8 +726,9 @@ class ReconcileWgTool(_WgToolBase):
             addresses = [a for s in members for a in split_list(s.get("tunneladdress"))]
             networks = networks_of(addresses)
             bare = bare_networks(addresses)
-            for entry in split_list(peer.get("tunneladdress")):
-                outcome, detail = classify_entry(entry, networks, bare)
+            entries = split_list(peer.get("tunneladdress"))
+            for entry in entries:
+                outcome, detail = classify_entry(entry, networks, bare, bool(members))
                 results.append(
                     {
                         "check": "peer_containment",
@@ -595,7 +740,11 @@ class ReconcileWgTool(_WgToolBase):
                         "detail": detail,
                     }
                 )
-            if not members:
+            # Only when the per-entry rows said nothing. One membership problem
+            # is one finding; the summary row used to be an extra row on top of
+            # a `no_interface` row per address, so N addresses read as N+1
+            # problems and inflated `checked` and the counts by the same N.
+            if not members and not entries:
                 results.append(
                     {
                         "check": "peer_containment",
@@ -607,9 +756,33 @@ class ReconcileWgTool(_WgToolBase):
                         "detail": "this peer belongs to no instance that exists",
                     }
                 )
+
+        for server in servers:
+            for uuid in split_list(server.get("peers")):
+                if uuid in known_peers:
+                    continue
+                results.append(
+                    {
+                        "check": "peer_containment",
+                        "peer": "",
+                        "peer_uuid": uuid,
+                        "instances": [server.get("name", "")],
+                        "entry": "",
+                        "outcome": "dangling_peer",
+                        "detail": (
+                            f"{server.get('name', '')} names peer {uuid} and no "
+                            f"client record has that uuid"
+                        ),
+                    }
+                )
         return results
 
     def _summarise(self, results: list[dict[str, Any]]) -> dict[str, Any]:
+        """Tally the outcomes, with the two a caller always reads present.
+
+        `current` and `drifted` are defaulted so "no drift" is a zero rather
+        than a missing key a caller has to read as one.
+        """
         counts: dict[str, int] = {}
         for result in results:
             counts[result["outcome"]] = counts.get(result["outcome"], 0) + 1
@@ -624,13 +797,23 @@ class ReconcileWgTool(_WgToolBase):
         Two sources, because the tunnel device is the only interface whose
         address comes from a WireGuard tunnel address rather than from an
         interface assignment or an ipalias virtual IP.
+
+        An assignment keeps its prefix length in its own key (`subnet` /
+        `subnetv6`), not on the address. Reading the address alone makes every
+        assignment a /32 or /128, so a second address in the assigned subnet —
+        an ipalias VIP is the usual one — is reported as accounted for by
+        nothing.
         """
         config = device.get("config") or {}
-        assigned = [
-            str(config.get(key, ""))
-            for key in ("ipaddr", "ipaddrv6")
-            if str(config.get(key, "")) not in ("", "none", "dhcp", "dhcp6", "track6")
-        ]
+        assigned = []
+        for key, bits_key in (("ipaddr", "subnet"), ("ipaddrv6", "subnetv6")):
+            address = str(config.get(key, ""))
+            if address in ("", "none", "dhcp", "dhcp6", "track6"):
+                continue
+            bits = str(config.get(bits_key, ""))
+            assigned.append(
+                f"{address}/{bits}" if bits and "/" not in address else address
+            )
         return networks_of([*tunnel, *assigned])
 
     def _address_liveness(
@@ -768,7 +951,18 @@ class ReconcileWgTool(_WgToolBase):
         maximum is supplied before comparison.
         """
         by_name = {str(d.get("device", "")): d for d in devices}
-        config_by_name = {str(c.get("name", "")): c for c in clients}
+        # Keyed on the device as well as the name, for the reason
+        # `runtime_by_peer` is: two same-named peers on two instances otherwise
+        # collapse, and one kernel row is then compared against the other one's
+        # config and reported as drift.
+        device_of = {
+            str(s.get("uuid", "")): str(s.get("interface", "")) for s in servers
+        }
+        config_by_peer = {
+            (device_of.get(uuid, ""), str(c.get("name", ""))): c
+            for c in clients
+            for uuid in split_list(c.get("servers"))
+        }
         results = []
 
         # Same reason as check B: driven by the config, so a disabled instance
@@ -791,7 +985,13 @@ class ReconcileWgTool(_WgToolBase):
             device = by_name.get(name)
             if device is None:
                 continue
-            tunnel = networks_of(split_list(server.get("tunneladdress")))
+            # The same accounting check B uses. Reading only the tunnel address
+            # here made one state produce two opposite verdicts in one report:
+            # check B accounted for an address from the interface assignment
+            # while check C called the route to it stale.
+            tunnel = self._config_networks(
+                device, split_list(server.get("tunneladdress"))
+            )
 
             loaded: set[Any] = set()
             for row in show:
@@ -826,14 +1026,32 @@ class ReconcileWgTool(_WgToolBase):
             for network in sorted(loaded, key=str):
                 if network in routed:
                     continue
+                # A /128 with no route of its own is still reachable when a
+                # route on the same device covers it: traffic reaches the
+                # device and crypto-routing dispatches on the allowed IP. Only
+                # the uncovered case can claim no route reaches it.
+                covers = [
+                    r
+                    for r in routed
+                    if r.version == network.version and network.subnet_of(r)
+                ]
                 results.append(
                     {
                         "check": "route_crosscheck",
                         "instance": instance,
                         "device": name,
                         "entry": str(network),
-                        "outcome": "missing_route",
+                        "outcome": "route_covered_by_prefix"
+                        if covers
+                        else "missing_route",
+                        "covered_by": sorted(str(r) for r in covers),
                         "detail": (
+                            f"the kernel holds {network} as an allowed IP on {name} "
+                            f"with no route of its own; "
+                            f"{', '.join(sorted(str(r) for r in covers))} covers it"
+                        )
+                        if covers
+                        else (
                             f"the kernel holds {network} as an allowed IP on {name} "
                             f"and no route reaches it"
                         ),
@@ -844,7 +1062,8 @@ class ReconcileWgTool(_WgToolBase):
             if row.get("type") != "peer":
                 continue
             peer = str(row.get("name", ""))
-            config = config_by_name.get(peer)
+            device = str(row.get("if", ""))
+            config = config_by_peer.get((device, peer))
             if config is None:
                 results.append(
                     {
@@ -853,15 +1072,36 @@ class ReconcileWgTool(_WgToolBase):
                         "entry": "",
                         "outcome": "dangling_peer",
                         "detail": (
-                            f"the kernel holds peer {peer!r} and no config row does"
+                            f"the kernel holds peer {peer!r} on {device} and no "
+                            f"config row of an instance on {device} does"
                         ),
                     }
                 )
                 continue
             # Sets, not strings. The kernel emits v6 first while the config keeps
             # entry order, so a string comparison fails only on a dual-stack peer.
-            kernel = {_as_network(e) for e in split_list(row.get("allowed-ips"))}
-            stored = {_as_network(e) for e in split_list(config.get("tunneladdress"))}
+            kernel, kernel_bad = _networks_and_rest(split_list(row.get("allowed-ips")))
+            stored, stored_bad = _networks_and_rest(
+                split_list(config.get("tunneladdress"))
+            )
+            if kernel_bad or stored_bad:
+                # Parsed apart rather than folded into the sets: two different
+                # unparseable strings both became None and compared equal, so
+                # the one case nobody can judge was reported as agreement.
+                results.append(
+                    {
+                        "check": "kernel_matches_config",
+                        "peer": peer,
+                        "entry": "",
+                        "outcome": "unreadable_address",
+                        "detail": (
+                            f"kernel {sorted(kernel_bad)} config {sorted(stored_bad)} "
+                            f"do not read as addresses, so the two sides cannot be "
+                            f"compared"
+                        ),
+                    }
+                )
+                continue
             results.append(
                 {
                     "check": "kernel_matches_config",
@@ -884,11 +1124,12 @@ class ReconcileWgTool(_WgToolBase):
             return self._no_client()
         try:
             servers, clients, show, devices = await self._read()
-        except TruncatedListing as exc:
-            return {"status": "error", "error": str(exc)}
+        except TruncatedListingError as exc:
+            return {"status": "error", "error": redact_keys(exc)}
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to read WireGuard state")
-            return {"status": "error", "error": str(exc)}
+            # Not `logger.exception`: see ListWgInstancesTool.
+            logger.error("Failed to read WireGuard state: %s", redact_keys(exc))
+            return {"status": "error", "error": redact_keys(exc)}
 
         results = [
             *self._peer_containment(servers, clients),

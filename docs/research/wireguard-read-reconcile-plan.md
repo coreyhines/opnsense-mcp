@@ -277,10 +277,10 @@ built and tested first against the fixtures with no client involved.
 **Interfaces:**
 - Consumes: the fixtures from Task 1.
 - Produces: `WG_SERVER`, `WG_CLIENT`, `WG_SERVICE`, `CORE_SERVICE`, `INTERFACES`;
-  `TruncatedListing`; `rows_or_refuse(payload, what) -> list[dict]`;
+  `TruncatedListingError`; `rows_or_refuse(payload, what) -> list[dict]`;
   `record_or_none(payload, key) -> dict | None`;
   `get_path(base, uuid) -> str`; `split_list(value) -> list[str]`;
-  `selected_keys(node) -> list[str]`; `is_host_route(entry) -> bool`;
+  `selected_option_keys(node) -> list[str]`; `is_host_route(entry) -> bool`;
   `networks_of(entries) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]`;
   `public_instance(row, **extra) -> dict`; `public_peer(row, **extra) -> dict`;
   `_WgToolBase` with `_no_client()` and `async _search(endpoint, body=None)`.
@@ -307,7 +307,7 @@ import pathlib
 import pytest
 
 from opnsense_mcp.tools.wireguard import (
-    TruncatedListing,
+    TruncatedListingError,
     get_path,
     is_host_route,
     networks_of,
@@ -315,7 +315,7 @@ from opnsense_mcp.tools.wireguard import (
     public_peer,
     record_or_none,
     rows_or_refuse,
-    selected_keys,
+    selected_option_keys,
     split_list,
 )
 
@@ -343,12 +343,12 @@ def test_rows_or_refuse_refuses_a_truncated_page() -> None:
     default ever changes, a caller acting on a partial view is the failure this
     prevents.
     """
-    with pytest.raises(TruncatedListing):
+    with pytest.raises(TruncatedListingError):
         rows_or_refuse({"rows": [{"uuid": "a"}], "total": 9}, "instances")
 
 
 def test_rows_or_refuse_refuses_a_payload_that_is_not_a_search_result() -> None:
-    with pytest.raises(TruncatedListing):
+    with pytest.raises(TruncatedListingError):
         rows_or_refuse([], "instances")
 
 
@@ -377,7 +377,7 @@ def test_split_list_strips_the_space_the_resolved_form_uses() -> None:
     assert split_list(None) == []
 
 
-def test_selected_keys_ignores_unselected_options_and_the_empty_key() -> None:
+def test_selected_option_keys_ignores_unselected_options_and_the_empty_key() -> None:
     """Membership is the selected flag, never the keys.
 
     The node map enumerates every peer on the box. An empty list is encoded as
@@ -389,9 +389,9 @@ def test_selected_keys_ignores_unselected_options_and_the_empty_key() -> None:
         "b": {"value": "peerB", "selected": 0},
         "": {"value": "", "selected": 1},
     }
-    assert selected_keys(node) == ["a"]
-    assert selected_keys({}) == []
-    assert selected_keys("not a node map") == []
+    assert selected_option_keys(node) == ["a"]
+    assert selected_option_keys({}) == []
+    assert selected_option_keys("not a node map") == []
 
 
 def test_the_dangling_instance_has_no_selected_peers() -> None:
@@ -399,7 +399,7 @@ def test_the_dangling_instance_has_no_selected_peers() -> None:
     record = record_or_none(fixture("wg_getserver_dangling"), "server")
     assert record is not None
     assert len(record["peers"]) == 11
-    assert selected_keys(record["peers"]) == []
+    assert selected_option_keys(record["peers"]) == []
 
 
 def test_is_host_route_uses_the_family_maximum() -> None:
@@ -533,7 +533,7 @@ INSTANCE_PUBLIC = (
 PEER_PUBLIC = ("uuid", "name", "enabled", "keepalive")
 
 
-class TruncatedListing(Exception):
+class TruncatedListingError(Exception):
     """A search returned fewer rows than it says exist."""
 
 
@@ -545,15 +545,15 @@ def rows_or_refuse(payload: Any, what: str) -> list[dict[str, Any]]:
     default into a failure rather than a silently short list.
     """
     if not isinstance(payload, dict):
-        raise TruncatedListing(
+        raise TruncatedListingError(
             f"the {what} listing returned {type(payload).__name__}, not a search result"
         )
     rows = payload.get("rows")
     if not isinstance(rows, list):
-        raise TruncatedListing(f"the {what} listing carries no rows")
+        raise TruncatedListingError(f"the {what} listing carries no rows")
     total = payload.get("total")
     if isinstance(total, int) and total != len(rows):
-        raise TruncatedListing(
+        raise TruncatedListingError(
             f"the {what} listing is truncated ({len(rows)} of {total}); refusing "
             f"rather than acting on a partial view"
         )
@@ -597,7 +597,7 @@ def split_list(value: Any) -> list[str]:
     return [part.strip() for part in str(value or "").split(",") if part.strip()]
 
 
-def selected_keys(node: Any) -> list[str]:
+def selected_option_keys(node: Any) -> list[str]:
     """Option keys a node map marks selected, dropping the empty-key entry.
 
     The map enumerates every candidate on the box with membership carried only
@@ -695,8 +695,8 @@ Expected: PASS, clean.
 
 Confirm each test fails for its own reason, then revert each change:
 
-1. In `selected_keys`, return `list(node)`. Expected:
-   `test_selected_keys_ignores_unselected_options_and_the_empty_key` and
+1. In `selected_option_keys`, return `list(node)`. Expected:
+   `test_selected_option_keys_ignores_unselected_options_and_the_empty_key` and
    `test_the_dangling_instance_has_no_selected_peers` fail.
 2. In `public_peer`, read `row.get("allowed_ips")` instead of
    `row.get("tunneladdress")`. Expected:
@@ -964,7 +964,7 @@ class ListWgInstancesTool(_WgToolBase):
                 await self._search(WG_CLIENT["search"]), "wireguard peers"
             )
             running = await self._running_uuids()
-        except TruncatedListing as exc:
+        except TruncatedListingError as exc:
             return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to read WireGuard instances")
@@ -1024,7 +1024,7 @@ git add opnsense_mcp/tools/wireguard.py tests/test_wireguard.py && git commit -m
 **Interfaces:**
 - Consumes: Task 2's helpers, Task 3's `FakeClient` test fixture.
 - Produces: `ListWgPeersTool` with `name = "list_wg_peers"`, and
-  `runtime_by_name(rows) -> dict[str, dict]`.
+  `runtime_by_peer(rows) -> dict[str, dict]`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1125,7 +1125,7 @@ Expected: `ImportError: cannot import name 'ListWgPeersTool'`.
 Append to `opnsense_mcp/tools/wireguard.py`:
 
 ```python
-def runtime_by_name(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def runtime_by_peer(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Kernel peer state keyed by peer name.
 
     `service/show` returns one array holding two row schemas discriminated by
@@ -1210,7 +1210,7 @@ class ListWgPeersTool(_WgToolBase):
                 await self._search(WG_CLIENT["search"], body), "wireguard peers"
             )
             show = rows_or_refuse(await self._search(WG_SERVICE["show"]), "wg runtime")
-        except TruncatedListing as exc:
+        except TruncatedListingError as exc:
             return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to read WireGuard peers")
@@ -1219,7 +1219,7 @@ class ListWgPeersTool(_WgToolBase):
         enabled = {
             str(s.get("uuid", "")): str(s.get("enabled", "0")) == "1" for s in servers
         }
-        runtime = runtime_by_name(show)
+        runtime = runtime_by_peer(show)
 
         peers = []
         for row in clients:
@@ -1258,7 +1258,7 @@ Expected: PASS, clean.
 
 - [ ] **Step 5: Falsify the type-discrimination test**
 
-In `runtime_by_name`, delete the `if row.get("type") != "peer": continue` guard.
+In `runtime_by_peer`, delete the `if row.get("type") != "peer": continue` guard.
 Expected: `test_an_interface_row_is_not_reported_as_a_peer` fails. Revert.
 
 - [ ] **Step 6: Commit**
@@ -1536,7 +1536,7 @@ class ReconcileWgTool(_WgToolBase):
             return self._no_client()
         try:
             servers, clients, _show, _devices = await self._read()
-        except TruncatedListing as exc:
+        except TruncatedListingError as exc:
             return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to read WireGuard state")
@@ -1969,7 +1969,7 @@ async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._no_client()
     try:
         servers, clients, show, devices = await self._read()
-    except TruncatedListing as exc:
+    except TruncatedListingError as exc:
         return {"status": "error", "error": str(exc)}
     except Exception as exc:  # noqa: BLE001
         logger.exception("Failed to read WireGuard state")
