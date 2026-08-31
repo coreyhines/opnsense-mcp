@@ -60,13 +60,33 @@ def offenders_in(text: str) -> list[str]:
     return [c for c in B64_32.findall(text.replace("\\/", "/")) if _looks_like_a_key(c)]
 
 
+def _is_nested_checkout(path: pathlib.Path) -> bool:
+    """True when *path* is a git checkout in its own right.
+
+    A worktree created under the repository (agents put them in
+    `.claude/worktrees/`) is a whole second copy of the tree. Walking into one
+    doubles every parametrised case and makes the count depend on what happens
+    to be left lying around, and a stale copy can fail the suite over a key that
+    no longer exists in git, which is unfindable from the failure message.
+
+    Detected by the `.git` entry every checkout carries rather than by name, so
+    a nested clone or a worktree somewhere else is pruned too.
+    """
+    return (path / ".git").exists()
+
+
 def _scanned_files() -> list[pathlib.Path]:
     """Every file in the repository, pruning what cannot hold readable text."""
     found = []
     for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
-        dirnames[:] = [name for name in dirnames if name not in SKIP_PARTS]
+        here = pathlib.Path(dirpath)
+        dirnames[:] = [
+            name
+            for name in dirnames
+            if name not in SKIP_PARTS and not _is_nested_checkout(here / name)
+        ]
         for filename in filenames:
-            path = pathlib.Path(dirpath) / filename
+            path = here / filename
             if path.suffix.lower() in SKIP_SUFFIXES:
                 continue
             found.append(path)
@@ -155,3 +175,35 @@ def test_the_scanner_is_not_defeated_by_an_escaped_slash() -> None:
 
     escaped = key.replace("/", "\\/")
     assert offenders_in(f'{{"privkey": "{escaped}"}}') == [key]
+
+
+def test_a_nested_checkout_is_not_scanned() -> None:
+    """A worktree under the repository must not be walked.
+
+    Agents create worktrees in `.claude/worktrees/`. Each is a second copy of
+    the whole tree, so walking one doubled the parametrised suite from 2,125
+    cases to 4,231 and made the count depend on leftover state. Worse, a stale
+    copy carrying a key the main tree no longer has fails this check over a file
+    that `git ls-files` cannot find.
+    """
+    nested = REPO_ROOT / ".claude" / "worktrees" / "_probe_nested_checkout"
+    nested.mkdir(parents=True, exist_ok=False)
+    planted = nested / "planted.txt"
+    try:
+        # What a real worktree carries: a `.git` file pointing at the parent.
+        (nested / ".git").write_text("gitdir: /nowhere\n")
+        planted.write_text(base64.b64encode(hashlib.sha256(b"probe").digest()).decode())
+
+        # The planted value must be the thing the check would otherwise catch,
+        # or this test passes because the file is uninteresting rather than
+        # because it was pruned.
+        assert offenders_in(planted.read_text()), "the planted value is not key-shaped"
+
+        assert planted not in set(_scanned_files())
+    finally:
+        # Gated on the mkdir above having succeeded, which exist_ok=False
+        # guarantees: this only ever removes a directory this test created.
+        for path in (planted, nested / ".git"):
+            if path.exists():
+                path.unlink()
+        nested.rmdir()
