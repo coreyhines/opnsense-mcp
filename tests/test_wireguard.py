@@ -213,6 +213,18 @@ def instance_client(**overrides):
     return FakeClient(responses)
 
 
+def reconcile_client(**overrides):
+    responses = {
+        "searchServer": fixture("wg_searchserver_rows"),
+        "searchClient": fixture("wg_searchclient_rows"),
+        "service/show": fixture("wg_service_show_rows"),
+        "interfaces_info": fixture("wg_interfaces_info_wg0"),
+        "core/service/search": {"rows": [], "total": 0},
+    }
+    responses.update(overrides)
+    return FakeClient(responses)
+
+
 @pytest.mark.asyncio
 async def test_list_instances_returns_every_instance() -> None:
     from opnsense_mcp.tools.wireguard import ListWgInstancesTool
@@ -437,3 +449,107 @@ async def test_list_peers_never_returns_key_material() -> None:
         assert "public-key" not in (peer["runtime"] or {})
     for secret in secrets:
         assert secret not in text
+
+
+def test_classify_entry_calls_a_host_route_inside_its_network_current() -> None:
+    from opnsense_mcp.tools.wireguard import classify_entry, networks_of
+
+    nets = networks_of(["192.168.10.1/24", "fd0b:cafe:f::1/64"])
+
+    assert classify_entry("192.168.10.7/32", nets)[0] == "current"
+    assert classify_entry("fd0b:cafe:f::2/128", nets)[0] == "current"
+
+
+def test_classify_entry_calls_a_host_route_outside_its_network_drifted() -> None:
+    """The case the tool exists for: a peer left on a prefix the instance no
+    longer carries."""
+    from opnsense_mcp.tools.wireguard import classify_entry, networks_of
+
+    nets = networks_of(["192.168.10.1/24", "fd0b:cafe:f::1/64"])
+
+    outcome, detail = classify_entry("2001:db8:5eed:b7ef::80/128", nets)
+
+    assert outcome == "drifted"
+    assert "2001:db8:5eed:b7ef::80/128" in detail
+
+
+def test_classify_entry_calls_a_wider_network_a_routed_prefix() -> None:
+    """The site-to-site remote LAN sits outside the tunnel network and is
+    correct. Containment alone would call it drift, so prefix width is what
+    separates an address on the tunnel from a network routed through it."""
+    from opnsense_mcp.tools.wireguard import classify_entry, networks_of
+
+    nets = networks_of(["172.20.181.2/24"])
+
+    assert classify_entry("192.168.99.0/24", nets)[0] == "routed_prefix"
+    assert classify_entry("172.20.181.1/32", nets)[0] == "current"
+
+
+def test_classify_entry_reports_a_family_the_instance_does_not_carry() -> None:
+    from opnsense_mcp.tools.wireguard import classify_entry, networks_of
+
+    nets = networks_of(["192.168.11.1"])
+
+    assert classify_entry("fd0b:cafe:f::2/128", nets)[0] == "no_interface"
+
+
+def test_classify_entry_reports_an_unreadable_address() -> None:
+    from opnsense_mcp.tools.wireguard import classify_entry, networks_of
+
+    assert classify_entry("not-an-address", networks_of(["192.168.10.1/24"]))[0] == (
+        "unreadable_address"
+    )
+
+
+@pytest.mark.asyncio
+async def test_reconcile_reports_no_drift_on_the_captured_state() -> None:
+    """Every peer on the box is currently inside its instance network. A tool
+    that manufactures drift here is worse than one that finds none."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+
+    assert result["status"] == "success"
+    assert result["counts"]["drifted"] == 0
+
+
+@pytest.mark.asyncio
+async def test_the_site_to_site_remote_lan_is_not_reported_as_drift() -> None:
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+    entries = [
+        r
+        for r in result["results"]
+        if r["check"] == "peer_containment" and r["entry"] == "192.168.99.0/24"
+    ]
+
+    assert entries, "the site-to-site remote LAN is missing from the report"
+    assert entries[0]["outcome"] == "routed_prefix"
+
+
+@pytest.mark.asyncio
+async def test_reconcile_status_says_the_audit_ran_not_what_it_found() -> None:
+    """A run that finds problems still ran. Severity belongs in the payload,
+    or a caller cannot tell a finding from a failure to look."""
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    result = await ReconcileWgTool(reconcile_client()).execute({})
+
+    assert result["status"] == "success"
+    assert "counts" in result
+
+
+@pytest.mark.asyncio
+async def test_reconcile_makes_no_write_call() -> None:
+    from opnsense_mcp.tools.wireguard import ReconcileWgTool
+
+    client = reconcile_client()
+    await ReconcileWgTool(client).execute({})
+
+    for method, endpoint, _body in client.calls:
+        assert method == "POST"
+        assert not any(
+            verb in endpoint
+            for verb in ("/add", "/set", "/del", "/toggle", "/apply", "/reconfigure")
+        )

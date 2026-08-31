@@ -434,3 +434,143 @@ class ListWgPeersTool(_WgToolBase):
                 "lives in its own client config, which this API cannot read."
             ),
         }
+
+
+def classify_entry(entry: str, networks: list[Any]) -> tuple[str, str]:
+    """Classify one server-side allowed-IP entry against its instance networks.
+
+    Prefix width carries the meaning, not membership alone. A host route belongs
+    to the peer and must sit inside the tunnel network; anything wider is a
+    network routed through the tunnel and is expected to sit outside it. Without
+    that distinction a site-to-site instance's remote LAN reads as drift, and
+    the only alternative is an exception carved out for one instance.
+    """
+    try:
+        network = ipaddress.ip_network(entry, strict=False)
+    except ValueError as exc:
+        return "unreadable_address", f"{entry!r} is not a network: {exc}"
+
+    family = [n for n in networks if n.version == network.version]
+    if not family:
+        return (
+            "no_interface",
+            f"the instance carries no IPv{network.version} tunnel address, so "
+            f"{entry} cannot be judged",
+        )
+    if any(network.subnet_of(n) for n in family):
+        return "current", ""
+    carried = ", ".join(str(n) for n in family)
+    if network.prefixlen == network.max_prefixlen:
+        return "drifted", f"{entry} is a host route outside {carried}"
+    return (
+        "routed_prefix",
+        f"{entry} is a network routed through the tunnel rather than an address "
+        f"on it; its path depends on {carried} and the static routes",
+    )
+
+
+class ReconcileWgTool(_WgToolBase):
+    """Report where the stored WireGuard config and the running kernel disagree.
+
+    Report only. Nothing here writes, so `status` says whether the audit ran and
+    every finding lives in the payload: a caller cannot otherwise tell an audit
+    that found problems from one that failed to look.
+    """
+
+    name = "reconcile_wg"
+    description = (
+        "Report drift between WireGuard config and the running kernel: peer "
+        "addresses outside their tunnel network, interface addresses no config "
+        "accounts for, and routes that do not match the loaded allowed IPs"
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
+
+    async def _read(self) -> tuple[list, list, list, list]:
+        servers = rows_or_refuse(
+            await self._search(WG_SERVER["search"]), "wireguard instances"
+        )
+        clients = rows_or_refuse(
+            await self._search(WG_CLIENT["search"]), "wireguard peers"
+        )
+        show = rows_or_refuse(await self._search(WG_SERVICE["show"]), "wg runtime")
+        devices = rows_or_refuse(await self._search(INTERFACES), "interfaces")
+        return servers, clients, show, devices
+
+    def _peer_containment(
+        self, servers: list[dict[str, Any]], clients: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Check A: every peer address against its instance's tunnel networks."""
+        by_uuid = {str(s.get("uuid", "")): s for s in servers}
+        results = []
+        for peer in clients:
+            members = [
+                by_uuid[u] for u in split_list(peer.get("servers")) if u in by_uuid
+            ]
+            networks = networks_of(
+                [a for s in members for a in split_list(s.get("tunneladdress"))]
+            )
+            for entry in split_list(peer.get("tunneladdress")):
+                outcome, detail = classify_entry(entry, networks)
+                results.append(
+                    {
+                        "check": "peer_containment",
+                        "peer": peer.get("name", ""),
+                        "peer_uuid": peer.get("uuid", ""),
+                        "instances": [s.get("name", "") for s in members],
+                        "entry": entry,
+                        "outcome": outcome,
+                        "detail": detail,
+                    }
+                )
+            if not members:
+                results.append(
+                    {
+                        "check": "peer_containment",
+                        "peer": peer.get("name", ""),
+                        "peer_uuid": peer.get("uuid", ""),
+                        "instances": [],
+                        "entry": "",
+                        "outcome": "no_interface",
+                        "detail": "this peer belongs to no instance that exists",
+                    }
+                )
+        return results
+
+    def _summarise(self, results: list[dict[str, Any]]) -> dict[str, Any]:
+        counts: dict[str, int] = {}
+        for result in results:
+            counts[result["outcome"]] = counts.get(result["outcome"], 0) + 1
+        counts.setdefault("current", 0)
+        counts.setdefault("drifted", 0)
+        return counts
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Run every check and report. Writes nothing."""
+        if not self.client:
+            return self._no_client()
+        try:
+            servers, clients, _show, _devices = await self._read()
+        except TruncatedListing as exc:
+            return {"status": "error", "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to read WireGuard state")
+            return {"status": "error", "error": str(exc)}
+
+        results = self._peer_containment(servers, clients)
+
+        return {
+            "status": "success",
+            "checked": len(results),
+            "counts": self._summarise(results),
+            "results": results,
+            "note": (
+                "Server-side allowed IPs fix routing to a peer. What a peer sends "
+                "through the tunnel lives in its own client config, which this "
+                "API cannot read, so a clean report is not proof of end-to-end "
+                "reachability."
+            ),
+        }
