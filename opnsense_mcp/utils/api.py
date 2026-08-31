@@ -1283,7 +1283,9 @@ class OPNsenseClient:
             logger.warning(f"Error fetching firewall logs: {e}")
             raise FirewallLogsFetchError(f"Error fetching firewall logs: {e}") from e
 
-    async def get_pf_states(self: "OPNsenseClient", limit: int = 100) -> dict[str, Any]:
+    async def get_pf_states(
+        self: "OPNsenseClient", limit: int = 100, search_phrase: str = ""
+    ) -> dict[str, Any]:
         """
         Get active PF state rows from OPNsense.
 
@@ -1292,10 +1294,18 @@ class OPNsenseClient:
         firmware and is handled separately by ``get_pf_state_table_meta``.
         """
         row_count = max(1, min(int(limit), 5000))
+        body: dict[str, Any] = {"current": 1, "rowCount": row_count}
+        if search_phrase:
+            # Narrowing happens on the firewall, so a filtered query is not
+            # answered from the first `rowCount` rows of the whole table.
+            # Verified on 26.7.3: 8,923 states unfiltered, 157 for one address,
+            # 0 for a phrase that matches nothing -- the last case is what
+            # rules out the parameter being accepted and ignored.
+            body["searchPhrase"] = search_phrase
         response = await self._make_request(
             "POST",
             ENDPOINTS["diagnostics"]["query_states"],
-            data={"current": 1, "rowCount": row_count},
+            data=body,
         )
         return response if isinstance(response, dict) else {"rows": []}
 
