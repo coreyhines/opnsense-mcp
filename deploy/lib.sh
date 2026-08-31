@@ -10,8 +10,15 @@ readonly DEFAULT_IMAGE_REPO="localhost/opnsense-mcp"
 readonly DEFAULT_CADDY_IMAGE="docker.io/library/caddy:2.9.1-alpine"
 
 is_interactive_shell() {
+  # Opening /dev/tty is the only test that settles this. Under `ssh host 'cmd'`
+  # the device node exists and passes -e and -r, while the process has no
+  # controlling terminal, so the open fails with ENXIO. The old test said
+  # interactive, install.sh then ran six `read ... </dev/tty` prompts that each
+  # failed, and `|| true` swallowed every failure: on a first install over SSH
+  # the pod name, network and static addresses would all silently take their
+  # defaults instead of being asked for.
   local tty_device=/dev/tty
-  if [[ -e "${tty_device}" && -r "${tty_device}" ]]; then
+  if : <"${tty_device}" 2>/dev/null; then
     return 0
   fi
   if [[ -t 0 ]]; then
