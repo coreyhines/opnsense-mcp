@@ -80,12 +80,23 @@ class FlushDnsTool:
         if mode == "restart":
             try:
                 result = await self.client.restart_unbound()
-                return {
+                # `restart_unbound` reports a refused restart as
+                # `applied: False` rather than raising, and its docstring says
+                # the caller must read the flag. Hardcoding True here claimed an
+                # apply the payload directly below it denied, so the tool
+                # contradicted itself in a single response.
+                applied = (
+                    bool(result.get("applied")) if isinstance(result, dict) else False
+                )
+                out: dict[str, Any] = {
                     "status": "success",
                     "mode": "restart",
-                    "applied": True,
+                    "applied": applied,
                     "result": result,
                 }
+                if not applied and isinstance(result, dict):
+                    out["apply_error"] = result.get("apply_error", "")
+                return out
             except Exception as e:
                 logger.exception("Failed to restart Unbound")
                 return {"status": "error", "error": str(e), "mode": "restart"}
