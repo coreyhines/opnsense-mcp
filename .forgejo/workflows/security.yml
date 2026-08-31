@@ -38,7 +38,31 @@ jobs:
       image: docker.io/gitguardian/ggshield:latest
     steps:
       - name: Install git and node
-        run: apk add --no-cache git nodejs || (apt-get update && apt-get install -y git nodejs)
+        run: |
+          set -eu
+          # Pick the package manager the image actually has. The previous form,
+          # `apk add ... || (apt-get update && ...)`, ran a command that cannot
+          # exist on an Alpine image whenever apk failed for any reason, so a
+          # TLS failure surfaced as `apt-get: command not found` and exit 127
+          # with the real error buried above it. That hid a broken CA path in a
+          # runner config for days.
+          if command -v apk >/dev/null 2>&1; then
+            install_deps() { apk add --no-cache git nodejs; }
+          elif command -v apt-get >/dev/null 2>&1; then
+            install_deps() { apt-get update && apt-get install -y git nodejs; }
+          else
+            echo "no supported package manager in this image" >&2
+            exit 1
+          fi
+          # The only network-dependent step in the job, so a transient index
+          # fetch should not fail the run.
+          for attempt in 1 2 3; do
+            if install_deps; then exit 0; fi
+            echo "package install attempt ${attempt} failed" >&2
+            sleep 5
+          done
+          echo "package install failed after 3 attempts" >&2
+          exit 1
       - uses: https://data.forgejo.org/actions/checkout@v6
         with:
           fetch-depth: 0
@@ -63,7 +87,31 @@ jobs:
       image: docker.io/semgrep/semgrep:latest
     steps:
       - name: Install git and node
-        run: apk add --no-cache git nodejs || (apt-get update && apt-get install -y git nodejs)
+        run: |
+          set -eu
+          # Pick the package manager the image actually has. The previous form,
+          # `apk add ... || (apt-get update && ...)`, ran a command that cannot
+          # exist on an Alpine image whenever apk failed for any reason, so a
+          # TLS failure surfaced as `apt-get: command not found` and exit 127
+          # with the real error buried above it. That hid a broken CA path in a
+          # runner config for days.
+          if command -v apk >/dev/null 2>&1; then
+            install_deps() { apk add --no-cache git nodejs; }
+          elif command -v apt-get >/dev/null 2>&1; then
+            install_deps() { apt-get update && apt-get install -y git nodejs; }
+          else
+            echo "no supported package manager in this image" >&2
+            exit 1
+          fi
+          # The only network-dependent step in the job, so a transient index
+          # fetch should not fail the run.
+          for attempt in 1 2 3; do
+            if install_deps; then exit 0; fi
+            echo "package install attempt ${attempt} failed" >&2
+            sleep 5
+          done
+          echo "package install failed after 3 attempts" >&2
+          exit 1
       - uses: https://data.forgejo.org/actions/checkout@v6
       - name: Semgrep scan
         run: |
