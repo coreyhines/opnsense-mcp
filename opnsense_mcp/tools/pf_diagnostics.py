@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -108,8 +109,31 @@ class PfStatesTool:
         if dst_port_raw is not None and dst_port is None:
             return _error_envelope(f"invalid dst_port: {dst_port_raw!r}")
 
+        # Push the most selective literal to the API. `searchPhrase` is a
+        # substring match across every column, so it can only ever over-match
+        # and the precise filter below still runs. Ports and protocol are not
+        # pushed: "80" or "udp" as a substring matches far too much to narrow
+        # anything usefully.
+        search_phrase = next((v for v in (ip, src_ip, dst_ip, interface) if v), "")
+
+        # Asked rather than discovered by catching TypeError: a TypeError from
+        # inside the client is a bug and must surface as itself, and an except
+        # handler that re-called the client would sit outside the generic
+        # handler below.
         try:
-            payload = await self.client.get_pf_states(limit)
+            accepts_phrase = (
+                "search_phrase"
+                in inspect.signature(self.client.get_pf_states).parameters
+            )
+        except (TypeError, ValueError):
+            accepts_phrase = False
+
+        try:
+            payload = (
+                await self.client.get_pf_states(limit, search_phrase=search_phrase)
+                if accepts_phrase
+                else await self.client.get_pf_states(limit)
+            )
         except Exception as exc:
             logger.exception("get_pf_states failed")
             return _error_envelope(str(exc), warnings)
@@ -152,6 +176,19 @@ class PfStatesTool:
 
         output_states = [{k: v for k, v in s.items() if k != "raw"} for s in filtered]
 
+        # Against the rows actually returned, not against the requested limit:
+        # what matters is whether the whole result set was examined.
+        truncated = bool(total_from_api is not None and total_from_api > len(rows))
+        if any_filter and not output_states and truncated:
+            # The failure this exists to prevent: an empty list that reads as
+            # "no such states" when it means "only part of the table was
+            # searched". The plausible answer is the dangerous one.
+            warnings.append(
+                f"no states matched, but only {len(rows)} of {total_from_api} "
+                f"were examined: this is a partial view, not an empty result. "
+                f"Raise limit, or narrow the filter so the firewall can apply it."
+            )
+
         summary: dict[str, Any] = {}
         if include_summary:
             meta: dict[str, Any] = {}
@@ -187,7 +224,7 @@ class PfStatesTool:
             "states": output_states,
             "summary": summary,
             "source_shape": source_shape,
-            "truncated": bool(total_from_api is not None and total_from_api > limit),
+            "truncated": truncated,
             "warnings": warnings,
             "filters_applied": filters_applied,
             "raw_included": False,

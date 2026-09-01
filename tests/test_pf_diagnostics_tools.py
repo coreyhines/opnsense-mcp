@@ -422,3 +422,115 @@ async def test_pf_statistics_no_client_returns_error() -> None:
 
     assert result["status"] == "error"
     assert "No client" in result["error"]
+
+
+# --- filtering must not happen only within a truncated page ----------------
+#
+# Issue #40. The tool fetched `limit` rows and filtered that page, so on a
+# firewall holding ~9,000 states any filter with the default limit matched
+# nothing and the tool reported an empty list. That reads as "no such states"
+# rather than "I did not look", and it produced two wrong conclusions during
+# the ULA migration.
+
+
+class _PagedStatesClient:
+    """A state table larger than one page, recording what was requested."""
+
+    def __init__(self, rows: list[dict], total: int) -> None:
+        self.rows = rows
+        self.total = total
+        self.bodies: list[dict] = []
+
+    async def get_pf_states(self, limit: int, search_phrase: str = "") -> dict:
+        self.bodies.append({"limit": limit, "search_phrase": search_phrase})
+        matched = (
+            [r for r in self.rows if search_phrase in str(r)]
+            if search_phrase
+            else self.rows
+        )
+        return {"rows": matched[:limit], "total": len(matched)}
+
+    async def get_pf_state_table_meta(self) -> dict:
+        return {}
+
+
+def _state_rows() -> list[dict]:
+    """One interesting row buried behind many uninteresting ones."""
+    filler = [
+        {
+            "interface": "igb0",
+            "proto": "tcp",
+            "src_addr": f"198.51.100.{n % 250 + 1}",
+            "dst_addr": "203.0.113.9",
+            "state": "ESTABLISHED",
+        }
+        for n in range(500)
+    ]
+    wanted = {
+        "interface": "igb1",
+        "proto": "udp",
+        "src_addr": "192.168.10.77",
+        "dst_addr": "192.0.2.53",
+        "state": "MULTIPLE",
+    }
+    return [*filler, wanted]
+
+
+@pytest.mark.asyncio
+async def test_a_filter_reaches_a_row_beyond_the_first_page() -> None:
+    """The row exists only past the default limit, which is the whole point."""
+    from opnsense_mcp.tools.pf_diagnostics import PfStatesTool
+
+    rows = _state_rows()
+    client = _PagedStatesClient(rows, len(rows))
+
+    result = await PfStatesTool(client).execute(
+        {"ip": "192.168.10.77", "limit": 100, "summary": False}
+    )
+
+    assert result["status"] == "success"
+    assert len(result["states"]) == 1, (
+        "the matching state is past the first page and was not found"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_filter_is_pushed_to_the_api_rather_than_applied_after() -> None:
+    from opnsense_mcp.tools.pf_diagnostics import PfStatesTool
+
+    rows = _state_rows()
+    client = _PagedStatesClient(rows, len(rows))
+
+    await PfStatesTool(client).execute({"ip": "192.168.10.77", "limit": 100})
+
+    assert any(b["search_phrase"] for b in client.bodies), (
+        "no search phrase was sent, so the API returned an unfiltered page"
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_empty_filtered_result_from_a_partial_view_says_so() -> None:
+    """The failure mode worth naming: empty because nothing matched, versus
+    empty because only part of the table was examined. A caller cannot tell
+    those apart from an empty list, and the plausible one is the dangerous one.
+    """
+    from opnsense_mcp.tools.pf_diagnostics import PfStatesTool
+
+    class _TruncatingClient(_PagedStatesClient):
+        async def get_pf_states(self, limit: int, search_phrase: str = "") -> dict:
+            # The API ignores the phrase and hands back a truncated page.
+            self.bodies.append({"limit": limit, "search_phrase": search_phrase})
+            return {"rows": self.rows[:limit], "total": self.total}
+
+    rows = _state_rows()
+    client = _TruncatingClient(rows, 9000)
+
+    result = await PfStatesTool(client).execute(
+        {"ip": "203.0.113.200", "limit": 5, "summary": True}
+    )
+
+    assert result["states"] == []
+    assert result["truncated"] is True
+    assert any(
+        "partial" in w.lower() or "truncat" in w.lower() for w in result["warnings"]
+    ), f"nothing warned that the view was partial: {result['warnings']}"
