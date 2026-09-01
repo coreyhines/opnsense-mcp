@@ -29,6 +29,17 @@ logger = logging.getLogger(__name__)
 # case and trailing whitespace, hence the normalisation at the call.
 APPLY_OK = frozenset({"ok", "success", "running", "done"})
 
+# An explicit refusal, whatever key carries it.
+APPLY_FAILED = frozenset({"failed", "failure", "error"})
+
+# Which key holds that answer is not consistent either.
+# `ApiMutableServiceControllerBase::reconfigureAction` returns {"status": ...};
+# WireGuard's ServiceController overrides it and returns {"result": ...}; and
+# unbound's restart answers {"response": ...}. Reading only "status" made the
+# other two read as failures, which is the direction that teaches a caller to
+# ignore `applied: false` -- the one signal reconcile_npt and apply_ula rely on.
+STATUS_KEYS = ("status", "result", "response")
+
 
 class ApplyError(Exception):
     """The write succeeded; applying it did not."""
@@ -50,11 +61,23 @@ async def run_apply(client: Any, endpoint: str) -> dict[str, Any]:
         # benign-looking apply miss.
         raise ApplyError(f"{endpoint} did not complete: {exc}") from exc
 
-    status = ""
-    if isinstance(response, dict):
-        status = str(response.get("status", "")).strip().lower()
-    if status not in APPLY_OK:
-        raise ApplyError(
-            f"{endpoint} reported {status or response!r} rather than success"
-        )
+    reported = (
+        {
+            key: str(response[key]).strip().lower()
+            for key in STATUS_KEYS
+            if key in response
+        }
+        if isinstance(response, dict)
+        else {}
+    )
+
+    # A mixed answer is refused rather than resolved in favour of the good half:
+    # picking the success out of {"status": "ok", "result": "failed"} is exactly
+    # the reading this module exists to prevent.
+    if any(value in APPLY_FAILED for value in reported.values()):
+        raise ApplyError(f"{endpoint} reported {response!r} rather than success")
+    if not any(value in APPLY_OK for value in reported.values()):
+        # Includes the payload that carries no status at all: silence is not
+        # consent, because the write has already happened by this point.
+        raise ApplyError(f"{endpoint} reported {response!r} rather than success")
     return response if isinstance(response, dict) else {}

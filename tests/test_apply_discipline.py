@@ -24,6 +24,8 @@ from __future__ import annotations
 import ast
 import pathlib
 
+import pytest
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGE = REPO_ROOT / "opnsense_mcp"
 
@@ -116,3 +118,122 @@ def test_the_allowlist_does_not_name_a_site_that_no_longer_exists() -> None:
     stale = sorted(set(ALLOWED_RAW_APPLIES) - live)
 
     assert not stale, f"allowlist entries with no matching call site: {stale}"
+
+
+# --- what counts as a successful apply -------------------------------------
+#
+# OPNsense does not answer with one shape. The base service controller returns
+# {"status": "ok"}, WireGuard's controller overrides it and returns
+# {"result": "ok"}, and unbound's restart answers {"response": "OK"}. Reading
+# only "status" made the second and third read as failures, which is the
+# direction that trains a caller to ignore `applied: false` — and that flag is
+# the whole signal reconcile_npt and apply_ula depend on.
+
+
+class _ApplyClient:
+    """Returns one canned payload from _make_request, recording the call."""
+
+    def __init__(self, payload: object) -> None:
+        self.payload = payload
+        self.calls: list[tuple[str, str]] = []
+
+    async def _make_request(self, method: str, endpoint: str, **kwargs: object):
+        self.calls.append((method, endpoint))
+        return self.payload
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "why"),
+    [
+        ({"status": "ok"}, "the base service controller"),
+        ({"result": "ok"}, "WireGuard's controller override"),
+        ({"response": "OK"}, "unbound's restart, uppercase and under `response`"),
+        ({"status": "  OK\n"}, "whitespace and case around a known-good value"),
+    ],
+)
+async def test_a_successful_apply_is_recognised_whatever_key_it_uses(
+    payload: dict, why: str
+) -> None:
+    from opnsense_mcp.utils.apply import run_apply
+
+    result = await run_apply(_ApplyClient(payload), "/api/x/service/reconfigure")
+
+    assert result == payload, why
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"status": "failed"},
+        {"result": "failed"},
+        {"response": "error"},
+        # A mixed signal must not be cherry-picked into a success.
+        {"status": "ok", "result": "failed"},
+    ],
+)
+async def test_a_refused_apply_is_still_refused(payload: dict) -> None:
+    from opnsense_mcp.utils.apply import ApplyError, run_apply
+
+    with pytest.raises(ApplyError):
+        await run_apply(_ApplyClient(payload), "/api/x/service/reconfigure")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload", [{}, {"unrelated": "value"}, [], "OK", {"result": "saved"}]
+)
+async def test_an_apply_that_says_nothing_is_not_a_success(payload: object) -> None:
+    """Silence is not consent: a payload carrying no status at all must refuse
+    rather than fall through to success."""
+    from opnsense_mcp.utils.apply import ApplyError, run_apply
+
+    with pytest.raises(ApplyError):
+        await run_apply(_ApplyClient(payload), "/api/x/service/reconfigure")
+
+
+@pytest.mark.asyncio
+async def test_the_refusal_names_what_came_back() -> None:
+    """The message that made #41 legible said what it actually received."""
+    from opnsense_mcp.utils.apply import ApplyError, run_apply
+
+    with pytest.raises(ApplyError) as caught:
+        await run_apply(_ApplyClient({"status": "wat"}), "/api/x/service/reconfigure")
+
+    assert "wat" in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_flush_dns_reports_the_applied_flag_it_was_given() -> None:
+    """`restart_unbound` returns `applied: False` on a refused restart and its
+    docstring says the caller must read the flag. flush_dns hardcoded
+    `applied: True`, so the tool claimed an apply its own payload denied."""
+    from opnsense_mcp.tools.flush_dns import FlushDnsTool
+
+    class _RefusingClient:
+        async def restart_unbound(self) -> dict:
+            return {
+                "status": "failed",
+                "applied": False,
+                "apply_error": "service refused",
+            }
+
+    result = await FlushDnsTool(_RefusingClient()).execute({"mode": "restart"})
+
+    assert result["applied"] is False
+    assert result.get("apply_error")
+
+
+@pytest.mark.asyncio
+async def test_flush_dns_still_reports_a_real_restart_as_applied() -> None:
+    from opnsense_mcp.tools.flush_dns import FlushDnsTool
+
+    class _WorkingClient:
+        async def restart_unbound(self) -> dict:
+            return {"response": "OK", "applied": True}
+
+    result = await FlushDnsTool(_WorkingClient()).execute({"mode": "restart"})
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
