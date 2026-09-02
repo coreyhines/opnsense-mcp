@@ -1,0 +1,70 @@
+{
+    "total": 9,
+    "rowCount": 9,
+    "current": 1,
+    "rows": [
+        {
+            "mac": "52:54:00:99:5d:42",
+            "ip": "fd0b:cafe:1::1",
+            "intf": "ax0",
+            "manufacturer": "Deciso B.V.",
+            "intf_description": "MGMT_LAN"
+        },
+        {
+            "mac": "52:54:00:db:63:33",
+            "ip": "fd0b:cafe:1:5054:00ff:fedb:6333",
+            "intf": "ax0",
+            "manufacturer": " Mojo Networks, Inc.",
+            "intf_description": "MGMT_LAN"
+        },
+        {
+            "mac": "52:54:00:ed:3e:76",
+            "ip": "fd0b:cafe:1:5054:00ff:feed:3e76",
+            "intf": "ax0",
+            "manufacturer": " Mojo Networks, Inc.",
+            "intf_description": "MGMT_LAN"
+        },
+        {
+            "mac": "52:54:00:e2:80:54",
+            "ip": "fd0b:cafe:1:5054:00ff:fee2:8054",
+            "intf": "ax0",
+            "manufacturer": "Arista Network, Inc.",
+            "intf_description": "MGMT_LAN"
+        },
+        {
+            "mac": "52:54:00:73:ab:97",
+            "ip": "fd0b:cafe:1:5054:00ff:fe73:ab97",
+            "intf": "ax0",
+            "manufacturer": " Mojo Networks, Inc.",
+            "intf_description": "MGMT_LAN"
+        },
+        {
+            "mac": "52:54:00:36:99:75",
+            "ip": "fd0b:cafe:1:5054:00ff:fe36:9975",
+            "intf": "ax0",
+            "manufacturer": " Mojo Networks, Inc.",
+            "intf_description": "MGMT_LAN"
+        },
+        {
+            "mac": "52:54:00:c4:62:00",
+            "ip": "fd0b:cafe:1::254",
+            "intf": "ax0",
+            "manufacturer": "Arista Networks",
+            "intf_description": "MGMT_LAN"
+        },
+        {
+            "mac": "52:54:00:05:ae:b4",
+            "ip": "fd0b:cafe:1:5054:00ff:fe05:aeb4",
+            "intf": "ax0",
+            "manufacturer": " Mojo Networks, Inc.",
+            "intf_description": "MGMT_LAN"
+        },
+        {
+            "mac": "52:54:00:1d:6a:57",
+            "ip": "fd0b:cafe:1:5054:00ff:fe1d:6a57",
+            "intf": "ax0",
+            "manufacturer": " Mojo Networks, Inc.",
+            "intf_description": "MGMT_LAN"
+        }
+    ]
+}

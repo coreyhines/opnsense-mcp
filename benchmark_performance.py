@@ -364,6 +364,22 @@ SHAPE_SOURCES: dict[str, ShapeSource] = {
         kind="node",
         root_key="vip",
     ),
+    # No searchPhrase: an unfiltered POST returns the whole grid, whose key
+    # union is what the fixture's rows must still match. The fixture itself was
+    # captured with one, because a filtered response is what the tool sends and
+    # a nine-row answer is small enough to read.
+    "diagnostics_search_arp_rows.json": ShapeSource(
+        "POST",
+        "/api/diagnostics/interface/search_arp",
+        {"current": 1},
+        kind="rows",
+    ),
+    "diagnostics_search_ndp_rows.json": ShapeSource(
+        "POST",
+        "/api/diagnostics/interface/search_ndp",
+        {"current": 1},
+        kind="rows",
+    ),
     "wg_searchserver_rows.json": ShapeSource(
         "POST",
         "/api/wireguard/server/searchServer",
