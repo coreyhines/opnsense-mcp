@@ -129,6 +129,13 @@ from opnsense_mcp.tools.wireguard import (
     ListWgPeersTool,
     ReconcileWgTool,
 )
+from opnsense_mcp.tools.wireguard_write import (
+    CreateWgPeerTool,
+    DeleteWgPeerTool,
+    SetWgInstanceTool,
+    SetWgPeerTool,
+    ToggleWgTool,
+)
 
 
 class Tool(Protocol):
@@ -205,6 +212,11 @@ TOOL_CLASSES: tuple[type, ...] = (
     PfStatisticsTool,
     ReconcileNptTool,
     ReconcileWgTool,
+    CreateWgPeerTool,
+    DeleteWgPeerTool,
+    SetWgInstanceTool,
+    SetWgPeerTool,
+    ToggleWgTool,
     RmAliasTool,
     RmBgpNeighborTool,
     RmDhcpHostTool,

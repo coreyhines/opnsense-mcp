@@ -1,0 +1,37 @@
+{
+  "client": {
+    "enabled": "1",
+    "name": "dualStackPeer",
+    "pubkey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "psk": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "tunneladdress": {
+      "192.168.10.2/32": {
+        "value": "192.168.10.2/32",
+        "selected": 1
+      },
+      "fd0b:cafe:f::2/128": {
+        "value": "fd0b:cafe:f::2/128",
+        "selected": 1
+      }
+    },
+    "serveraddress": "",
+    "serverport": "",
+    "endpoint": "",
+    "keepalive": "5",
+    "servers": {
+      "0fe8684f-a358-4616-8c18-80666ed38e2d": {
+        "value": "wg2SiteToSite",
+        "selected": 0
+      },
+      "6975c926-5a06-4b5c-aa6e-86e14f39cd76": {
+        "value": "wg0HomeVpn",
+        "selected": 1
+      },
+      "00524b42-93b5-455f-982f-8c7c4174ab73": {
+        "value": "wg1RemoteLabUsers",
+        "selected": 0
+      }
+    },
+    "privkey": ""
+  }
+}

@@ -1395,6 +1395,11 @@ def test_the_wireguard_group_exposes_every_tool() -> None:
         "list_instances": "list_wg_instances",
         "list_peers": "list_wg_peers",
         "reconcile": "reconcile_wg",
+        "set_instance": "set_wg_instance",
+        "set_peer": "set_wg_peer",
+        "create_peer": "create_wg_peer",
+        "delete_peer": "delete_wg_peer",
+        "toggle": "toggle_wg",
     }
 
 
@@ -1406,8 +1411,24 @@ def test_no_wireguard_member_declares_a_field_named_action() -> None:
         ListWgPeersTool,
         ReconcileWgTool,
     )
+    from opnsense_mcp.tools.wireguard_write import (
+        CreateWgPeerTool,
+        DeleteWgPeerTool,
+        SetWgInstanceTool,
+        SetWgPeerTool,
+        ToggleWgTool,
+    )
 
-    for tool in (ListWgInstancesTool, ListWgPeersTool, ReconcileWgTool):
+    for tool in (
+        ListWgInstancesTool,
+        ListWgPeersTool,
+        ReconcileWgTool,
+        SetWgInstanceTool,
+        SetWgPeerTool,
+        CreateWgPeerTool,
+        DeleteWgPeerTool,
+        ToggleWgTool,
+    ):
         assert "action" not in tool.input_schema["properties"]
 
 
@@ -1416,4 +1437,13 @@ def test_every_wireguard_tool_is_registered() -> None:
 
     names = {getattr(cls, "name", "") for cls in TOOL_CLASSES}
 
-    assert {"list_wg_instances", "list_wg_peers", "reconcile_wg"} <= names
+    assert {
+        "list_wg_instances",
+        "list_wg_peers",
+        "reconcile_wg",
+        "set_wg_instance",
+        "set_wg_peer",
+        "create_wg_peer",
+        "delete_wg_peer",
+        "toggle_wg",
+    } <= names

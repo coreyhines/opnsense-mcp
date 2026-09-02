@@ -420,6 +420,17 @@ SHAPE_SOURCES: dict[str, ShapeSource] = {
         kind="node",
         root_key="server",
     ),
+    # A peer that belongs to one of three instances, so the `servers` node map
+    # enumerates all three and carries membership only in `selected`. Building
+    # a membership list from its keys enrols the peer everywhere, which is the
+    # trap `set_wg_peer` is written against.
+    "wg_getclient_multi_instance.json": ShapeSource(
+        "GET",
+        "/api/wireguard/client/getClient/693b9fb2-d68a-450c-b5b7-fa0ec7cec302",
+        None,
+        kind="node",
+        root_key="client",
+    ),
 }
 
 
