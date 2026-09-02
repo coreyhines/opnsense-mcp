@@ -1,0 +1,115 @@
+{
+    "total": 9,
+    "rowCount": 9,
+    "current": 1,
+    "rows": [
+        {
+            "mac": "52:54:00:96:4d:83",
+            "ip": "172.20.5.6",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": 90,
+            "permanent": false,
+            "type": "bridge",
+            "manufacturer": "Arista Networks",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        },
+        {
+            "mac": "52:54:00:0b:32:86",
+            "ip": "172.20.5.5",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": 95,
+            "permanent": false,
+            "type": "bridge",
+            "manufacturer": "Arista Networks",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        },
+        {
+            "mac": "52:54:00:43:53:8d",
+            "ip": "172.20.5.4",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": 28,
+            "permanent": false,
+            "type": "bridge",
+            "manufacturer": "Arista Networks",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        },
+        {
+            "mac": "52:54:00:fb:80:6d",
+            "ip": "172.20.5.3",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": 103,
+            "permanent": false,
+            "type": "bridge",
+            "manufacturer": "",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        },
+        {
+            "mac": "52:54:00:12:da:73",
+            "ip": "172.20.5.2",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": 107,
+            "permanent": false,
+            "type": "bridge",
+            "manufacturer": "Arista Networks",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        },
+        {
+            "mac": "52:54:00:45:ee:8b",
+            "ip": "172.20.5.1",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": -1,
+            "permanent": true,
+            "type": "bridge",
+            "manufacturer": "FreeBSD Foundation",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        },
+        {
+            "mac": "52:54:00:c4:62:00",
+            "ip": "172.20.5.254",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": 99,
+            "permanent": false,
+            "type": "bridge",
+            "manufacturer": "Arista Networks",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        },
+        {
+            "mac": "52:54:00:d6:83:f3",
+            "ip": "172.20.5.220",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": 109,
+            "permanent": false,
+            "type": "bridge",
+            "manufacturer": "",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        },
+        {
+            "mac": "52:54:00:72:a5:03",
+            "ip": "172.20.5.123",
+            "intf": "bridge0",
+            "expired": false,
+            "expires": 27,
+            "permanent": false,
+            "type": "bridge",
+            "manufacturer": "",
+            "hostname": "",
+            "intf_description": "VLAN5_ax0_igb3"
+        }
+    ]
+}

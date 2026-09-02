@@ -90,10 +90,16 @@ Rules apply in order: regex, then literals, then MAC and EUI-64 handling.
 MAC = re.compile(r"\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b")
 FAKE_OUI = "52:54:00"
 
-# EUI-64 link-local addresses embed the MAC, leaking it a second time in a
-# different shape, so they are rewritten through the same mapping.
-EUI64_LL = re.compile(
-    r"\bfe80::([0-9a-f]{1,4}):([0-9a-f]{1,4})ff:fe([0-9a-f]{1,2}):([0-9a-f]{1,4})\b",
+# An EUI-64 interface identifier embeds the MAC, leaking it a second time in a
+# different shape, so it is rewritten through the same mapping.
+#
+# Anchored on the identifier rather than on `fe80::`, because SLAAC puts the
+# same identifier under every prefix the interface holds. A capture of the NDP
+# table carries each device once as `fe80::` and again under the site ULA and
+# the delegated GUA; only the first was being rewritten, so the MAC the bare-MAC
+# rule had just removed came straight back in the other two.
+EUI64_IID = re.compile(
+    r"(?<=:)([0-9a-f]{1,4}):([0-9a-f]{1,4})ff:fe([0-9a-f]{1,2}):([0-9a-f]{1,4})\b",
     re.IGNORECASE,
 )
 
@@ -146,18 +152,20 @@ def _mac_from_eui64(match: re.Match[str]) -> str:
     )
 
 
-def _fake_link_local(match: re.Match[str]) -> str:
-    """Rebuild a link-local address around the sanitised MAC.
+def _fake_eui64_iid(match: re.Match[str]) -> str:
+    """Rebuild an EUI-64 interface identifier around the sanitised MAC.
 
-    Goes through the real MAC so a device appearing both as a MAC and as a
-    link-local address gets one fictional identity, not two.
+    Goes through the real MAC so a device appearing as a MAC, a link-local
+    address and a SLAAC address gets one fictional identity, not three. Only
+    the identifier is rewritten; whatever prefix preceded it is left to the
+    prefix rules.
     """
     real = _mac_from_eui64(match)
     if _is_synthetic_mac(real):
         return match.group(0)
     fake = [int(byte, 16) for byte in _fake_mac(real).split(":")]
     return (
-        f"fe80::{fake[0] ^ 0x02:x}{fake[1]:02x}:{fake[2]:02x}ff:"
+        f"{fake[0] ^ 0x02:x}{fake[1]:02x}:{fake[2]:02x}ff:"
         f"fe{fake[3]:02x}:{fake[4]:02x}{fake[5]:02x}"
     )
 
@@ -182,9 +190,9 @@ def sanitize(text: str, rules: dict) -> str:
     for real, fake in rules["literals"].items():
         text = text.replace(real, fake)
     if rules["macs"]:
-        # Link-local first, so the embedded form is handled by the rule that
+        # The embedded form first, so it is handled by the rule that
         # understands its shape rather than by the bare MAC rule.
-        text = EUI64_LL.sub(_fake_link_local, text)
+        text = EUI64_IID.sub(_fake_eui64_iid, text)
         text = MAC.sub(lambda m: _fake_mac(m.group(0)), text)
     return text
 

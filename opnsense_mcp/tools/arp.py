@@ -15,6 +15,29 @@ logger = logging.getLogger(__name__)
 oui_lookup = OUILookup()
 
 
+def _looks_like_address(query: str) -> bool:
+    """Is this query already a whole address or MAC, rather than a name?
+
+    A whole address needs no resolving, so a miss on it means the neighbour is
+    genuinely absent. A partial one -- a prefix, a subnet, half a MAC -- is a
+    substring the tables can still match, and must not be handed to a resolver
+    that would collapse the answer to one host.
+    """
+    try:
+        ipaddress.ip_address(query)
+    except ValueError:
+        pass
+    else:
+        return True
+    # Six hex pairs separated by ':' or '-'. Exact validation happens in the
+    # table search; this only decides whether a resolver could add anything.
+    parts = query.lower().replace("-", ":").split(":")
+    return len(parts) == 6 and all(
+        1 <= len(part) <= 2 and all(c in "0123456789abcdef" for c in part)
+        for part in parts
+    )
+
+
 class ARPEntry(BaseModel):
     """Model for ARP/NDP table entries."""
 
@@ -72,12 +95,13 @@ class ARPTool:
         IPv4, or IPv6 address, or using targeted search if 'search'
         is provided.
 
-        For human-style lookups like hostnames, this will first resolve
-        the query via OPNsenseClient.resolve_host_info to obtain the best
-        matching IP / MAC, then perform a targeted ARP/NDP search for those
-        concrete values. This restores the older "is host on the network?"
-        behavior while keeping the fast server-side search path for direct
-        IP/MAC queries.
+        A 'search' query is put to both tables, which filter on the firewall
+        and answer with every match. Only a query neither table matches, and
+        that is not itself an address or MAC, is resolved through
+        OPNsenseClient.resolve_host_info first: that is the "is this host on
+        the network?" case, where a name has to become an address before a
+        neighbour table can be asked about it. Resolving first was the defect
+        in #40, because the resolver answers with one host.
         """
         try:
             if self.client is None:
@@ -106,24 +130,29 @@ class ARPTool:
                         "status": "success",
                     }
 
-                # Decide whether this looks like an IP/MAC or a hostname-ish query.
-                looks_like_ip = False
-                looks_like_mac = False
-                try:
-                    ipaddress.ip_address(search_query)
-                    looks_like_ip = True
-                except ValueError:
-                    looks_like_ip = False
+                # Search the tables directly. Both search methods filter on
+                # the firewall and return every match.
+                arp_raw, ndp_raw = await asyncio.gather(
+                    self.client.search_arp_table(search_query),
+                    self.client.search_ndp_table(search_query),
+                )
 
-                q_lc = search_query.lower()
-                if (":" in q_lc or "-" in q_lc) and len(
-                    q_lc.replace("-", ":").split(":")
-                ) == 6:
-                    # Cheap MAC heuristic; exact validation happens later anyway.
-                    looks_like_mac = True
-
-                # For hostnames / free-form queries, resolve to concrete identifiers first.
-                if not looks_like_ip and not looks_like_mac:
+                # Only a query the tables cannot answer goes to
+                # resolve_host_info, and only when it is not already an
+                # address or a MAC: that is the "is this hostname on the
+                # network" case, where a name has to become an address before
+                # a neighbour table can be asked about it.
+                #
+                # It must not run while the tables have matches of their own.
+                # It answers with a single host -- ndp_entries[0] -- and the
+                # result was then searched for, so a prefix matching nine
+                # neighbours came back as the first one and the other eight
+                # were reported as not existing (#40).
+                if (
+                    not arp_raw
+                    and not ndp_raw
+                    and not _looks_like_address(search_query)
+                ):
                     try:
                         host_info = await self.client.resolve_host_info(search_query)
                     except Exception:
@@ -139,38 +168,15 @@ class ARPTool:
                     if host_info and host_info.get("ndp"):
                         resolved_ipv6 = host_info["ndp"].get("ip")
 
-                    # If we got something concrete, search by those; otherwise fall
-                    # back to the raw server-side search endpoints.
                     if resolved_ip or resolved_mac or resolved_ipv6:
-                        arp_filters: dict[str, Any] = {}
-                        ndp_filters: dict[str, Any] = {}
-                        if resolved_mac:
-                            arp_filters["mac"] = resolved_mac
-                            ndp_filters["mac"] = resolved_mac
-                        if resolved_ip:
-                            arp_filters["ip"] = resolved_ip
-                        if resolved_ipv6:
-                            ndp_filters["ipv6"] = resolved_ipv6
-
                         arp_raw, ndp_raw = await asyncio.gather(
                             self.client.search_arp_table(
-                                arp_filters.get("ip") or arp_filters.get("mac") or ""
+                                resolved_ip or resolved_mac or ""
                             ),
                             self.client.search_ndp_table(
-                                ndp_filters.get("ipv6") or ndp_filters.get("mac") or ""
+                                resolved_ipv6 or resolved_mac or ""
                             ),
                         )
-                    else:
-                        arp_raw, ndp_raw = await asyncio.gather(
-                            self.client.search_arp_table(search_query),
-                            self.client.search_ndp_table(search_query),
-                        )
-                else:
-                    # Direct IP/MAC queries stay on the fast path.
-                    arp_raw, ndp_raw = await asyncio.gather(
-                        self.client.search_arp_table(search_query),
-                        self.client.search_ndp_table(search_query),
-                    )
 
                 return {
                     "arp": [

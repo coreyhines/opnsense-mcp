@@ -63,3 +63,28 @@ A model's field list is evidence about storage, not about what a
 controller accepts. Two adversarial reviewers read this file and
 independently reported the mismatch as an unfixed bug, which is what an
 untested inference in a fixtures README buys.
+
+## Neighbour table grids, 2026-09-01
+
+| File | Endpoint | Captured with |
+|---|---|---|
+| `diagnostics_search_arp_rows.json` | `POST diagnostics/interface/search_arp` | `searchPhrase` on one VLAN's /24 |
+| `diagnostics_search_ndp_rows.json` | `POST diagnostics/interface/search_ndp` | `searchPhrase` on one VLAN's ULA /64 |
+
+Captured filtered rather than whole, because the filter is the finding. These
+endpoints are bootgrids: they answer a POST carrying `searchPhrase` with
+`{total, rowCount, current, rows}`. The client sent a GET `search` parameter,
+which they ignore — `search_ndp?search=<prefix>` returned all 278 neighbours,
+not the 9 matching — and then read the result from a `data` key no response
+carries. Both failures were silent and cancelled out, because an empty read
+fell through to fetching the whole table and filtering it client-side.
+
+So the shape assertion that matters here is negative: `data` is absent, and
+`rows` is where the answer is. See `tests/test_arp_search.py`.
+
+The NDP capture is also why the sanitiser now rewrites an EUI-64 interface
+identifier under any prefix rather than only under `fe80::`. SLAAC repeats the
+identifier under every prefix an interface holds, so these rows carried the MAC
+that the bare-MAC rule had just removed, inside an address in an allow-listed
+ULA range. `_offending_eui64` in `tests/test_no_site_identifiers.py` is the
+check that notices.

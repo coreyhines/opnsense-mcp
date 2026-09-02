@@ -214,8 +214,9 @@ SUFFIX_ONLY = ipaddress.ip_network("::/64")
 def _is_exempt_v6(address: ipaddress.IPv6Address) -> bool:
     """Same, for v6. Link-local is exempt as an address but not as a MAC.
 
-    An EUI-64 link-local embeds a hardware MAC, so it is handled by the
-    sanitiser rather than waved through here.
+    An EUI-64 address embeds a hardware MAC, which `_offending_eui64` below
+    checks separately: exempting the address says nothing about the MAC inside
+    it, and a ULA or documentation prefix is exempt here while carrying one.
 
     Addresses inside ::/64 are host suffixes, not addresses: this codebase
     moves hosts between prefixes by suffix, so "::13" appears throughout and
@@ -263,6 +264,72 @@ def _offending_v6(text: str) -> list[str]:
     return bad
 
 
+# Six hex pairs. Case-insensitive because captures and prose disagree.
+MAC = re.compile(r"\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b")
+
+# The interface-identifier half of an EUI-64 address, under any prefix. Not
+# anchored to `fe80::`, which is the mistake the sanitiser made: SLAAC puts the
+# same identifier under every prefix an interface holds, so a captured NDP table
+# carries each device once as a link-local and again under the site ULA. The
+# bare-MAC rule removed the MAC, the link-local rule removed it again, and the
+# ULA rows kept it -- inside an address in `fd0b::/16`, which is allow-listed
+# above, so nothing here noticed.
+EUI64_IID = re.compile(
+    r"(?<=:)([0-9a-f]{1,4}):([0-9a-f]{1,4})ff:fe([0-9a-f]{1,2}):([0-9a-f]{1,4})\b",
+    re.IGNORECASE,
+)
+
+# Neither belongs to any manufacturer.
+UNASSIGNED_MACS = frozenset({"00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"})
+
+
+def _is_real_mac(mac: str) -> bool:
+    """Does this address name actual hardware?
+
+    Bit 0x02 of the first byte marks a MAC as locally administered, which no
+    manufacturer assigns. Everything the sanitiser emits is locally
+    administered, and so is every placeholder anyone writes by hand, which
+    makes the bit the whole discriminator -- the same one
+    `scripts/sanitize_site_identifiers.py` uses, so the two agree by
+    construction rather than by a shared list.
+    """
+    return not (int(mac.split(":")[0], 16) & 0x02) and mac.lower() not in (
+        UNASSIGNED_MACS
+    )
+
+
+def _offending_macs(text: str) -> list[str]:
+    """Every MAC in `text` that a vendor really assigned."""
+    return [mac for mac in MAC.findall(text) if _is_real_mac(mac)]
+
+
+def _offending_eui64(text: str) -> list[str]:
+    """Every EUI-64 address in `text` whose embedded MAC is a real one.
+
+    EUI-64 interleaves the six MAC bytes around a literal ff:fe and flips the
+    universal/local bit of the first, so that bit is flipped back before the
+    same test is applied.
+    """
+    bad = []
+    for match in EUI64_IID.finditer(text):
+        head, third, fourth, tail = match.groups()
+        head_value, tail_value = int(head, 16), int(tail, 16)
+        mac = ":".join(
+            f"{byte:02x}"
+            for byte in (
+                (head_value >> 8) ^ 0x02,
+                head_value & 0xFF,
+                int(third, 16),
+                int(fourth, 16),
+                tail_value >> 8,
+                tail_value & 0xFF,
+            )
+        )
+        if _is_real_mac(mac):
+            bad.append(match.group(0))
+    return bad
+
+
 @pytest.mark.parametrize("path", _scanned_files(), ids=lambda p: str(p.name))
 def test_addresses_are_documentation_ranges_only(path: pathlib.Path) -> None:
     """No file carries an address outside the ranges reserved for examples."""
@@ -272,7 +339,13 @@ def test_addresses_are_documentation_ranges_only(path: pathlib.Path) -> None:
         pytest.skip("not a text file")
 
     offenders = sorted(
-        set(_offending_v4(text) + _offending_v6(text) + _offending_hostnames(text))
+        set(
+            _offending_v4(text)
+            + _offending_v6(text)
+            + _offending_hostnames(text)
+            + _offending_macs(text)
+            + _offending_eui64(text)
+        )
     )
     assert not offenders, (
         f"{path.relative_to(REPO_ROOT)} contains identifiers outside the "
@@ -321,3 +394,35 @@ def test_what_the_hostname_check_does_not_catch() -> None:
     assert _offending_hostnames("forge.internal.corp") == []
     assert _offending_hostnames("ssh root@buildbox") == []
     assert _offending_hostnames("host.lan is up") == []
+
+
+def test_the_check_would_catch_a_real_mac() -> None:
+    """A vendor OUI names the kit on the network as surely as its address does."""
+    assert _offending_macs("neighbour e4:d1:24:52:91:ff on ax0") == [
+        "e4:d1:24:52:91:ff"
+    ]
+
+    # Everything the sanitiser emits, and every placeholder written by hand.
+    assert _offending_macs("52:54:00:db:63:33 and aa:bb:cc:dd:ee:ff") == []
+    assert _offending_macs("ff:ff:ff:ff:ff:ff and 00:00:00:00:00:00") == []
+
+
+def test_the_check_would_catch_a_mac_hidden_in_an_address() -> None:
+    """The gap this was added for.
+
+    All three of these carry one MAC. The first two were already removed by the
+    sanitiser; the third was not, because its rule was anchored to `fe80::`,
+    and the address itself is inside an allow-listed ULA range so the address
+    check waved it through.
+    """
+    assert _offending_eui64("fe80::e6d1:24ff:fe52:91ff%ax0") == ["e6d1:24ff:fe52:91ff"]
+    assert _offending_eui64("fd0b:cafe:1:e6d1:24ff:fe52:91ff") == [
+        "e6d1:24ff:fe52:91ff"
+    ]
+    assert _offending_eui64("2001:db8:5eed:b500:e6d1:24ff:fe52:91ff") == [
+        "e6d1:24ff:fe52:91ff"
+    ]
+
+    # The sanitised form of that same device: 52:54:00:.. is locally
+    # administered, so the identifier built from it names nothing.
+    assert _offending_eui64("fd0b:cafe:1:5054:00ff:fedb:6333") == []

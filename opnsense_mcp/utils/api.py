@@ -12,6 +12,7 @@ import socket
 import ssl
 import threading
 import urllib.parse
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import requests
@@ -72,6 +73,52 @@ def _api_error_detail(payload: Any) -> str:
 
 
 _MAC_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.IGNORECASE)
+
+
+def _matching_neighbours(
+    table: list[dict[str, Any]], query: str
+) -> list[dict[str, Any]]:
+    """Rows of an ARP/NDP table a free-text query matches.
+
+    Only reached on firmware whose bootgrid search endpoint is missing, so it
+    has to approximate what the firewall would have matched. `intf` and
+    `intf_description` are included for that reason: the endpoint searches every
+    rendered column, so leaving them out would make the fallback answer a
+    query like an interface description with nothing while the primary path
+    answers it with rows.
+
+    An address or MAC is compared whole. A substring match on `172.20.5.1` also
+    matches `172.20.5.10`, which is the same off-by-one-address mistake a
+    read-back once made here.
+    """
+    query_lc = query.lower()
+    try:
+        ipaddress.ip_address(query_lc)
+        is_ip_query = True
+    except ValueError:
+        is_ip_query = False
+    is_mac_query = bool(_MAC_RE.match(query_lc))
+    mac_query = query_lc.replace("-", ":")
+
+    def matches(entry: dict[str, Any]) -> bool:
+        ip = str(entry.get("ip", "")).lower()
+        mac = str(entry.get("mac", "")).lower().replace("-", ":")
+        if is_ip_query:
+            if ip == query_lc:
+                return True
+        elif query_lc in ip:
+            return True
+        if is_mac_query:
+            if mac == mac_query:
+                return True
+        elif query_lc in mac:
+            return True
+        return any(
+            query_lc in str(entry.get(field, "")).lower()
+            for field in ("hostname", "intf", "intf_description")
+        )
+
+    return [entry for entry in table if matches(entry)]
 
 
 def _record_type_for_server(server: str) -> str:
@@ -900,57 +947,76 @@ class OPNsenseClient:
             logger.info("Successfully applied firewall changes")
             return {"result": "success", "applied": True}
 
+    async def _search_neighbour_table(
+        self: "OPNsenseClient",
+        endpoint: str,
+        query: str,
+        full_table: Callable[[], Awaitable[list[dict[str, Any]]]],
+    ) -> list[dict]:
+        """Filter a neighbour table on the firewall, not in a page of it.
+
+        The endpoint is a bootgrid: it answers a POST carrying `searchPhrase`
+        with `{total, rowCount, current, rows}`. Both halves of that mattered,
+        because both were wrong here (#40):
+
+        - the filter was sent as a GET `search` parameter, which the endpoint
+          ignores. `search_ndp?search=<prefix>` returned all 278 neighbours.
+        - the result was read from a `data` key the response does not carry, so
+          it was always empty.
+
+        Neither failed loudly. An empty read fell through to fetching the whole
+        table and filtering it here, so every search silently did two full
+        fetches and answered from a client-side scan. That scan then reached
+        `resolve_host_info`, which answers "which host is this" by taking the
+        first match, and a prefix query matching nine neighbours was reported
+        as one.
+
+        The local scan is kept for firmware without the endpoint, and only for
+        that: it runs when the request fails or the reply is not a bootgrid,
+        never when the firewall returned rows.
+        """
+        query = query.strip()
+        if query == "*" or not query:
+            return await full_table()
+
+        try:
+            # rowCount -1 asks for every match. Without it the grid pages, and
+            # a paged answer to a filter is the defect this method exists to
+            # remove rather than relocate.
+            response = await self._make_request(
+                "POST",
+                endpoint,
+                json={"current": 1, "rowCount": -1, "searchPhrase": query},
+            )
+        except Exception:
+            logger.exception("Search failed at %s; filtering locally", endpoint)
+            response = None
+
+        if isinstance(response, dict) and isinstance(response.get("rows"), list):
+            rows = response["rows"]
+            total = response.get("total")
+            if isinstance(total, int) and total > len(rows):
+                # Cannot happen with rowCount -1, and is worth hearing about if
+                # it ever does: it would mean answering a filter from a page.
+                logger.warning(
+                    "%s returned %d of %d matching rows", endpoint, len(rows), total
+                )
+            return list(rows)
+
+        logger.debug("%s returned no grid; filtering the full table", endpoint)
+        return _matching_neighbours(await full_table(), query)
+
     async def search_arp_table(self: "OPNsenseClient", query: str) -> list[dict]:
         """
         Search ARP table for IP, MAC, or hostname.
 
         Uses the OPNsense API. If query is '*', returns full table.
         """
-        query = query.strip()
-        try:
-            if query == "*" or not query:
-                # Use canonical endpoint for full table
-                return await self._get_arp_table()
-
-            # Use search endpoint for specific queries
-            endpoint = "/api/diagnostics/interface/search_arp"
-            params = {"search": query}
-            response = await self._make_request("GET", endpoint, params=params)
-        except Exception:
-            logger.exception("Failed to search ARP table")
-            return []
-        else:
-            data = response.get("data", []) if isinstance(response, dict) else []
-            if data:
-                return data
-
-            # Some OPNsense versions return empty for valid queries; fall back
-            # to local filtering over the full table for reliability.
-            full_table = await self._get_arp_table()
-            query_lc = query.lower()
-            is_ip_query = False
-            try:
-                ipaddress.ip_address(query_lc)
-                is_ip_query = True
-            except ValueError:
-                is_ip_query = False
-            is_mac_query = bool(_MAC_RE.match(query_lc))
-            return [
-                entry
-                for entry in full_table
-                if (
-                    str(entry.get("ip", "")).lower() == query_lc
-                    if is_ip_query
-                    else query_lc in str(entry.get("ip", "")).lower()
-                )
-                or (
-                    str(entry.get("mac", "")).lower().replace("-", ":")
-                    == query_lc.replace("-", ":")
-                    if is_mac_query
-                    else query_lc in str(entry.get("mac", "")).lower()
-                )
-                or query_lc in str(entry.get("hostname", "")).lower()
-            ]
+        return await self._search_neighbour_table(
+            "/api/diagnostics/interface/search_arp",
+            query,
+            self._get_arp_table,
+        )
 
     async def search_ndp_table(self: "OPNsenseClient", query: str) -> list[dict]:
         """
@@ -958,51 +1024,11 @@ class OPNsenseClient:
 
         Uses the OPNsense API. If query is '*', returns full table.
         """
-        query = query.strip()
-        try:
-            if query == "*" or not query:
-                # Use canonical endpoint for full table
-                return await self._get_ndp_table()
-
-            # Use search endpoint for specific queries
-            endpoint = "/api/diagnostics/interface/search_ndp"
-            params = {"search": query}
-            response = await self._make_request("GET", endpoint, params=params)
-        except Exception:
-            logger.exception("Failed to search NDP table")
-            return []
-        else:
-            data = response.get("data", []) if isinstance(response, dict) else []
-            if data:
-                return data
-
-            # Some OPNsense versions return empty for valid queries; fall back
-            # to local filtering over the full table for reliability.
-            full_table = await self._get_ndp_table()
-            query_lc = query.lower()
-            is_ip_query = False
-            try:
-                ipaddress.ip_address(query_lc)
-                is_ip_query = True
-            except ValueError:
-                is_ip_query = False
-            is_mac_query = bool(_MAC_RE.match(query_lc))
-            return [
-                entry
-                for entry in full_table
-                if (
-                    str(entry.get("ip", "")).lower() == query_lc
-                    if is_ip_query
-                    else query_lc in str(entry.get("ip", "")).lower()
-                )
-                or (
-                    str(entry.get("mac", "")).lower().replace("-", ":")
-                    == query_lc.replace("-", ":")
-                    if is_mac_query
-                    else query_lc in str(entry.get("mac", "")).lower()
-                )
-                or query_lc in str(entry.get("hostname", "")).lower()
-            ]
+        return await self._search_neighbour_table(
+            "/api/diagnostics/interface/search_ndp",
+            query,
+            self._get_ndp_table,
+        )
 
     def _detect_endpoint(
         self: "OPNsenseClient", name: str, endpoints: list[str | None]
