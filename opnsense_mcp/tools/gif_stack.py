@@ -224,6 +224,23 @@ def _is_gif_privilege_failure(exc_or_body: Any) -> bool:
     return "403" in text
 
 
+class _TruncatedListingError(Exception):
+    """A search returned fewer rows than it claims exist."""
+
+
+def _refuse_if_truncated(rows: Any, what: str) -> None:
+    """Raise when a search page does not cover the whole result set."""
+    if not isinstance(rows, dict):
+        return
+    total = rows.get("total")
+    returned = len(rows.get("rows", []))
+    if isinstance(total, int) and total > returned:
+        raise _TruncatedListingError(
+            f"the {what} listing is truncated ({returned} of {total}); refusing "
+            f"rather than acting on a partial view"
+        )
+
+
 class _GifToolBase:
     """Shared client handling for GIF tools."""
 
@@ -237,12 +254,15 @@ class _GifToolBase:
     def _privilege_error(self) -> dict[str, Any]:
         return {"status": "error", "error": privilege_error_message()}
 
-    async def _rows(self, endpoint: str) -> list[dict[str, Any]]:
+    async def _rows(
+        self, endpoint: str, *, what: str = "search results"
+    ) -> list[dict[str, Any]]:
         data = await self.client._make_request(
             "POST", endpoint, json={"current": 1, "rowCount": 5000}
         )
         if _is_gif_privilege_failure(data):
             raise ValueError(PRIVILEGE_HINT)
+        _refuse_if_truncated(data, what)
         return data.get("rows", []) if isinstance(data, dict) else []
 
     async def _apply(
@@ -272,7 +292,7 @@ class _GifToolBase:
 
     async def _assignment_rows(self) -> list[dict[str, Any]]:
         """Return interface assignment rows."""
-        return await self._rows(ASSIGNMENT["search"])
+        return await self._rows(ASSIGNMENT["search"], what="interface assignments")
 
 
 class ListGifTool(_GifToolBase):
@@ -287,7 +307,9 @@ class ListGifTool(_GifToolBase):
         if not self.client:
             return self._no_client()
         try:
-            rows = await self._rows(GIF["search"])
+            rows = await self._rows(GIF["search"], what="GIF devices")
+        except _TruncatedListingError as exc:
+            return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             if _is_gif_privilege_failure(exc):
                 return self._privilege_error()
@@ -387,7 +409,7 @@ class MkGifTool(_GifToolBase):
             }
 
         try:
-            for row in await self._rows(GIF["search"]):
+            for row in await self._rows(GIF["search"], what="GIF devices"):
                 if _gif_identity_matches(
                     row, parent, remote, tunnel_local, tunnel_remote
                 ):
@@ -405,6 +427,8 @@ class MkGifTool(_GifToolBase):
             result = await self.client._make_request(
                 "POST", GIF["add"], call_class="write", json={"gif": wire}
             )
+        except _TruncatedListingError as exc:
+            return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             if _is_gif_privilege_failure(exc):
                 return self._privilege_error()
@@ -440,6 +464,13 @@ class SetGifTool(_GifToolBase):
         "type": "object",
         "properties": {
             "uuid": {"type": "string", "description": "GIF device uuid"},
+            "device": {
+                "type": "string",
+                "description": (
+                    "GIF device name (gifif); cannot be changed after creation"
+                ),
+                "optional": True,
+            },
             "parent": {
                 "type": "string",
                 "description": "Parent interface name or local address",
@@ -575,7 +606,7 @@ class RmGifTool(_GifToolBase):
             return pending
 
         try:
-            rows = await self._rows(GIF["search"])
+            rows = await self._rows(GIF["search"], what="GIF devices")
             row = next((r for r in rows if r.get("uuid") == uuid), None)
             if not row:
                 return {"status": "error", "error": f"GIF {uuid} not found"}
@@ -606,6 +637,8 @@ class RmGifTool(_GifToolBase):
             result = await self.client._make_request(
                 "POST", f"{GIF['delete']}/{uuid}", call_class="write", json={}
             )
+        except _TruncatedListingError as exc:
+            return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             if _is_gif_privilege_failure(exc):
                 return self._privilege_error()
@@ -726,6 +759,8 @@ class AssignInterfaceTool(_GifToolBase):
                     ),
                 }
             identifier = created_row.get("identifier") or created_row.get("uuid") or ""
+        except _TruncatedListingError as exc:
+            return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             if _is_gif_privilege_failure(exc):
                 return self._privilege_error()

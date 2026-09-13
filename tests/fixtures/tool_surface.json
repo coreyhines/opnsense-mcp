@@ -240,6 +240,37 @@
       "type": "object"
     }
   },
+  "assign_interface": {
+    "description": "Assign a device to an interface identifier (for example gif0 to optN)",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reconfigure interface assignments afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "description": "Interface description (descr)",
+          "optional": true,
+          "type": "string"
+        },
+        "device": {
+          "description": "Device name, for example gif0; must be assignable",
+          "type": "string"
+        },
+        "identifier": {
+          "description": "Interface identifier to use, for example opt12",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "device"
+      ],
+      "type": "object"
+    }
+  },
   "audit_shaper_config": {
     "description": "Audit traffic shaper configuration against best practices; optional ISP rates and WAN line rate for bandwidth checks",
     "inputSchema": {
@@ -898,6 +929,14 @@
       "type": "object"
     }
   },
+  "list_gif": {
+    "description": "List GIF tunnel devices",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
   "list_loopback": {
     "description": "List loopback interface devices",
     "inputSchema": {
@@ -1381,6 +1420,68 @@
         "name",
         "interface",
         "gateway"
+      ],
+      "type": "object"
+    }
+  },
+  "mk_gif": {
+    "description": "Create a GIF tunnel on a parent interface or address",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reconfigure GIF devices afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "device": {
+          "description": "GIF device name, for example gif0",
+          "optional": true,
+          "type": "string"
+        },
+        "ecn": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "link2": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "noclamp": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "parent": {
+          "description": "Parent interface name or local address",
+          "type": "string"
+        },
+        "remote": {
+          "description": "Outer remote peer address",
+          "type": "string"
+        },
+        "tunnel_local": {
+          "description": "Inner local tunnel endpoint",
+          "type": "string"
+        },
+        "tunnel_remote": {
+          "description": "Inner remote tunnel endpoint",
+          "type": "string"
+        },
+        "tunnel_remote_net": {
+          "description": "Prefix length for tunnel remote (1-128, default 32)",
+          "optional": true,
+          "type": "number"
+        }
+      },
+      "required": [
+        "parent",
+        "remote",
+        "tunnel_local",
+        "tunnel_remote"
       ],
       "type": "object"
     }
@@ -2159,6 +2260,31 @@
       "type": "object"
     }
   },
+  "rm_gif": {
+    "description": "Delete a GIF tunnel device; refuses while it is assigned to an interface",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reconfigure GIF devices afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "GIF device uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
   "rm_loopback": {
     "description": "Delete a loopback interface device; requires a confirm token",
     "inputSchema": {
@@ -2706,6 +2832,73 @@
       },
       "required": [
         "rule_uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_gif": {
+    "description": "Update fields on an existing GIF tunnel device",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reconfigure GIF devices afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
+        "description": {
+          "optional": true,
+          "type": "string"
+        },
+        "device": {
+          "description": "GIF device name (gifif); cannot be changed after creation",
+          "optional": true,
+          "type": "string"
+        },
+        "ecn": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "link2": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "noclamp": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "parent": {
+          "description": "Parent interface name or local address",
+          "optional": true,
+          "type": "string"
+        },
+        "remote": {
+          "description": "Outer remote peer address",
+          "optional": true,
+          "type": "string"
+        },
+        "tunnel_local": {
+          "description": "Inner local tunnel endpoint",
+          "optional": true,
+          "type": "string"
+        },
+        "tunnel_remote": {
+          "description": "Inner remote tunnel endpoint",
+          "optional": true,
+          "type": "string"
+        },
+        "tunnel_remote_net": {
+          "description": "Prefix length for tunnel remote (1-128)",
+          "optional": true,
+          "type": "number"
+        },
+        "uuid": {
+          "description": "GIF device uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
       ],
       "type": "object"
     }

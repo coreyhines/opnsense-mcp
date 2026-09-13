@@ -377,6 +377,13 @@ SHAPE_SOURCES: dict[str, ShapeSource] = {
         {"current": 1, "rowCount": 50},
         kind="rows",
     ),
+    "assignment_get_item_blank.json": ShapeSource(
+        "GET",
+        "/api/interfaces/assignment/get_item/",
+        None,
+        kind="node",
+        root_key="interface",
+    ),
     # No searchPhrase: an unfiltered POST returns the whole grid, whose key
     # union is what the fixture's rows must still match. The fixture itself was
     # captured with one, because a filtered response is what the tool sends and

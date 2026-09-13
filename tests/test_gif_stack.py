@@ -389,3 +389,30 @@ async def test_assign_reuses_existing_binding() -> None:
     assert result["status"] == "success"
     assert result.get("created") is False
     assert result["identifier"] == "opt20"
+
+
+@pytest.mark.asyncio
+async def test_rm_gif_refuses_truncated_gif_listing() -> None:
+    client = AsyncMock()
+    client._make_request = AsyncMock(
+        return_value={"rows": [], "total": 6000, "rowCount": 5000}
+    )
+    tool = RmGifTool(client)
+    challenge = await tool.execute({"uuid": GIF_UUID})
+    result = await tool.execute(
+        {"uuid": GIF_UUID, "confirm": challenge["confirm_token"]}
+    )
+    assert result["status"] == "error"
+    assert "truncated" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_assign_refuses_truncated_assignment_listing() -> None:
+    client = AsyncMock()
+    client._make_request = AsyncMock(
+        return_value={"rows": [], "total": 6000, "rowCount": 5000}
+    )
+    tool = AssignInterfaceTool(client)
+    result = await tool.execute({"device": "gif0"})
+    assert result["status"] == "error"
+    assert "truncated" in result["error"]

@@ -179,6 +179,22 @@ _NOT_TOOLS = frozenset(
         "running_disagrees",
         "runtime_absent_reason",
         "unaccounted_address",
+        # GIF design docs name API endpoints, schema fields, helpers and
+        # response statuses. None is a tool; the five GIF tools register when
+        # this task lands.
+        "add_item",
+        "configure_gif",
+        "confirmation_required",
+        "get_item",
+        "gif_params_to_wire",
+        "gif_settings",
+        "issue_delete_confirm_token",
+        "project_gif_row",
+        "set_item",
+        "tunnel_local",
+        "tunnel_remote",
+        "tunnel_remote_net",
+        "validate_delete_confirm_token",
     }
 )
 
