@@ -198,17 +198,42 @@ def test_exposed_group_schemas_avoid_prototype_keys() -> None:
     Object.prototype and makes Zod's z.record() reject the whole properties
     map — Cursor then loads zero tools. Alias before advertising.
     """
-    forbidden = {"constructor", "__proto__", "prototype"}
+    from opnsense_mcp.utils.grouped_tool import FORBIDDEN_WIRE_KEYS
+
     problems = []
     for name, tool in sorted(_exposed_groups().items()):
         props = (getattr(tool, "input_schema", None) or {}).get("properties") or {}
-        bad = sorted(forbidden & set(props))
+        bad = sorted(FORBIDDEN_WIRE_KEYS & set(props))
         if bad:
             problems.append(f"{name}: {bad}")
     assert not problems, (
         "exposed tool schemas must not advertise prototype-shadowing keys: "
         + "; ".join(problems)
     )
+
+
+def test_grouped_tool_refuses_to_advertise_constructor() -> None:
+    """Forget the alias and the group must refuse to build, not ship zero tools."""
+    from opnsense_mcp.utils.grouped_tool import GroupedTool
+
+    class _Member:
+        name = "mk_dhcp_range"
+        description = "x"
+        input_schema = {
+            "type": "object",
+            "properties": {
+                "constructor": {"type": "string", "description": "dnsmasq field"},
+            },
+            "required": [],
+        }
+
+    try:
+        GroupedTool("dhcp", "DHCP", {"create_range": _Member()}, field_aliases={})
+    except ValueError as exc:
+        assert "constructor" in str(exc)
+        assert "zero tools" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for unaliased constructor")
 
 
 def test_exposed_group_schemas_avoid_type_unions() -> None:

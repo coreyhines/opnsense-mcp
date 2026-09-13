@@ -32,7 +32,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from opnsense_mcp.utils.grouped_tool import GroupedTool, strip_dead_keys
+from opnsense_mcp.utils.grouped_tool import (
+    GroupedTool,
+    refuse_forbidden_wire_keys,
+    strip_dead_keys,
+)
 
 # group name -> (description, {action: tool name})
 #
@@ -313,11 +317,10 @@ def _without_dead_keys(tool: Any) -> Any:
     properties = schema.get("properties")
     if not isinstance(properties, dict):
         return tool
-    tool.input_schema = {
-        **schema,
-        "properties": {
-            field: strip_dead_keys(spec) if isinstance(spec, dict) else spec
-            for field, spec in properties.items()
-        },
+    cleaned = {
+        field: strip_dead_keys(spec) if isinstance(spec, dict) else spec
+        for field, spec in properties.items()
     }
+    refuse_forbidden_wire_keys(getattr(tool, "name", type(tool).__name__), cleaned)
+    tool.input_schema = {**schema, "properties": cleaned}
     return tool
