@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from opnsense_mcp.tools.gif_stack import (
+    AssignInterfaceTool,
     ListGifTool,
     MkGifTool,
     RmGifTool,
@@ -354,3 +355,37 @@ async def test_rm_gif_deletes_once_confirmed() -> None:
         for c in client._make_request.await_args_list
         if c.args
     )
+
+
+@pytest.mark.asyncio
+async def test_assign_refuses_unknown_device() -> None:
+    blank = json.loads((FIX / "assignment_get_item_blank.json").read_text())
+    client = AsyncMock()
+    client._make_request = AsyncMock(return_value=blank)
+    tool = AssignInterfaceTool(client)
+    result = await tool.execute({"device": "gif99"})
+    assert result["status"] == "error"
+    assert "gif99" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_assign_reuses_existing_binding() -> None:
+    client = AsyncMock()
+    client._make_request = AsyncMock(
+        return_value={
+            "rows": [
+                {
+                    "uuid": "opt20",
+                    "identifier": "opt20",
+                    "if": "gif0",
+                    "descr": "lab",
+                    "lock": "0",
+                }
+            ]
+        }
+    )
+    tool = AssignInterfaceTool(client)
+    result = await tool.execute({"device": "gif0"})
+    assert result["status"] == "success"
+    assert result.get("created") is False
+    assert result["identifier"] == "opt20"

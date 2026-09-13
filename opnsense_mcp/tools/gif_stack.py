@@ -197,6 +197,25 @@ def _gif_identity_matches(
         return False
 
 
+def _assignable_devices(blank: dict[str, Any]) -> set[str]:
+    """Return device names the assignment blank lists as assignable."""
+    node = blank.get("interface", {}) if isinstance(blank, dict) else {}
+    if_field = node.get("if", {}) if isinstance(node, dict) else {}
+    if isinstance(if_field, dict):
+        return {key for key in if_field if key}
+    return set()
+
+
+def _assignment_holder(
+    rows: list[dict[str, Any]], device: str
+) -> dict[str, Any] | None:
+    """Return the assignment row bound to *device*, if any."""
+    for row in rows:
+        if (row.get("if") or "") == device:
+            return row
+    return None
+
+
 def _is_gif_privilege_failure(exc_or_body: Any) -> bool:
     """Return True when gif_settings denied access (HTTP 403)."""
     if isinstance(exc_or_body, dict) and exc_or_body.get("status") == 403:
@@ -607,6 +626,120 @@ class RmGifTool(_GifToolBase):
             "status": "success",
             "uuid": uuid,
             "deleted": True,
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
+
+
+class AssignInterfaceTool(_GifToolBase):
+    """Bind a device such as gif0 to an interface identifier."""
+
+    name = "assign_interface"
+    description = (
+        "Assign a device to an interface identifier (for example gif0 to optN)"
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "device": {
+                "type": "string",
+                "description": "Device name, for example gif0; must be assignable",
+            },
+            "identifier": {
+                "type": "string",
+                "description": "Interface identifier to use, for example opt12",
+                "optional": True,
+            },
+            "description": {
+                "type": "string",
+                "description": "Interface description (descr)",
+                "optional": True,
+            },
+            "apply": {
+                "type": "boolean",
+                "description": "Reconfigure interface assignments afterwards (default false)",
+                "optional": True,
+                "default": False,
+            },
+        },
+        "required": ["device"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Assign *device* to an interface id, reusing an existing binding when present."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+
+        device = str(params.get("device") or "").strip()
+        if not device:
+            return {"status": "error", "error": "device is required"}
+
+        try:
+            rows = await self._assignment_rows()
+            existing = _assignment_holder(rows, device)
+            if existing:
+                identifier = existing.get("identifier") or existing.get("uuid") or ""
+                return {
+                    "status": "success",
+                    "created": False,
+                    "identifier": identifier,
+                    "device": device,
+                    "applied": False,
+                }
+
+            blank = await self.client._make_request("GET", ASSIGNMENT["get"])
+            assignable = _assignable_devices(blank if isinstance(blank, dict) else {})
+            if device not in assignable:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"{device!r} is not an assignable device. It may not be "
+                        f"instantiated yet, or the name is wrong. Assignable "
+                        f"options come from the assignment model."
+                    ),
+                }
+
+            descr = str(params.get("description") or device).strip()
+            payload: dict[str, Any] = {"descr": descr, "if": device}
+            identifier = str(params.get("identifier") or "").strip()
+            if identifier:
+                payload["identifier"] = identifier
+
+            await self.client._make_request(
+                "POST",
+                ASSIGNMENT["add"],
+                call_class="write",
+                json={"interface": payload},
+            )
+
+            rows = await self._assignment_rows()
+            created_row = _assignment_holder(rows, device)
+            if not created_row:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"assignment for {device!r} was written but does not "
+                        f"appear in search_item yet"
+                    ),
+                }
+            identifier = created_row.get("identifier") or created_row.get("uuid") or ""
+        except Exception as exc:  # noqa: BLE001
+            if _is_gif_privilege_failure(exc):
+                return self._privilege_error()
+            logger.exception("Failed to assign interface for %s", device)
+            return {"status": "error", "error": str(exc)}
+
+        applied, apply_error = await self._apply(
+            params, ASSIGNMENT["reconfigure"], "interface assignment"
+        )
+        out: dict[str, Any] = {
+            "status": "success",
+            "created": True,
+            "identifier": identifier,
+            "device": device,
             "applied": applied,
         }
         if apply_error:

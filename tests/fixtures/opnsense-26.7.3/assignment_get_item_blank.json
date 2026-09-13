@@ -1,0 +1,96 @@
+{
+  "interface": {
+    "descr": "",
+    "identifier": "",
+    "icon": "",
+    "optgroup": "",
+    "if": {
+      "igb0": {
+        "value": "igb0 (MAC)",
+        "optgroup": "hardware",
+        "selected": 0
+      },
+      "igb1": {
+        "value": "igb1 (MAC)",
+        "optgroup": "hardware",
+        "selected": 0
+      },
+      "igb2": {
+        "value": "igb2 (MAC)",
+        "optgroup": "hardware",
+        "selected": 0
+      },
+      "igb3": {
+        "value": "igb3 (MAC)",
+        "optgroup": "hardware",
+        "selected": 0
+      },
+      "ax0": {
+        "value": "ax0 (MAC)",
+        "optgroup": "hardware",
+        "selected": 0
+      },
+      "ax1": {
+        "value": "ax1 (MAC)",
+        "optgroup": "hardware",
+        "selected": 0
+      },
+      "bridge0": {
+        "value": "bridge0 ()",
+        "optgroup": "bridge",
+        "selected": 0
+      },
+      "ax0_vlan2": {
+        "value": "ax0_vlan2 VLAN N)",
+        "optgroup": "vlan",
+        "selected": 0
+      },
+      "ax0_vlan3": {
+        "value": "ax0_vlan3 VLAN N)",
+        "optgroup": "vlan",
+        "selected": 0
+      },
+      "ax0_vlan4": {
+        "value": "ax0_vlan4 VLAN N)",
+        "optgroup": "vlan",
+        "selected": 0
+      },
+      "ax0_vlan5": {
+        "value": "ax0_vlan5 VLAN N)",
+        "optgroup": "vlan",
+        "selected": 0
+      },
+      "ax0_vlan6": {
+        "value": "ax0_vlan6 VLAN N)",
+        "optgroup": "vlan",
+        "selected": 0
+      },
+      "ax0_vlan7": {
+        "value": "ax0_vlan7 VLAN N)",
+        "optgroup": "vlan",
+        "selected": 0
+      },
+      "ax0_vlan81": {
+        "value": "ax0_vlan81 VLAN N)",
+        "optgroup": "vlan",
+        "selected": 0
+      },
+      "vlan01": {
+        "value": "vlan01 VLAN10Podman (Parent: ax0, Tag: 10)",
+        "optgroup": "vlan",
+        "selected": 0
+      },
+      "wg0": {
+        "value": "wg0 (WireGuard - lab)",
+        "optgroup": "wireguard",
+        "selected": 0
+      },
+      "gif0": {
+        "value": "gif0",
+        "optgroup": "virtual",
+        "selected": 0
+      }
+    },
+    "lock": "0"
+  }
+}
