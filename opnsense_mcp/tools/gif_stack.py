@@ -324,7 +324,10 @@ class MkGifTool(_GifToolBase):
     """Create a GIF tunnel device."""
 
     name = "mk_gif"
-    description = "Create a GIF tunnel on a parent interface or address"
+    description = (
+        "Create a GIF tunnel on a parent interface or address. Compose with "
+        "assign and set_address to enable the assigned interface when needed."
+    )
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
@@ -343,7 +346,10 @@ class MkGifTool(_GifToolBase):
             },
             "tunnel_remote_net": {
                 "type": "number",
-                "description": "Prefix length for tunnel remote (1-128, default 32)",
+                "description": (
+                    "Prefix length for tunnel remote (1-128, default 32). "
+                    "IPv6 tunnel-broker setups must pass 64."
+                ),
                 "optional": True,
             },
             "device": {
@@ -493,7 +499,10 @@ class SetGifTool(_GifToolBase):
             },
             "tunnel_remote_net": {
                 "type": "number",
-                "description": "Prefix length for tunnel remote (1-128)",
+                "description": (
+                    "Prefix length for tunnel remote (1-128, default 32). "
+                    "IPv6 tunnel-broker setups must pass 64."
+                ),
                 "optional": True,
             },
             "description": {"type": "string", "optional": True},
