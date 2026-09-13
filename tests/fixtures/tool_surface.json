@@ -269,6 +269,49 @@
       "type": "object"
     }
   },
+  "create_wg_peer": {
+    "description": "Create a WireGuard peer. Takes the peer's public key; never generates or returns a private key. Stages by default",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Load the change now. Omitted, the peer is written to config and left staged until something else applies it.",
+          "optional": true,
+          "type": "boolean"
+        },
+        "instances": {
+          "description": "Instance uuids or names to enrol this peer in",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "keepalive": {
+          "optional": true,
+          "type": "string"
+        },
+        "name": {
+          "description": "Peer name",
+          "type": "string"
+        },
+        "pubkey": {
+          "description": "The peer's public key, generated on the device. This tool never generates one: a private key must not pass through a conversation transcript",
+          "type": "string"
+        },
+        "tunneladdress": {
+          "description": "Server-side allowed IPs, comma-joined",
+          "optional": true,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "pubkey",
+        "instances"
+      ],
+      "type": "object"
+    }
+  },
   "delete_shaper_pipe": {
     "description": "Delete a traffic shaper pipe; requires confirm token from prior call",
     "inputSchema": {
@@ -323,6 +366,31 @@
           "type": "string"
         },
         "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "delete_wg_peer": {
+    "description": "Delete a WireGuard peer; requires a confirm token",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Load the change now. Omitted, the peer is removed from config and left staged until something else applies it.",
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Peer uuid",
           "type": "string"
         }
       },
@@ -2870,6 +2938,137 @@
       "type": "object"
     }
   },
+  "set_wg_instance": {
+    "description": "Update a WireGuard instance's addresses, MTU, DNS, gateway or routing; stages by default",
+    "inputSchema": {
+      "properties": {
+        "allowed_ips": {
+          "optional": true,
+          "type": "string"
+        },
+        "apply": {
+          "default": false,
+          "description": "Load the change now. Omitted, the change is written to config and left staged until something else applies it.",
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "disableroutes": {
+          "optional": true,
+          "type": "boolean"
+        },
+        "dns": {
+          "description": "DNS servers pushed to peers, comma-joined",
+          "optional": true,
+          "type": "string"
+        },
+        "endpoint": {
+          "optional": true,
+          "type": "string"
+        },
+        "gateway": {
+          "optional": true,
+          "type": "string"
+        },
+        "mtu": {
+          "optional": true,
+          "type": "string"
+        },
+        "name": {
+          "optional": true,
+          "type": "string"
+        },
+        "peer_dns": {
+          "optional": true,
+          "type": "string"
+        },
+        "port": {
+          "description": "Listen port",
+          "optional": true,
+          "type": "string"
+        },
+        "tunneladdress": {
+          "description": "The instance's own addresses, comma-joined. Replaces the whole list; removing one needs a confirm token",
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Instance uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "set_wg_peer": {
+    "description": "Update a WireGuard peer's allowed IPs, keepalive, endpoint or instance membership; stages by default",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Load the change now. Omitted, the change is written to config and left staged until something else applies it.",
+          "optional": true,
+          "type": "boolean"
+        },
+        "confirm": {
+          "optional": true,
+          "type": "string"
+        },
+        "endpoint": {
+          "optional": true,
+          "type": "string"
+        },
+        "instances": {
+          "description": "Instance uuids or names this peer belongs to. Replaces the whole membership; removing one needs a confirm token",
+          "items": {
+            "type": "string"
+          },
+          "optional": true,
+          "type": "array"
+        },
+        "keepalive": {
+          "optional": true,
+          "type": "string"
+        },
+        "name": {
+          "optional": true,
+          "type": "string"
+        },
+        "pubkey": {
+          "description": "The peer's public key",
+          "optional": true,
+          "type": "string"
+        },
+        "serveraddress": {
+          "optional": true,
+          "type": "string"
+        },
+        "serverport": {
+          "optional": true,
+          "type": "string"
+        },
+        "tunneladdress": {
+          "description": "Server-side allowed IPs for this peer, comma-joined. Replaces the whole list; removing one locks the peer out and needs a confirm token",
+          "optional": true,
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Peer uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "type": "object"
+    }
+  },
   "shaper_statistics": {
     "description": "Get traffic shaper runtime statistics with structured hints; optional baseline_id compares against a prior snapshot",
     "inputSchema": {
@@ -3140,6 +3339,41 @@
       },
       "required": [
         "uuid"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_wg": {
+    "description": "Enable or disable a WireGuard instance or peer, to an explicit target state rather than by flipping it; stages by default",
+    "inputSchema": {
+      "properties": {
+        "apply": {
+          "default": false,
+          "description": "Load the change now. Omitted, the change is written to config and left staged until something else applies it.",
+          "optional": true,
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "Target state, set explicitly rather than flipped.",
+          "type": "boolean"
+        },
+        "kind": {
+          "description": "Which record `uuid` names",
+          "enum": [
+            "instance",
+            "peer"
+          ],
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Instance or peer uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "kind",
+        "enabled"
       ],
       "type": "object"
     }
