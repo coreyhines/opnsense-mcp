@@ -10,6 +10,7 @@ import pytest
 
 from opnsense_mcp.tools.gif_stack import (
     ListGifTool,
+    MkGifTool,
     gif_params_to_wire,
     privilege_error_message,
     project_gif_row,
@@ -141,3 +142,80 @@ async def test_list_gif_maps_403_to_privilege_error() -> None:
     assert result["status"] == "error"
     assert "403" in result["error"] or "privilege" in result["error"].lower()
     assert "gif_settings" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_mk_gif_requires_core_fields() -> None:
+    tool = MkGifTool(AsyncMock())
+    result = await tool.execute({"parent": "wan"})
+    assert result["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_mk_gif_reuses_identical_tunnel() -> None:
+    existing = {
+        "rows": [
+            {
+                "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "gifif": "gif0",
+                "if": "wan",
+                "remote-addr": "203.0.113.10",
+                "tunnel-local-addr": "2001:db8:1::2",
+                "tunnel-remote-addr": "2001:db8:1::1",
+                "tunnel-remote-net": "64",
+                "descr": "lab",
+            }
+        ]
+    }
+    client = AsyncMock()
+    client._make_request = AsyncMock(return_value=existing)
+    tool = MkGifTool(client)
+    result = await tool.execute(
+        {
+            "parent": "wan",
+            "remote": "203.0.113.10",
+            "tunnel_local": "2001:db8:1::2",
+            "tunnel_remote": "2001:db8:1::1",
+            "tunnel_remote_net": 64,
+        }
+    )
+    assert result["status"] == "success"
+    assert result["created"] is False
+    assert result["device"] == "gif0"
+    assert not any(
+        "add_item" in str(c.args[1])
+        for c in client._make_request.await_args_list
+        if c.args
+    )
+
+
+@pytest.mark.asyncio
+async def test_mk_gif_stages_without_apply_by_default() -> None:
+    client = AsyncMock()
+
+    async def fake(method, endpoint, **kwargs):
+        if "search_item" in endpoint:
+            return {"rows": []}
+        if "add_item" in endpoint:
+            return {"uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "result": "saved"}
+        raise AssertionError(endpoint)
+
+    client._make_request = AsyncMock(side_effect=fake)
+    tool = MkGifTool(client)
+    result = await tool.execute(
+        {
+            "parent": "wan",
+            "remote": "203.0.113.10",
+            "tunnel_local": "2001:db8:1::2",
+            "tunnel_remote": "2001:db8:1::1",
+            "tunnel_remote_net": 64,
+        }
+    )
+    assert result["status"] == "success"
+    assert result["created"] is True
+    assert result["applied"] is False
+    assert not any(
+        "reconfigure" in str(c.args[1])
+        for c in client._make_request.await_args_list
+        if c.args
+    )
