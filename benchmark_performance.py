@@ -364,6 +364,19 @@ SHAPE_SOURCES: dict[str, ShapeSource] = {
         kind="node",
         root_key="vip",
     ),
+    "gif_get_item_blank.json": ShapeSource(
+        "GET",
+        "/api/interfaces/gif_settings/get_item",
+        None,
+        kind="node",
+        root_key="gif",
+    ),
+    "gif_search_item_empty.json": ShapeSource(
+        "POST",
+        "/api/interfaces/gif_settings/search_item",
+        {"current": 1, "rowCount": 50},
+        kind="rows",
+    ),
     # No searchPhrase: an unfiltered POST returns the whole grid, whose key
     # union is what the fixture's rows must still match. The fixture itself was
     # captured with one, because a filtered response is what the tool sends and

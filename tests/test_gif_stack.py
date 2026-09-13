@@ -1,0 +1,113 @@
+"""Unit tests for GIF wire mappers and fixtures."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from opnsense_mcp.tools.gif_stack import (
+    gif_params_to_wire,
+    privilege_error_message,
+    project_gif_row,
+)
+
+FIX = Path(__file__).parent / "fixtures" / "opnsense-26.7.3"
+
+
+def test_gif_params_to_wire_maps_parent_interface() -> None:
+    wire = gif_params_to_wire(
+        {
+            "parent": "wan",
+            "remote": "203.0.113.10",
+            "tunnel_local": "2001:db8:1::2",
+            "tunnel_remote": "2001:db8:1::1",
+            "tunnel_remote_net": 64,
+            "description": "lab",
+            "ecn": True,
+        }
+    )
+    assert wire["if"] == "wan"
+    assert wire["remote-addr"] == "203.0.113.10"
+    assert wire["tunnel-local-addr"] == "2001:db8:1::2"
+    assert wire["tunnel-remote-addr"] == "2001:db8:1::1"
+    assert wire["tunnel-remote-net"] == "64"
+    assert wire["descr"] == "lab"
+    assert wire["link1"] == "1"
+    assert "ipaddr" not in wire or wire.get("ipaddr") in ("", None)
+
+
+def test_gif_params_to_wire_defaults_tunnel_remote_net_to_32() -> None:
+    wire = gif_params_to_wire(
+        {
+            "parent": "wan",
+            "remote": "203.0.113.10",
+            "tunnel_local": "192.0.2.1",
+            "tunnel_remote": "192.0.2.2",
+        }
+    )
+    assert wire["tunnel-remote-net"] == "32"
+
+
+def test_gif_params_to_wire_maps_parent_as_ipaddr() -> None:
+    wire = gif_params_to_wire(
+        {
+            "parent": "198.51.100.1",
+            "remote": "203.0.113.10",
+            "tunnel_local": "192.0.2.1",
+            "tunnel_remote": "192.0.2.2",
+        }
+    )
+    assert wire["ipaddr"] == "198.51.100.1"
+    assert "if" not in wire
+
+
+def test_project_gif_row_uses_wire_keys() -> None:
+    public = project_gif_row(
+        {
+            "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "gifif": "gif0",
+            "if": "wan",
+            "remote-addr": "203.0.113.10",
+            "tunnel-local-addr": "2001:db8:1::2",
+            "tunnel-remote-addr": "2001:db8:1::1",
+            "tunnel-remote-net": "64",
+            "descr": "lab",
+        }
+    )
+    assert public["device"] == "gif0"
+    assert public["parent"] == "wan"
+    assert public["remote"] == "203.0.113.10"
+    assert public["tunnel_local"] == "2001:db8:1::2"
+    assert public["uuid"]
+
+
+def test_privilege_error_message_mentions_gif_settings() -> None:
+    message = privilege_error_message()
+    assert "403" in message
+    assert "gif_settings" in message
+
+
+def test_gif_search_fixture_bootgrid_shape() -> None:
+    payload = json.loads((FIX / "gif_search_item_empty.json").read_text())
+    assert "rows" in payload
+    assert payload["total"] == 0
+    assert payload["rows"] == []
+
+
+def test_gif_get_item_fixture_carries_wire_keys() -> None:
+    payload = json.loads((FIX / "gif_get_item_blank.json").read_text())
+    node = payload["gif"]
+    for key in (
+        "if",
+        "ipaddr",
+        "gifif",
+        "remote-addr",
+        "tunnel-local-addr",
+        "tunnel-remote-addr",
+        "tunnel-remote-net",
+        "descr",
+        "link1",
+        "link2",
+        "noclamp",
+    ):
+        assert key in node

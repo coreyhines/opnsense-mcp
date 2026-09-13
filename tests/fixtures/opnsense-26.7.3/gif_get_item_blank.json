@@ -1,0 +1,21 @@
+{
+  "_note": "synthetic until ACL allows capture",
+  "gif": {
+    "if": {
+      "wan": {
+        "value": "WAN",
+        "selected": 1
+      }
+    },
+    "ipaddr": "",
+    "gifif": "",
+    "remote-addr": "",
+    "tunnel-local-addr": "",
+    "tunnel-remote-addr": "",
+    "tunnel-remote-net": "32",
+    "descr": "",
+    "link1": "0",
+    "link2": "0",
+    "noclamp": "0"
+  }
+}
