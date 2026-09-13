@@ -7,6 +7,11 @@ import logging
 from typing import Any
 
 from opnsense_mcp.utils.apply import ApplyError, run_apply
+from opnsense_mcp.utils.mvc_merge import merge_for_set
+from opnsense_mcp.utils.shaper_write_helpers import (
+    issue_delete_confirm_token,
+    validate_delete_confirm_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +42,75 @@ PRIVILEGE_HINT = (
 def privilege_error_message() -> str:
     """Return the operator-facing message when gif_settings returns 403."""
     return PRIVILEGE_HINT
+
+
+_GIF_UPDATE_FIELDS = (
+    "parent",
+    "remote",
+    "tunnel_local",
+    "tunnel_remote",
+    "tunnel_remote_net",
+    "description",
+    "ecn",
+    "link2",
+    "noclamp",
+)
+
+
+def _gif_update_changes(params: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Map only caller-supplied update fields to Gif.xml wire keys."""
+    changes: dict[str, Any] = {}
+
+    if "parent" in params:
+        parent = str(params.get("parent") or "").strip()
+        if not parent:
+            return {}, "parent cannot be empty"
+        try:
+            ipaddress.ip_address(parent.split("%", 1)[0])
+            changes["ipaddr"] = parent
+            changes["if"] = ""
+        except ValueError:
+            changes["if"] = parent
+            changes["ipaddr"] = ""
+
+    for label, key in (
+        ("remote", "remote-addr"),
+        ("tunnel_local", "tunnel-local-addr"),
+        ("tunnel_remote", "tunnel-remote-addr"),
+    ):
+        if label not in params:
+            continue
+        addr = str(params.get(label) or "").strip()
+        if not addr:
+            return {}, f"{label} cannot be empty"
+        try:
+            _normalize_addr(addr)
+        except ValueError:
+            return {}, f"{label} {addr!r} is not a valid address"
+        changes[key] = addr
+
+    if "tunnel_remote_net" in params:
+        tunnel_remote_net = params.get("tunnel_remote_net", 32)
+        try:
+            net_int = int(tunnel_remote_net)
+        except (TypeError, ValueError):
+            return {}, f"tunnel_remote_net {tunnel_remote_net!r} is not a number"
+        if not 1 <= net_int <= 128:
+            return {}, "tunnel_remote_net must be between 1 and 128"
+        changes["tunnel-remote-net"] = str(net_int)
+
+    if "description" in params:
+        changes["descr"] = str(params.get("description") or "")
+
+    for param, wire_key in (
+        ("ecn", "link1"),
+        ("link2", "link2"),
+        ("noclamp", "noclamp"),
+    ):
+        if param in params:
+            changes[wire_key] = "1" if params.get(param) else "0"
+
+    return changes, None
 
 
 def gif_params_to_wire(params: dict[str, Any]) -> dict[str, Any]:
@@ -165,6 +239,22 @@ class _GifToolBase:
             return False, str(exc)
         return True, ""
 
+    def _confirm(self, resource: str, uuid: str, confirm: Any) -> dict[str, Any] | None:
+        """Return a confirmation response, or None when the token is valid."""
+        if validate_delete_confirm_token(resource, uuid, str(confirm or "")):
+            return None
+        token = issue_delete_confirm_token(resource, uuid)
+        return {
+            "status": "confirmation_required",
+            "uuid": uuid,
+            "confirm_token": token["token"],
+            "message": token["message"],
+        }
+
+    async def _assignment_rows(self) -> list[dict[str, Any]]:
+        """Return interface assignment rows."""
+        return await self._rows(ASSIGNMENT["search"])
+
 
 class ListGifTool(_GifToolBase):
     """List GIF tunnel devices."""
@@ -258,7 +348,10 @@ class MkGifTool(_GifToolBase):
             try:
                 _normalize_addr(addr)
             except ValueError:
-                return {"status": "error", "error": f"{label} {addr!r} is not a valid address"}
+                return {
+                    "status": "error",
+                    "error": f"{label} {addr!r} is not a valid address",
+                }
 
         tunnel_remote_net = params.get("tunnel_remote_net", 32)
         try:
@@ -269,11 +362,16 @@ class MkGifTool(_GifToolBase):
                 "error": f"tunnel_remote_net {tunnel_remote_net!r} is not a number",
             }
         if not 1 <= net_int <= 128:
-            return {"status": "error", "error": "tunnel_remote_net must be between 1 and 128"}
+            return {
+                "status": "error",
+                "error": "tunnel_remote_net must be between 1 and 128",
+            }
 
         try:
             for row in await self._rows(GIF["search"]):
-                if _gif_identity_matches(row, parent, remote, tunnel_local, tunnel_remote):
+                if _gif_identity_matches(
+                    row, parent, remote, tunnel_local, tunnel_remote
+                ):
                     return {
                         "status": "success",
                         "created": False,
@@ -309,6 +407,208 @@ class MkGifTool(_GifToolBase):
         }
         if isinstance(result, dict) and result.get("gifif"):
             out["device"] = result["gifif"]
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
+
+
+class SetGifTool(_GifToolBase):
+    """Update a GIF tunnel device."""
+
+    name = "set_gif"
+    description = "Update fields on an existing GIF tunnel device"
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "uuid": {"type": "string", "description": "GIF device uuid"},
+            "parent": {
+                "type": "string",
+                "description": "Parent interface name or local address",
+                "optional": True,
+            },
+            "remote": {
+                "type": "string",
+                "description": "Outer remote peer address",
+                "optional": True,
+            },
+            "tunnel_local": {
+                "type": "string",
+                "description": "Inner local tunnel endpoint",
+                "optional": True,
+            },
+            "tunnel_remote": {
+                "type": "string",
+                "description": "Inner remote tunnel endpoint",
+                "optional": True,
+            },
+            "tunnel_remote_net": {
+                "type": "number",
+                "description": "Prefix length for tunnel remote (1-128)",
+                "optional": True,
+            },
+            "description": {"type": "string", "optional": True},
+            "ecn": {"type": "boolean", "optional": True},
+            "link2": {"type": "boolean", "optional": True},
+            "noclamp": {"type": "boolean", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "description": "Reconfigure GIF devices afterwards (default false)",
+                "optional": True,
+                "default": False,
+            },
+        },
+        "required": ["uuid"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Read the device, merge caller changes, and write the whole node back."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        uuid = (params.get("uuid") or "").strip()
+        if not uuid:
+            return {"status": "error", "error": "uuid is required"}
+
+        if str(params.get("device") or "").strip():
+            return {
+                "status": "error",
+                "error": (
+                    "device (gifif) cannot be changed after creation; the firmware "
+                    "overlay locks it. Delete and recreate the tunnel instead."
+                ),
+            }
+
+        changes, error = _gif_update_changes(params)
+        if error:
+            return {"status": "error", "error": error}
+        if not changes:
+            return {
+                "status": "error",
+                "error": (
+                    f"nothing to change; pass one of: {', '.join(_GIF_UPDATE_FIELDS)}"
+                ),
+            }
+
+        try:
+            current = await self.client._make_request("GET", f"{GIF['get']}/{uuid}")
+            node = current.get("gif", {}) if isinstance(current, dict) else {}
+            if not node:
+                return {"status": "error", "error": f"GIF {uuid} not found"}
+
+            payload = merge_for_set(node, changes)
+            await self.client._make_request(
+                "POST",
+                f"{GIF['set']}/{uuid}",
+                call_class="write",
+                json={"gif": payload},
+            )
+        except Exception as exc:  # noqa: BLE001
+            if _is_gif_privilege_failure(exc):
+                return self._privilege_error()
+            logger.exception("Failed to update GIF")
+            return {"status": "error", "error": str(exc)}
+
+        applied, apply_error = await self._apply(params, GIF["reconfigure"], "GIF")
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "changed": sorted(changes),
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
+
+
+class RmGifTool(_GifToolBase):
+    """Delete a GIF tunnel device."""
+
+    name = "rm_gif"
+    description = (
+        "Delete a GIF tunnel device; refuses while it is assigned to an interface"
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "uuid": {"type": "string", "description": "GIF device uuid"},
+            "confirm": {"type": "string", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "description": "Reconfigure GIF devices afterwards (default false)",
+                "optional": True,
+                "default": False,
+            },
+        },
+        "required": ["uuid"],
+    }
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Delete once confirmed, unless an interface assignment still uses it."""
+        params = params or {}
+        if not self.client:
+            return self._no_client()
+        uuid = (params.get("uuid") or "").strip()
+        if not uuid:
+            return {"status": "error", "error": "uuid is required"}
+
+        pending = self._confirm("gif", uuid, params.get("confirm"))
+        if pending:
+            return pending
+
+        try:
+            rows = await self._rows(GIF["search"])
+            row = next((r for r in rows if r.get("uuid") == uuid), None)
+            if not row:
+                return {"status": "error", "error": f"GIF {uuid} not found"}
+
+            device = (row.get("gifif") or "").strip()
+            if not device:
+                return {
+                    "status": "error",
+                    "error": f"GIF {uuid} has no device name; cannot check assignments",
+                }
+
+            assignment_rows = await self._assignment_rows()
+            holders = [
+                r.get("identifier") or r.get("uuid")
+                for r in assignment_rows
+                if (r.get("if") or "") == device
+            ]
+            if holders:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"{device} is assigned to interface {', '.join(holders)}. "
+                        f"Unassign it first; deleting the device would take the "
+                        f"interface with it."
+                    ),
+                }
+
+            result = await self.client._make_request(
+                "POST", f"{GIF['delete']}/{uuid}", call_class="write", json={}
+            )
+        except Exception as exc:  # noqa: BLE001
+            if _is_gif_privilege_failure(exc):
+                return self._privilege_error()
+            logger.exception("Failed to delete GIF")
+            return {"status": "error", "error": str(exc)}
+
+        if isinstance(result, dict) and result.get("result") == "not found":
+            return {
+                "status": "error",
+                "error": (
+                    f"no GIF device with uuid {uuid}. It may already be gone, "
+                    f"or the uuid came from an older listing."
+                ),
+            }
+
+        applied, apply_error = await self._apply(params, GIF["reconfigure"], "GIF")
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+        }
         if apply_error:
             out["apply_error"] = apply_error
         return out

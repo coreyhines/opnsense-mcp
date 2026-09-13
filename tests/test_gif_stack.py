@@ -11,6 +11,8 @@ import pytest
 from opnsense_mcp.tools.gif_stack import (
     ListGifTool,
     MkGifTool,
+    RmGifTool,
+    SetGifTool,
     gif_params_to_wire,
     privilege_error_message,
     project_gif_row,
@@ -18,6 +20,21 @@ from opnsense_mcp.tools.gif_stack import (
 from opnsense_mcp.utils.api import RequestError
 
 FIX = Path(__file__).parent / "fixtures" / "opnsense-26.7.3"
+
+GIF_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+GIF_ROW = {
+    "uuid": GIF_UUID,
+    "gifif": "gif0",
+    "if": "wan",
+    "remote-addr": "203.0.113.10",
+    "tunnel-local-addr": "2001:db8:1::2",
+    "tunnel-remote-addr": "2001:db8:1::1",
+    "tunnel-remote-net": "64",
+    "descr": "lab",
+}
+GIF_NODE = json.loads((FIX / "gif_get_item_blank.json").read_text())["gif"]
+GIF_NODE["gifif"] = "gif0"
+GIF_NODE["remote-addr"] = "203.0.113.10"
 
 
 def test_gif_params_to_wire_maps_parent_interface() -> None:
@@ -216,6 +233,124 @@ async def test_mk_gif_stages_without_apply_by_default() -> None:
     assert result["applied"] is False
     assert not any(
         "reconfigure" in str(c.args[1])
+        for c in client._make_request.await_args_list
+        if c.args
+    )
+
+
+@pytest.mark.asyncio
+async def test_set_gif_refuses_device_rename() -> None:
+    tool = SetGifTool(AsyncMock())
+    result = await tool.execute({"uuid": GIF_UUID, "device": "gif1"})
+    assert result["status"] == "error"
+    assert "gifif" in result["error"] or "device" in result["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_set_gif_stages_without_apply_by_default() -> None:
+    client = AsyncMock()
+
+    async def fake(method, endpoint, **kwargs):
+        if "get_item" in endpoint:
+            return {"gif": GIF_NODE}
+        if "set_item" in endpoint:
+            return {"result": "saved"}
+        raise AssertionError(endpoint)
+
+    client._make_request = AsyncMock(side_effect=fake)
+    tool = SetGifTool(client)
+    result = await tool.execute(
+        {"uuid": GIF_UUID, "description": "updated", "tunnel_remote_net": 64}
+    )
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    set_calls = [
+        c
+        for c in client._make_request.await_args_list
+        if c.args and "set_item" in str(c.args[1])
+    ]
+    assert set_calls
+    payload = set_calls[0].kwargs.get("json", {}).get("gif", {})
+    assert "gifif" not in payload or payload.get("gifif") == "gif0"
+    assert not any(
+        "reconfigure" in str(c.args[1])
+        for c in client._make_request.await_args_list
+        if c.args
+    )
+
+
+@pytest.mark.asyncio
+async def test_rm_gif_requires_confirm_token() -> None:
+    client = AsyncMock()
+    client._make_request = AsyncMock(return_value={"rows": []})
+    tool = RmGifTool(client)
+
+    result = await tool.execute({"uuid": GIF_UUID})
+
+    assert result["status"] == "confirmation_required"
+    assert result.get("confirm_token")
+    assert not any(
+        "del_item" in str(c.args[1])
+        for c in client._make_request.await_args_list
+        if c.args
+    )
+
+
+@pytest.mark.asyncio
+async def test_rm_gif_refuses_while_assigned() -> None:
+    client = AsyncMock()
+
+    async def fake(method, endpoint, **kwargs):
+        if "gif_settings/search" in endpoint:
+            return {"rows": [GIF_ROW]}
+        if "assignment/search" in endpoint:
+            return {
+                "rows": [
+                    {"if": "gif0", "identifier": "opt5", "uuid": "asn-uuid"},
+                ]
+            }
+        raise AssertionError(endpoint)
+
+    client._make_request = AsyncMock(side_effect=fake)
+    tool = RmGifTool(client)
+
+    first = await tool.execute({"uuid": GIF_UUID})
+    result = await tool.execute({"uuid": GIF_UUID, "confirm": first["confirm_token"]})
+
+    assert result["status"] == "error"
+    assert "assigned" in result["error"].lower() or "opt5" in result["error"]
+    assert not any(
+        "del_item" in str(c.args[1])
+        for c in client._make_request.await_args_list
+        if c.args
+    )
+
+
+@pytest.mark.asyncio
+async def test_rm_gif_deletes_once_confirmed() -> None:
+    client = AsyncMock()
+
+    async def fake(method, endpoint, **kwargs):
+        if "gif_settings/search" in endpoint:
+            return {"rows": [GIF_ROW]}
+        if "assignment/search" in endpoint:
+            return {"rows": []}
+        if "del_item" in endpoint:
+            return {"result": "deleted"}
+        raise AssertionError(endpoint)
+
+    client._make_request = AsyncMock(side_effect=fake)
+    tool = RmGifTool(client)
+
+    challenge = await tool.execute({"uuid": GIF_UUID})
+    result = await tool.execute(
+        {"uuid": GIF_UUID, "confirm": challenge["confirm_token"]}
+    )
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+    assert any(
+        "del_item" in str(c.args[1])
         for c in client._make_request.await_args_list
         if c.args
     )
