@@ -25,7 +25,7 @@ The floor is lower than it should be for a reason worth knowing: MCP gives
 every tool a complete schema with no cross-tool reference, so `apply` is stored
 13 times no matter how canonical its definition is.
 
-Result: 124 operations behind 15 names.
+Result: 129 operations behind 15 names.
 """
 
 from __future__ import annotations

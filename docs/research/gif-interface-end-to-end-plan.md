@@ -478,9 +478,7 @@ Assignment holder check:
 ```python
 rows = await self._assignment_rows()
 holders = [
-    r.get("identifier") or r.get("uuid")
-    for r in rows
-    if (r.get("if") or "") == device
+    r.get("identifier") or r.get("uuid") for r in rows if (r.get("if") or "") == device
 ]
 ```
 
