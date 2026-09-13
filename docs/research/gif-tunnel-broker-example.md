@@ -11,7 +11,7 @@ There is no `configure_gif` orchestrator. Each step reports its own `status`, `a
 
 ## Lab addresses only
 
-Examples below use documentation ranges ([RFC 5737](https://www.rfc-editor.org/rfc/rfc5737), [RFC 3849](https://www.rfc-editor.org/rfc/rfc3849)). Replace with values your broker assigns before applying on a live firewall.
+Examples below use documentation ranges (RFC 5737, RFC 3849). Replace with values your broker assigns before applying on a live firewall.
 
 | Role | Example value |
 |------|----------------|

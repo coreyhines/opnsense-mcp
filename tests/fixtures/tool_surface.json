@@ -1425,7 +1425,7 @@
     }
   },
   "mk_gif": {
-    "description": "Create a GIF tunnel on a parent interface or address",
+    "description": "Create a GIF tunnel on a parent interface or address. Compose with assign and set_address to enable the assigned interface when needed.",
     "inputSchema": {
       "properties": {
         "apply": {
@@ -1472,7 +1472,7 @@
           "type": "string"
         },
         "tunnel_remote_net": {
-          "description": "Prefix length for tunnel remote (1-128, default 32)",
+          "description": "Prefix length for tunnel remote (1-128, default 32). IPv6 tunnel-broker setups must pass 64.",
           "optional": true,
           "type": "number"
         }
@@ -2888,7 +2888,7 @@
           "type": "string"
         },
         "tunnel_remote_net": {
-          "description": "Prefix length for tunnel remote (1-128)",
+          "description": "Prefix length for tunnel remote (1-128, default 32). IPv6 tunnel-broker setups must pass 64.",
           "optional": true,
           "type": "number"
         },
