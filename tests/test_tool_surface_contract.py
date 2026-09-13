@@ -179,13 +179,8 @@ def test_input_schemas_are_well_formed() -> None:
     assert not problems, "\n".join(problems)
 
 
-def test_exposed_group_schemas_avoid_prototype_keys() -> None:
-    """Grouped tools are what HTTP clients see; keep their keys Zod-safe.
-
-    A property named ``constructor`` (dnsmasq's real field) shadows
-    Object.prototype and makes Zod's z.record() reject the whole properties
-    map — Cursor then loads zero tools. Alias before advertising.
-    """
+def _exposed_groups() -> dict[str, object]:
+    """What the HTTP/stdio servers advertise after grouping."""
     from opnsense_mcp.fastmcp_server import build_shaper_tools
     from opnsense_mcp.utils.registry import build_tools
     from opnsense_mcp.utils.tool_groups import build_groups
@@ -193,10 +188,19 @@ def test_exposed_group_schemas_avoid_prototype_keys() -> None:
     class _Client:
         pass
 
-    exposed = build_groups(build_tools(_Client(), extra=build_shaper_tools(_Client())))
+    return build_groups(build_tools(_Client(), extra=build_shaper_tools(_Client())))
+
+
+def test_exposed_group_schemas_avoid_prototype_keys() -> None:
+    """Grouped tools are what HTTP clients see; keep their keys Zod-safe.
+
+    A property named ``constructor`` (dnsmasq's real field) shadows
+    Object.prototype and makes Zod's z.record() reject the whole properties
+    map — Cursor then loads zero tools. Alias before advertising.
+    """
     forbidden = {"constructor", "__proto__", "prototype"}
     problems = []
-    for name, tool in sorted(exposed.items()):
+    for name, tool in sorted(_exposed_groups().items()):
         props = (getattr(tool, "input_schema", None) or {}).get("properties") or {}
         bad = sorted(forbidden & set(props))
         if bad:
@@ -204,4 +208,27 @@ def test_exposed_group_schemas_avoid_prototype_keys() -> None:
     assert not problems, (
         "exposed tool schemas must not advertise prototype-shadowing keys: "
         + "; ".join(problems)
+    )
+
+
+def test_exposed_group_schemas_avoid_type_unions() -> None:
+    """Cursor drops every tool when any property uses ``"type": [...]``.
+
+    Member-tool schemas were already checked; grouping can still reintroduce a
+    union from an unfixed member, and that is what HTTP clients see. Confirmed
+    live: a stale deploy advertising ``dhcp.ipv6`` as
+    ``["integer", "string"]`` left Cursor connected with zero tools.
+    """
+    problems = []
+    for name, tool in sorted(_exposed_groups().items()):
+        props = (getattr(tool, "input_schema", None) or {}).get("properties") or {}
+        for prop_name, prop_schema in props.items():
+            if not isinstance(prop_schema, dict):
+                continue
+            prop_type = prop_schema.get("type")
+            if isinstance(prop_type, list):
+                problems.append(f"{name}.{prop_name}: type is a list {prop_type!r}")
+    assert not problems, (
+        "exposed schemas must not use JSON Schema type unions "
+        "(Cursor MCP / Zod loads zero tools): " + "; ".join(problems)
     )
