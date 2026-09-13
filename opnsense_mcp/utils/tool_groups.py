@@ -25,7 +25,7 @@ The floor is lower than it should be for a reason worth knowing: MCP gives
 every tool a complete schema with no cross-tool reference, so `apply` is stored
 13 times no matter how canonical its definition is.
 
-Result: 124 operations behind 15 names.
+Result: 129 operations behind 15 names.
 """
 
 from __future__ import annotations
@@ -142,15 +142,21 @@ GROUPS: dict[str, tuple[str, dict[str, str]]] = {
         },
     ),
     "interface_device": (
-        "Create the devices interfaces are built on: 802.1Q VLANs and loopbacks",
+        "Create the devices interfaces are built on: 802.1Q VLANs, loopbacks, "
+        "and GIF tunnels; assign devices to interface ids",
         {
             "list_vlans": "list_vlans",
             "create_vlan": "mk_vlan",
             "delete_vlan": "rm_vlan",
             "list_loopback": "list_loopback",
             "create_loopback": "mk_loopback",
-            "set_address": "set_interface_address",
             "delete_loopback": "rm_loopback",
+            "list_gif": "list_gif",
+            "create_gif": "mk_gif",
+            "update_gif": "set_gif",
+            "delete_gif": "rm_gif",
+            "assign": "assign_interface",
+            "set_address": "set_interface_address",
         },
     ),
     "nat_outbound": (

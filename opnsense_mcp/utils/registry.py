@@ -65,6 +65,13 @@ from opnsense_mcp.tools.fw_groups import ListFwGroupsTool, SetFwGroupTool
 from opnsense_mcp.tools.fw_rules import FwRulesTool
 from opnsense_mcp.tools.gateway_status import GatewayStatusTool
 from opnsense_mcp.tools.get_logs import GetLogsTool
+from opnsense_mcp.tools.gif_stack import (
+    AssignInterfaceTool,
+    ListGifTool,
+    MkGifTool,
+    RmGifTool,
+    SetGifTool,
+)
 from opnsense_mcp.tools.interface_address import SetInterfaceAddressTool
 from opnsense_mcp.tools.interface_health import InterfaceHealthTool
 from opnsense_mcp.tools.interface_list import InterfaceListTool
@@ -157,6 +164,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     ApplyUlaTool,
     BgpStatusTool,
     ARPTool,
+    AssignInterfaceTool,
     DHCPTool,
     DHCPLeaseDeleteTool,
     DiffConfigBackupsTool,
@@ -179,6 +187,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     ListLoopbackTool,
     ListNptRulesTool,
     ListGatewaysTool,
+    ListGifTool,
     ListFwGroupsTool,
     ListNatOutboundTool,
     ListRouterAdvertsTool,
@@ -196,6 +205,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     MkBgpNeighborTool,
     MkfwRuleTool,
     MkGatewayTool,
+    MkGifTool,
     MkRouteTool,
     MkVlanTool,
     MkLoopbackTool,
@@ -221,6 +231,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     RmBgpNeighborTool,
     RmDhcpHostTool,
     RmGatewayTool,
+    RmGifTool,
     RmLoopbackTool,
     RmDhcpOptionTool,
     RmDhcpRangeTool,
@@ -233,6 +244,7 @@ TOOL_CLASSES: tuple[type, ...] = (
     RmfwRuleTool,
     SetAliasTool,
     SetBgpGlobalTool,
+    SetGifTool,
     SetDhcpSubnetDnsTool,
     SetInterfaceAddressTool,
     SetDhcpRangeTool,
