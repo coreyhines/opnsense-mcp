@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
 
 from opnsense_mcp.tools.gif_stack import (
+    ListGifTool,
     gif_params_to_wire,
     privilege_error_message,
     project_gif_row,
 )
+from opnsense_mcp.utils.api import RequestError
 
 FIX = Path(__file__).parent / "fixtures" / "opnsense-26.7.3"
 
@@ -111,3 +116,28 @@ def test_gif_get_item_fixture_carries_wire_keys() -> None:
         "noclamp",
     ):
         assert key in node
+
+
+@pytest.mark.asyncio
+async def test_list_gif_projects_rows() -> None:
+    payload = json.loads((FIX / "gif_search_item_empty.json").read_text())
+    client = AsyncMock()
+    client._make_request = AsyncMock(return_value=payload)
+    tool = ListGifTool(client)
+    result = await tool.execute({})
+    assert result["status"] == "success"
+    assert "gifs" in result
+    assert result["count"] == len(result["gifs"])
+    for row in result["gifs"]:
+        assert row.get("device") or result["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_gif_maps_403_to_privilege_error() -> None:
+    client = AsyncMock()
+    client._make_request = AsyncMock(side_effect=RequestError("HTTP 403: Forbidden"))
+    tool = ListGifTool(client)
+    result = await tool.execute({})
+    assert result["status"] == "error"
+    assert "403" in result["error"] or "privilege" in result["error"].lower()
+    assert "gif_settings" in result["error"]

@@ -76,3 +76,56 @@ def project_gif_row(row: dict[str, Any]) -> dict[str, Any]:
         "tunnel_remote_net": row.get("tunnel-remote-net", ""),
         "description": row.get("descr", ""),
     }
+
+
+def _is_gif_privilege_failure(exc_or_body: Any) -> bool:
+    """Return True when gif_settings denied access (HTTP 403)."""
+    if isinstance(exc_or_body, dict) and exc_or_body.get("status") == 403:
+        return True
+    text = str(exc_or_body)
+    return "403" in text
+
+
+class _GifToolBase:
+    """Shared client handling for GIF tools."""
+
+    def __init__(self, client: Any) -> None:
+        """Store the OPNsense client."""
+        self.client = client
+
+    def _no_client(self) -> dict[str, Any]:
+        return {"status": "error", "error": "No client available"}
+
+    def _privilege_error(self) -> dict[str, Any]:
+        return {"status": "error", "error": privilege_error_message()}
+
+    async def _rows(self, endpoint: str) -> list[dict[str, Any]]:
+        data = await self.client._make_request(
+            "POST", endpoint, json={"current": 1, "rowCount": 5000}
+        )
+        if _is_gif_privilege_failure(data):
+            raise ValueError(PRIVILEGE_HINT)
+        return data.get("rows", []) if isinstance(data, dict) else []
+
+
+class ListGifTool(_GifToolBase):
+    """List GIF tunnel devices."""
+
+    name = "list_gif"
+    description = "List GIF tunnel devices"
+    input_schema: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+
+    async def execute(self, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Return each GIF's parent, remote peer, and tunnel endpoints."""
+        if not self.client:
+            return self._no_client()
+        try:
+            rows = await self._rows(GIF["search"])
+        except Exception as exc:  # noqa: BLE001
+            if _is_gif_privilege_failure(exc):
+                return self._privilege_error()
+            logger.exception("Failed to list GIF devices")
+            return {"status": "error", "error": str(exc)}
+
+        gifs = [project_gif_row(row) for row in rows]
+        return {"status": "success", "count": len(gifs), "gifs": gifs}
