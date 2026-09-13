@@ -179,13 +179,8 @@ def test_input_schemas_are_well_formed() -> None:
     assert not problems, "\n".join(problems)
 
 
-def test_exposed_group_schemas_avoid_prototype_keys() -> None:
-    """Grouped tools are what HTTP clients see; keep their keys Zod-safe.
-
-    A property named ``constructor`` (dnsmasq's real field) shadows
-    Object.prototype and makes Zod's z.record() reject the whole properties
-    map — Cursor then loads zero tools. Alias before advertising.
-    """
+def _exposed_groups() -> dict[str, object]:
+    """What the HTTP/stdio servers advertise after grouping."""
     from opnsense_mcp.fastmcp_server import build_shaper_tools
     from opnsense_mcp.utils.registry import build_tools
     from opnsense_mcp.utils.tool_groups import build_groups
@@ -193,15 +188,72 @@ def test_exposed_group_schemas_avoid_prototype_keys() -> None:
     class _Client:
         pass
 
-    exposed = build_groups(build_tools(_Client(), extra=build_shaper_tools(_Client())))
-    forbidden = {"constructor", "__proto__", "prototype"}
+    return build_groups(build_tools(_Client(), extra=build_shaper_tools(_Client())))
+
+
+def test_exposed_group_schemas_avoid_prototype_keys() -> None:
+    """Grouped tools are what HTTP clients see; keep their keys Zod-safe.
+
+    A property named ``constructor`` (dnsmasq's real field) shadows
+    Object.prototype and makes Zod's z.record() reject the whole properties
+    map — Cursor then loads zero tools. Alias before advertising.
+    """
+    from opnsense_mcp.utils.grouped_tool import FORBIDDEN_WIRE_KEYS
+
     problems = []
-    for name, tool in sorted(exposed.items()):
+    for name, tool in sorted(_exposed_groups().items()):
         props = (getattr(tool, "input_schema", None) or {}).get("properties") or {}
-        bad = sorted(forbidden & set(props))
+        bad = sorted(FORBIDDEN_WIRE_KEYS & set(props))
         if bad:
             problems.append(f"{name}: {bad}")
     assert not problems, (
         "exposed tool schemas must not advertise prototype-shadowing keys: "
         + "; ".join(problems)
+    )
+
+
+def test_grouped_tool_refuses_to_advertise_constructor() -> None:
+    """Forget the alias and the group must refuse to build, not ship zero tools."""
+    from opnsense_mcp.utils.grouped_tool import GroupedTool
+
+    class _Member:
+        name = "mk_dhcp_range"
+        description = "x"
+        input_schema = {
+            "type": "object",
+            "properties": {
+                "constructor": {"type": "string", "description": "dnsmasq field"},
+            },
+            "required": [],
+        }
+
+    try:
+        GroupedTool("dhcp", "DHCP", {"create_range": _Member()}, field_aliases={})
+    except ValueError as exc:
+        assert "constructor" in str(exc)
+        assert "zero tools" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for unaliased constructor")
+
+
+def test_exposed_group_schemas_avoid_type_unions() -> None:
+    """Cursor drops every tool when any property uses ``"type": [...]``.
+
+    Member-tool schemas were already checked; grouping can still reintroduce a
+    union from an unfixed member, and that is what HTTP clients see. Confirmed
+    live: a stale deploy advertising ``dhcp.ipv6`` as
+    ``["integer", "string"]`` left Cursor connected with zero tools.
+    """
+    problems = []
+    for name, tool in sorted(_exposed_groups().items()):
+        props = (getattr(tool, "input_schema", None) or {}).get("properties") or {}
+        for prop_name, prop_schema in props.items():
+            if not isinstance(prop_schema, dict):
+                continue
+            prop_type = prop_schema.get("type")
+            if isinstance(prop_type, list):
+                problems.append(f"{name}.{prop_name}: type is a list {prop_type!r}")
+    assert not problems, (
+        "exposed schemas must not use JSON Schema type unions "
+        "(Cursor MCP / Zod loads zero tools): " + "; ".join(problems)
     )

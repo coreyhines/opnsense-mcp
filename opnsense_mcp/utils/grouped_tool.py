@@ -32,10 +32,28 @@ HELP_ACTION = "help"
 # `help` still surfaces it; dropped from the wire.
 DEAD_SCHEMA_KEYS = frozenset({"optional"})
 
+# Cursor's MCP client validates `inputSchema.properties` with Zod's
+# `z.record(...)`. Own-properties named `constructor` / `__proto__` /
+# `prototype` make that check fail as `expected: "record"` and Cursor then
+# shows the server as enabled with **zero tools**. Alias those fields before
+# they reach the wire; refuse to advertise them if an alias was forgotten.
+FORBIDDEN_WIRE_KEYS = frozenset({"constructor", "__proto__", "prototype"})
+
 
 def strip_dead_keys(spec: dict[str, Any]) -> dict[str, Any]:
     """Copy a property spec without the keys no client reads."""
     return {k: v for k, v in spec.items() if k not in DEAD_SCHEMA_KEYS}
+
+
+def refuse_forbidden_wire_keys(tool_name: str, properties: dict[str, Any]) -> None:
+    """Raise if *properties* would break Cursor's Zod `z.record` check."""
+    bad = sorted(FORBIDDEN_WIRE_KEYS & set(properties))
+    if bad:
+        raise ValueError(
+            f"{tool_name} inputSchema.properties advertises {bad}, which "
+            "Cursor rejects as an invalid record (enabled, zero tools). "
+            "Alias the field in FIELD_ALIASES before exposing it."
+        )
 
 
 class GroupedTool:
@@ -117,6 +135,7 @@ class GroupedTool:
             )
             properties[field] = merged
 
+        refuse_forbidden_wire_keys(self.name, properties)
         return {
             "type": "object",
             "properties": properties,
