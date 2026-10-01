@@ -60,13 +60,11 @@ jobs:
           fi
           git init
           git remote add origin "${origin}"
-          git fetch --depth 1 origin "${sha}"
-          git checkout --force FETCH_HEAD
+          # Full history (was checkout fetch-depth: 0). Needed for
+          # history scanners / risk map / mirror publish selection.
+          git fetch --prune --no-tags origin "+refs/heads/*:refs/remotes/origin/*" "${sha}"
+          git checkout --force "${sha}"
           git remote set-url origin "${base}"
-        with:
-          # The publisher compares against a commit that may be far back, so a
-          # shallow clone would make every candidate look unreachable.
-          fetch-depth: 0
 
       - name: Resolve what is already published
         id: published

@@ -8,6 +8,10 @@
 # See moby/moby#53258 / nektos/act#6092 (same class of bug).
 #
 # Paste the step below after git is installed. Keep REPO_TOKEN from github.token.
+# Do NOT leave a `with:` / `fetch-depth` block on a `run:` step — Forgejo
+# schema validation rejects it and the whole workflow becomes unusable.
+# For full history (was checkout fetch-depth: 0), fetch heads instead of
+# `git fetch --depth 1`.
 
 # - name: Checkout
 #   env:

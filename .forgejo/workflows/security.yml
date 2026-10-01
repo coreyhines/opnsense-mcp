@@ -46,12 +46,11 @@ jobs:
           fi
           git init
           git remote add origin "${origin}"
-          git fetch --depth 1 origin "${sha}"
-          git checkout --force FETCH_HEAD
+          # Full history (was checkout fetch-depth: 0). Needed for
+          # history scanners / risk map / mirror publish selection.
+          git fetch --prune --no-tags origin "+refs/heads/*:refs/remotes/origin/*" "${sha}"
+          git checkout --force "${sha}"
           git remote set-url origin "${base}"
-        with:
-          # gitleaks scans history; a shallow clone hides prior commits.
-          fetch-depth: 0
       - name: Scan for committed secrets
         run: gitleaks detect --config .gitleaks.toml --redact --log-opts main --verbose
 
@@ -113,8 +112,6 @@ jobs:
           git fetch --depth 1 origin "${sha}"
           git checkout --force FETCH_HEAD
           git remote set-url origin "${base}"
-        with:
-          fetch-depth: 0
       - name: ggshield secret scan
         env:
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
