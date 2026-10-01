@@ -330,7 +330,12 @@ jobs:
           git checkout --force FETCH_HEAD
           git remote set-url origin "${base}"
       - name: Trivy filesystem scan
-        run: trivy fs --exit-code 1 --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
+        run: |
+          set -euo pipefail
+          # Table first so the job log shows what failed; JSON for the artifact.
+          trivy fs --skip-version-check --severity HIGH,CRITICAL --format table .
+          trivy fs --skip-version-check --exit-code 1 --severity HIGH,CRITICAL \
+            --format json -o trivy-fs-report.json .
       - name: Upload trivy-fs-report
         if: always()
         continue-on-error: true

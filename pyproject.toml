@@ -26,6 +26,10 @@ dependencies = [
     "idna>=3.19",
     "starlette>=1.6.0",
     "pydantic-settings>=2.15.0",
+    # Transitive floors: Trivy HIGH/CRITICAL on the resolved lock (pyjwt
+    # CVE-2026-102268 family, urllib3 CVE-2026-97687/97689).
+    "pyjwt>=2.14.0",
+    "urllib3>=2.8.0",
 ]
 
 [tool.setuptools]
