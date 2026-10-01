@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/logo.png" alt="opnsense-mcp" width="96" height="96" />
+</p>
+
 # OPNsense MCP Project Guide
 
 Developer-focused orientation for current architecture and runtime paths.

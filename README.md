@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.png" alt="opnsense-mcp" width="160" height="160" />
+</p>
+
 # OPNsense MCP Server
 
 [![opnsense-mcp MCP server](https://glama.ai/mcp/servers/coreyhines/opnsense-mcp/badges/card.svg)](https://glama.ai/mcp/servers/coreyhines/opnsense-mcp)
@@ -140,6 +144,7 @@ numbers are trusted.
 - Claude Code specifics: [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md)
 - Centralized SSE spec: [`docs/CENTRALIZED_DEPLOY_SPEC.md`](docs/CENTRALIZED_DEPLOY_SPEC.md)
 - Contributor guide: [`docs/DEVELOPMENT/CONTRIBUTING.md`](docs/DEVELOPMENT/CONTRIBUTING.md)
+- Brand assets: [`docs/assets/`](docs/assets/README.md)
 
 ## License
 

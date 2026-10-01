@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="opnsense-mcp" width="96" height="96" />
+</p>
+
 # Getting Started
 
 This guide is optimized for first run.

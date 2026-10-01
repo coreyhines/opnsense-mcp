@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../docs/assets/opnsense-mcp-128x128.png" alt="opnsense-mcp" width="96" height="96" />
+</p>
+
 # OPNsense MCP Server Configuration Examples
 
 This directory contains example configuration files for the OPNsense MCP Server

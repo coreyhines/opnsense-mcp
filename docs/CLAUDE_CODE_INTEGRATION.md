@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="opnsense-mcp" width="96" height="96" />
+</p>
+
 # Claude Code Integration
 
 Fast path for using this MCP server from Claude Code.

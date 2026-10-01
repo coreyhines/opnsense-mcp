@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/logo.png" alt="opnsense-mcp" width="96" height="96" />
+</p>
+
 # Contributing to OPNsense MCP Server
 
 > **How to contribute to AI-powered OPNsense network management**
