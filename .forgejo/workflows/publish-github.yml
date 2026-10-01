@@ -33,13 +33,36 @@ jobs:
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
-      - name: Install git, node and curl
+      - name: Install git and curl
         # actions/checkout is a Node-based action; these plain Python images
         # have neither by default. curl fetches the runs listing, so the
         # selector stays a pure function with no network access of its own.
-        run: apk add --no-cache git nodejs curl
+        run: apk add --no-cache git curl
 
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
         with:
           # The publisher compares against a commit that may be far back, so a
           # shallow clone would make every candidate look unreachable.
