@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/assets/logo.png" alt="opnsense-mcp" width="160" height="160" />
-</p>
+![opnsense-mcp](docs/assets/logo.png)
 
 # OPNsense MCP Server
 
