@@ -57,3 +57,14 @@ def test_an_empty_enum_survives_as_an_empty_string() -> None:
     node = {"bestpath": {"aigp": {"value": "aigp", "selected": 0}}}
 
     assert merge_for_set(node, {}) == {"bestpath": ""}
+
+
+def test_an_empty_list_is_written_back_as_an_empty_string() -> None:
+    """26.7.5 returns [] for an unset multi-select; str([]) would be "[]"."""
+    node = {"categories": [], "description": "x"}
+
+    merged = merge_for_set(node, {})
+
+    assert merged["categories"] == ""
+    assert merged["description"] == "x"
+
