@@ -1,3 +1,5 @@
+![opnsense-mcp](../docs/assets/opnsense-mcp-128x128.png)
+
 # OPNsense MCP Server Configuration Examples
 
 This directory contains example configuration files for the OPNsense MCP Server

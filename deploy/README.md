@@ -1,3 +1,5 @@
+![opnsense-mcp](../docs/assets/logo.png)
+
 # Deploying OPNsense MCP (Streamable HTTP Mode)
 
 Centralized Podman quadlet deployment with **Caddy** TLS and a pinned image from **your registry**.

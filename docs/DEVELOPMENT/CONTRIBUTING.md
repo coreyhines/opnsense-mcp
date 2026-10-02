@@ -1,3 +1,5 @@
+![opnsense-mcp](../assets/logo.png)
+
 # Contributing to OPNsense MCP Server
 
 > **How to contribute to AI-powered OPNsense network management**

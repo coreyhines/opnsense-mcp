@@ -1,3 +1,5 @@
+![opnsense-mcp](assets/logo.png)
+
 # Claude Code Integration
 
 Fast path for using this MCP server from Claude Code.

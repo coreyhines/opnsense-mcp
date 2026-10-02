@@ -1,3 +1,5 @@
+![opnsense-mcp](assets/logo.png)
+
 # Getting Started
 
 This guide is optimized for first run.

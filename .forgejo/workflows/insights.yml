@@ -21,12 +21,34 @@ jobs:
     container:
       image: docker.io/library/python:3.12-bookworm
     steps:
-      - name: Install git and node
-        run: apt-get update && apt-get install -y --no-install-recommends git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
-        with:
-          # The risk map reads the whole history; a shallow clone would blind it.
-          fetch-depth: 0
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          # Full history (was checkout fetch-depth: 0). Needed for
+          # history scanners / risk map / mirror publish selection.
+          git fetch --prune --no-tags origin "+refs/heads/*:refs/remotes/origin/*" "${sha}"
+          git checkout --force "${sha}"
+          git remote set-url origin "${base}"
 
       - name: Defect-risk map
         run: |

@@ -23,12 +23,34 @@ jobs:
       image: ghcr.io/gitleaks/gitleaks:v8.30.1
       options: --entrypoint ""
     steps:
-      - name: Install git and node
-        run: apk add --no-cache git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
-        with:
-          # gitleaks scans history; a shallow clone hides prior commits.
-          fetch-depth: 0
+      - name: Install git
+        run: apk add --no-cache git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          # Full history (was checkout fetch-depth: 0). Needed for
+          # history scanners / risk map / mirror publish selection.
+          git fetch --prune --no-tags origin "+refs/heads/*:refs/remotes/origin/*" "${sha}"
+          git checkout --force "${sha}"
+          git remote set-url origin "${base}"
       - name: Scan for committed secrets
         run: gitleaks detect --config .gitleaks.toml --redact --log-opts main --verbose
 
@@ -40,7 +62,7 @@ jobs:
       # deploy image; CI should not be held to a weaker standard.
       image: docker.io/gitguardian/ggshield:v1.51.0
     steps:
-      - name: Install git and node
+      - name: Install git
         run: |
           set -eu
           # Pick the package manager the image actually has. The previous form,
@@ -50,9 +72,9 @@ jobs:
           # with the real error buried above it. That hid a broken CA path in a
           # runner config for days.
           if command -v apk >/dev/null 2>&1; then
-            install_deps() { apk add --no-cache git nodejs; }
+            install_deps() { apk add --no-cache git; }
           elif command -v apt-get >/dev/null 2>&1; then
-            install_deps() { apt-get update && apt-get install -y git nodejs; }
+            install_deps() { apt-get update && apt-get install -y git; }
           else
             echo "no supported package manager in this image" >&2
             exit 1
@@ -66,9 +88,30 @@ jobs:
           done
           echo "package install failed after 3 attempts" >&2
           exit 1
-      - uses: https://data.forgejo.org/actions/checkout@v6
-        with:
-          fetch-depth: 0
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: ggshield secret scan
         env:
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
@@ -89,7 +132,7 @@ jobs:
     container:
       image: docker.io/semgrep/semgrep:1.173.0
     steps:
-      - name: Install git and node
+      - name: Install git
         run: |
           set -eu
           # Pick the package manager the image actually has. The previous form,
@@ -99,9 +142,9 @@ jobs:
           # with the real error buried above it. That hid a broken CA path in a
           # runner config for days.
           if command -v apk >/dev/null 2>&1; then
-            install_deps() { apk add --no-cache git nodejs; }
+            install_deps() { apk add --no-cache git; }
           elif command -v apt-get >/dev/null 2>&1; then
-            install_deps() { apt-get update && apt-get install -y git nodejs; }
+            install_deps() { apt-get update && apt-get install -y git; }
           else
             echo "no supported package manager in this image" >&2
             exit 1
@@ -115,7 +158,30 @@ jobs:
           done
           echo "package install failed after 3 attempts" >&2
           exit 1
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: Semgrep scan
         run: |
           semgrep scan \
@@ -139,9 +205,32 @@ jobs:
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
-      - name: Install git and node
-        run: apk add --no-cache git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install git
+        run: apk add --no-cache git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: Audit production dependencies
         run: |
           set -euo pipefail
@@ -165,9 +254,32 @@ jobs:
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
-      - name: Install git and node
-        run: apk add --no-cache git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install git
+        run: apk add --no-cache git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: Generate CycloneDX SBOM
         run: |
           set -euo pipefail
@@ -191,11 +303,39 @@ jobs:
       image: docker.io/aquasec/trivy:0.72.0
       options: --entrypoint ""
     steps:
-      - name: Install git and node
-        run: apk add --no-cache git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install git
+        run: apk add --no-cache git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: Trivy filesystem scan
-        run: trivy fs --exit-code 1 --severity HIGH,CRITICAL . -f json -o trivy-fs-report.json
+        run: |
+          set -euo pipefail
+          # Table first so the job log shows what failed; JSON for the artifact.
+          trivy fs --skip-version-check --severity HIGH,CRITICAL --format table .
+          trivy fs --skip-version-check --exit-code 1 --severity HIGH,CRITICAL \
+            --format json -o trivy-fs-report.json .
       - name: Upload trivy-fs-report
         if: always()
         continue-on-error: true
@@ -213,9 +353,32 @@ jobs:
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
-      - name: Install git and node
-        run: apk add --no-cache git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install git
+        run: apk add --no-cache git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: Install scanners
         run: pip install --quiet --upgrade "pip>=26.0" bandit detect-secrets pip-audit
       - name: Bandit

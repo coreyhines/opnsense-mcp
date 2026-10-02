@@ -13,11 +13,33 @@ jobs:
     container:
       image: docker.io/library/python:3.12-alpine
     steps:
-      - name: Install git and node
-        # actions/checkout is a Node-based action; these plain Python images
-        # have neither by default.
-        run: apk add --no-cache git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install git
+        # Needed for the inline Checkout step (see deploy/ci/forgejo-git-checkout.md).
+        run: apk add --no-cache git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: Install ruff
         run: pip install --quiet ruff
       - name: Ruff check
@@ -30,11 +52,33 @@ jobs:
     container:
       image: docker.io/library/python:3.12-bookworm
     steps:
-      - name: Install git and node
-        # actions/checkout is a Node-based action; these plain Python images
-        # have neither by default.
-        run: apt-get update && apt-get install -y --no-install-recommends git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install git
+        # Needed for the inline Checkout step (see deploy/ci/forgejo-git-checkout.md).
+        run: apt-get update && apt-get install -y --no-install-recommends git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: Install dependencies
         # The package itself, not just its requirements: build_info reads
         # importlib.metadata, so without an install it reports "unknown" and
@@ -79,11 +123,33 @@ jobs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
       image: ${{ steps.build.outputs.image }}
     steps:
-      - name: Install git and node
-        # actions/checkout is a Node-based action; buildah/stable has
-        # neither by default.
-        run: dnf install -y git nodejs
-      - uses: https://data.forgejo.org/actions/checkout@v6
+      - name: Install git
+        # Needed for the inline Checkout step (see deploy/ci/forgejo-git-checkout.md).
+        run: dnf install -y git
+      - name: Checkout
+        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
+        # job container; /var/run -> /run makes Podman CopyToContainer fail with
+        # "path escapes from parent" (moby#53258 / act#6092). See
+        # deploy/ci/forgejo-git-checkout.md.
+        env:
+          REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          server="${GITHUB_SERVER_URL:?}"
+          repo="${GITHUB_REPOSITORY:?}"
+          sha="${GITHUB_SHA:?}"
+          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
+          base="${server%/}/${repo}.git"
+          if [ -n "${token}" ]; then
+            origin="https://x-access-token:${token}@${base#https://}"
+          else
+            origin="${base}"
+          fi
+          git init
+          git remote add origin "${origin}"
+          git fetch --depth 1 origin "${sha}"
+          git checkout --force FETCH_HEAD
+          git remote set-url origin "${base}"
       - name: Compute image tag
         id: tag
         run: |
