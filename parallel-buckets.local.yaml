@@ -18,4 +18,6 @@ models:
     ollama_workstation:
       standard: qwen3:32b
     ollama_cloud:
-      standard: glm-5.3:cloud
+      standard: kimi-k3:cloud
+  denylist:
+  - glm-5.3:cloud
