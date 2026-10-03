@@ -48,6 +48,10 @@ UNBOUND = {
 
 # Reason code for deprecate refusal — dnsmasq has no preferred-lifetime field.
 REASON_DEPRECATE_NOT_SUPPORTED = "dnsmasq_deprecate_not_supported"
+# Classification missed the interface (empty/unparseable select, or absent
+# from both radvd and dnsmasq). Writing radvd without a positive serving
+# verdict is the failure mode the classifier was built to stop.
+REASON_NO_SERVING_VERDICT = "no_serving_verdict"
 
 # NPT translation must be live before the prefix is advertised, or anything
 # that believes the advertisement sends traffic that cannot be translated.
@@ -249,74 +253,80 @@ class SetRouterAdvertTool(_UlaToolBase):
                 verdicts = classify_ra_daemons(radvd_rows, [], iface_states)
                 verdict = verdicts.get(iface)
 
-            # Apply the routing decision
-            if verdict is not None:
-                if verdict.daemon == DAEMON_BOTH:
+            # No positive serving verdict → refuse. An empty/unparseable
+            # interface select, or an iface absent from both classifications,
+            # must not fall through to "assume radvd".
+            if verdict is None:
+                return {
+                    "status": "refused",
+                    "reason": (
+                        f"No serving-daemon verdict for interface {iface!r}. "
+                        "Refuse writing radvd without knowing which daemon "
+                        "serves RA on this interface."
+                    ),
+                    "reason_codes": [REASON_NO_SERVING_VERDICT],
+                    "interface": iface,
+                    "uuid": uuid,
+                }
+
+            if verdict.daemon == DAEMON_BOTH:
+                return {
+                    "status": "refused",
+                    "reason": (
+                        "Both radvd and dnsmasq serve RA on this interface. "
+                        "Writing either one makes the misconfiguration worse. "
+                        "Disable one before proceeding."
+                    ),
+                    "reason_codes": list(verdict.reason_codes),
+                    "interface": iface,
+                    "uuid": uuid,
+                }
+
+            if verdict.daemon == DAEMON_DNSMASQ:
+                # More specific message when deprecation is requested
+                if wants_deprecate:
                     return {
                         "status": "refused",
                         "reason": (
-                            "Both radvd and dnsmasq serve RA on this interface. "
-                            "Writing either one makes the misconfiguration worse. "
-                            "Disable one before proceeding."
+                            f"dnsmasq serves RA on {iface} and has no "
+                            "preferred-lifetime field. Deprecating an advertised "
+                            "prefix is not implementable through this API. "
+                            "Phase 3 (graceful prefix deprecation) must be done "
+                            "in the UI or by dropping track6 from the interface."
                         ),
-                        "reason_codes": list(verdict.reason_codes),
+                        "reason_codes": [
+                            REASON_DEPRECATE_NOT_SUPPORTED,
+                            *verdict.reason_codes,
+                        ],
                         "interface": iface,
                         "uuid": uuid,
+                        "missing_capability": "preferred_lifetime",
                     }
+                return {
+                    "status": "refused",
+                    "reason": (
+                        f"dnsmasq serves RA on {iface}, not radvd. Writing to "
+                        "radvd would change config nothing reads. Use the "
+                        "dhcp_ranges tool to modify dnsmasq RA settings."
+                    ),
+                    "reason_codes": list(verdict.reason_codes),
+                    "interface": iface,
+                    "uuid": uuid,
+                }
 
-                if verdict.daemon == DAEMON_DNSMASQ:
-                    # More specific message when deprecation is requested
-                    if wants_deprecate:
-                        return {
-                            "status": "refused",
-                            "reason": (
-                                f"dnsmasq serves RA on {iface} and has no "
-                                "preferred-lifetime field. Deprecating an advertised "
-                                "prefix is not implementable through this API. "
-                                "Phase 3 (graceful prefix deprecation) must be done "
-                                "in the UI or by dropping track6 from the interface."
-                            ),
-                            "reason_codes": [
-                                REASON_DEPRECATE_NOT_SUPPORTED,
-                                *verdict.reason_codes,
-                            ],
-                            "interface": iface,
-                            "uuid": uuid,
-                            "missing_capability": "preferred_lifetime",
-                        }
-                    return {
-                        "status": "refused",
-                        "reason": (
-                            f"dnsmasq serves RA on {iface}, not radvd. Writing to "
-                            "radvd would change config nothing reads. Use the "
-                            "dhcp_ranges tool to modify dnsmasq RA settings."
-                        ),
-                        "reason_codes": list(verdict.reason_codes),
-                        "interface": iface,
-                        "uuid": uuid,
-                    }
+            if verdict.daemon == DAEMON_NONE:
+                return {
+                    "status": "refused",
+                    "reason": (
+                        f"Neither radvd nor dnsmasq is advertising on {iface}. "
+                        "Enable one daemon before configuring RA."
+                    ),
+                    "reason_codes": list(verdict.reason_codes),
+                    "interface": iface,
+                    "uuid": uuid,
+                }
 
-                if verdict.daemon == DAEMON_NONE:
-                    return {
-                        "status": "refused",
-                        "reason": (
-                            f"Neither radvd nor dnsmasq is advertising on {iface}. "
-                            "Enable one daemon before configuring RA."
-                        ),
-                        "reason_codes": list(verdict.reason_codes),
-                        "interface": iface,
-                        "uuid": uuid,
-                    }
-
-            # If we get here and the caller wants deprecation, refuse if
-            # dnsmasq serves (already checked) OR if we would be writing to
-            # radvd (which is the only path left). However, radvd *does* support
-            # deprecation, so only refuse when dnsmasq serves — but we already
-            # exited above for dnsmasq. Double-check nonetheless for the
-            # REASON_DEPRECATE_NOT_SUPPORTED code path (future-proofing for
-            # when dnsmasq ranges might be partially served).
-
-            # radvd serves — proceed with the write
+            # Only DAEMON_RADVD remains — proceed with the write
             payload = flatten_mvc_node(node)
             for field in _RA_COMPUTED:
                 payload.pop(field, None)
@@ -359,7 +369,7 @@ class SetRouterAdvertTool(_UlaToolBase):
             **({"apply_error": apply_error} if apply_error else {}),
             "uuid": uuid,
             "interface": iface,
-            "daemon": DAEMON_RADVD,
+            "daemon": verdict.daemon,
             "note": "Staged unless apply was set.",
         }
 

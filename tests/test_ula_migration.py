@@ -25,6 +25,7 @@ import pytest
 
 from opnsense_mcp.tools.ula_migration import (
     REASON_DEPRECATE_NOT_SUPPORTED,
+    REASON_NO_SERVING_VERDICT,
     ApplyUlaTool,
     ListRouterAdvertsTool,
     PlanDnsUlaTool,
@@ -627,6 +628,39 @@ async def test_set_router_advert_succeeds_when_radvd_serves() -> None:
     # Verify the set_entry call was made
     set_calls = [c for c in calls if "set_entry" in c["endpoint"]]
     assert len(set_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_set_router_advert_refuses_when_interface_unclassified() -> None:
+    """Unparseable/missing interface select → refuse; never write radvd.
+
+    Falsifies the fallthrough that assumed radvd when classification missed.
+    """
+    entry = copy.deepcopy(RA_ENTRY)
+    iface_field = entry["entries"]["interface"]
+    for option in iface_field.values():
+        if isinstance(option, dict):
+            option["selected"] = 0
+
+    client = _client()
+    calls = _stub_with_dnsmasq(
+        client,
+        RA_ROWS_ENABLED,
+        DNSMASQ_RANGE_ROWS_EMPTY,
+        entry,
+        INTERFACE_STATES,
+    )
+
+    result = await SetRouterAdvertTool(client).execute(
+        {"uuid": RA_UUID, "enabled": True}
+    )
+
+    assert result["status"] == "refused"
+    assert REASON_NO_SERVING_VERDICT in result["reason_codes"]
+    assert result.get("daemon") != DAEMON_RADVD
+
+    set_calls = [c for c in calls if "set_entry" in c["endpoint"]]
+    assert set_calls == [], "radvd set_entry must not run without a serving verdict"
 
 
 @pytest.mark.asyncio
