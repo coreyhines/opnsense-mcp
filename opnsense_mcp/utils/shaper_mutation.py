@@ -22,6 +22,9 @@ from opnsense_mcp.utils.shaper_serialize import (
     merge_flat_into_pipe_api_post,
     merge_flat_into_queue_api_post,
     merge_flat_into_rule_api_post,
+    serialize_pipe_api_post,
+    serialize_queue_api_post,
+    serialize_rule_api_post,
 )
 from opnsense_mcp.utils.shaper_snapshot_store import (
     build_restore_plan,
@@ -108,64 +111,118 @@ async def _delete_shaper_resource(
     )
 
 
-async def remove_orphan_shaper_resources(
+# Delete order: rules reference queues and pipes, queues reference pipes.
+_ORPHAN_ORDER: tuple[tuple[str, str, str], ...] = (
+    ("rules", "rule", "search_rules"),
+    ("queues", "queue", "search_queues"),
+    ("pipes", "pipe", "search_pipes"),
+)
+
+
+def _row_uuids(rows: list[dict[str, Any]]) -> list[str]:
+    """Non-empty uuids of *rows*, in row order."""
+    return [
+        str(row.get("uuid") or "").strip()
+        for row in rows
+        if str(row.get("uuid") or "").strip()
+    ]
+
+
+async def plan_orphan_removal(
     client: ClientT,
     snapshot: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Delete live pipes/queues/rules whose UUID is not present in *snapshot*."""
-    snap_rule_ids = {
-        str(row.get("uuid") or "").strip()
-        for row in snapshot.get("search_rules") or []
-        if row.get("uuid")
-    }
-    snap_queue_ids = {
-        str(row.get("uuid") or "").strip()
-        for row in snapshot.get("search_queues") or []
-        if row.get("uuid")
-    }
-    snap_pipe_ids = {
-        str(row.get("uuid") or "").strip()
-        for row in snapshot.get("search_pipes") or []
-        if row.get("uuid")
-    }
+) -> dict[str, list[str]]:
+    """Live rule/queue/pipe uuids absent from *snapshot*, keyed by plural kind.
+
+    This is the exact set a confirmed ``remove_orphans`` restore deletes. It
+    is computed before the restore runs: objects the restore recreates get
+    new uuids that are not in the snapshot either, and computing orphans
+    afterwards deleted them again.
+    """
     live_pipes, live_queues, live_rules = await load_pipe_queue_rule_rows(client)
-    deleted: list[dict[str, Any]] = []
-    for row in live_rules:
-        uid = str(row.get("uuid") or "").strip()
-        if uid and uid not in snap_rule_ids:
-            resp = await _delete_shaper_resource(client, "rule", uid)
-            _require_api_ok("del_rule", uid, resp)
-            deleted.append({"action": "del_rule", "uuid": uid, "result": resp})
-    for row in live_queues:
-        uid = str(row.get("uuid") or "").strip()
-        if uid and uid not in snap_queue_ids:
-            resp = await _delete_shaper_resource(client, "queue", uid)
-            _require_api_ok("del_queue", uid, resp)
-            deleted.append({"action": "del_queue", "uuid": uid, "result": resp})
-    for row in live_pipes:
-        uid = str(row.get("uuid") or "").strip()
-        if uid and uid not in snap_pipe_ids:
-            resp = await _delete_shaper_resource(client, "pipe", uid)
-            _require_api_ok("del_pipe", uid, resp)
-            deleted.append({"action": "del_pipe", "uuid": uid, "result": resp})
+    live = {"pipes": live_pipes, "queues": live_queues, "rules": live_rules}
+    plan: dict[str, list[str]] = {}
+    for kind, _resource, snap_key in _ORPHAN_ORDER:
+        keep = set(_row_uuids(list(snapshot.get(snap_key) or [])))
+        plan[kind] = [uid for uid in _row_uuids(live[kind]) if uid not in keep]
+    return plan
+
+
+async def remove_orphan_shaper_resources(
+    client: ClientT,
+    orphans: dict[str, list[str]],
+    results: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Delete exactly the uuids in *orphans* (from :func:`plan_orphan_removal`).
+
+    Nothing is re-derived from live state here, so a delete cannot reach an
+    object the caller did not confirm.
+    """
+    deleted = results if results is not None else []
+    for kind, resource, _snap_key in _ORPHAN_ORDER:
+        for uid in orphans.get(kind) or []:
+            resp = await _delete_shaper_resource(client, resource, uid)
+            _require_api_ok(f"del_{resource}", uid, resp)
+            deleted.append({"action": f"del_{resource}", "uuid": uid, "result": resp})
     return deleted
+
+
+async def _add_shaper_resource(
+    client: ClientT,
+    resource: str,
+    snapshot_uuid: str,
+    payload: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """POST add_<resource> and return the uuid OPNsense assigned."""
+    resp = await client._make_request(
+        "POST", f"/trafficshaper/settings/add_{resource}/", json=payload
+    )
+    _require_api_ok(f"add_{resource}", snapshot_uuid, resp)
+    new_uuid = str(resp.get("uuid") or resp.get("id") or "").strip()
+    if not new_uuid:
+        raise RuntimeError(
+            f"add_{resource} for snapshot {resource} {snapshot_uuid} returned no uuid"
+        )
+    return new_uuid, resp
 
 
 async def apply_snapshot_restore(
     client: ClientT,
     snapshot: dict[str, Any],
     *,
-    remove_orphans: bool = False,
+    orphans: dict[str, list[str]] | None = None,
+    results: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Replay *snapshot* via get+normalize+merge set endpoints."""
+    """Replay *snapshot* and return ``(results, resource_updates)``.
+
+    A snapshot row still present live is replayed through ``set_*``. A row
+    absent live (deleted since the snapshot) is recreated through ``add_*``,
+    in dependency order pipes, queues, rules. OPNsense assigns the recreated
+    object a new uuid, so queue ``pipe`` and rule ``target`` references to
+    it are remapped; each ``add_*`` result records ``snapshot_uuid``.
+
+    Restore used to call ``set_*`` only, which cannot bring back a deleted
+    object, so the snapshot a delete returned could not undo that delete.
+
+    *orphans* is a confirmed deletion set; it is deleted after the replay.
+    *results* collects steps as they complete, so a caller still holds the
+    finished steps (including created uuids) when a later step raises.
+    """
     if not client:
         raise RuntimeError("No client available")
+    results = results if results is not None else []
     plan = build_restore_plan(snapshot)
     pipe_rows = list(snapshot.get("search_pipes") or [])
     queue_rows = list(snapshot.get("search_queues") or [])
     pmap = pipe_description_map(pipe_rows)
     tmap = target_description_map(queue_rows, pipe_rows)
-    results: list[dict[str, Any]] = []
+    live_pipes, live_queues, live_rules = await load_pipe_queue_rule_rows(client)
+    live_ids = {
+        "pipe": set(_row_uuids(live_pipes)),
+        "queue": set(_row_uuids(live_queues)),
+        "rule": set(_row_uuids(live_rules)),
+    }
+    uuid_map: dict[str, str] = {}
     resource_updates = 0
 
     for step in plan["pipes"]:
@@ -173,18 +230,35 @@ async def apply_snapshot_restore(
         row = step.get("search_row") or {}
         if not uid:
             continue
-        gui_resp = await client._make_request(
-            "GET", f"/trafficshaper/settings/get_pipe/{uid}"
-        )
         flat = normalize_pipe({**row, "uuid": uid})
-        payload = merge_flat_into_pipe_api_post(gui_resp.get("pipe") or {}, flat)
-        resp = await client._make_request(
-            "POST",
-            f"/trafficshaper/settings/set_pipe/{uid}",
-            json=payload,
-        )
-        _require_api_ok("set_pipe", uid, resp)
-        results.append({"action": "set_pipe", "uuid": uid, "result": resp})
+        if uid in live_ids["pipe"]:
+            gui_resp = await client._make_request(
+                "GET", f"/trafficshaper/settings/get_pipe/{uid}"
+            )
+            payload = merge_flat_into_pipe_api_post(gui_resp.get("pipe") or {}, flat)
+            resp = await client._make_request(
+                "POST",
+                f"/trafficshaper/settings/set_pipe/{uid}",
+                json=payload,
+            )
+            _require_api_ok("set_pipe", uid, resp)
+            results.append({"action": "set_pipe", "uuid": uid, "result": resp})
+        else:
+            flat["uuid"] = ""
+            new_uuid, resp = await _add_shaper_resource(
+                client, "pipe", uid, serialize_pipe_api_post(flat)
+            )
+            uuid_map[uid] = new_uuid
+            pmap[new_uuid] = pmap.get(uid, new_uuid)
+            tmap[new_uuid] = tmap.get(uid, new_uuid)
+            results.append(
+                {
+                    "action": "add_pipe",
+                    "uuid": new_uuid,
+                    "snapshot_uuid": uid,
+                    "result": resp,
+                }
+            )
         resource_updates += 1
 
     for step in plan["queues"]:
@@ -192,20 +266,38 @@ async def apply_snapshot_restore(
         row = step.get("search_row") or {}
         if not uid:
             continue
-        gui_resp = await client._make_request(
-            "GET", f"/trafficshaper/settings/get_queue/{uid}"
-        )
         flat = normalize_queue({**row, "uuid": uid})
-        payload = merge_flat_into_queue_api_post(
-            gui_resp.get("queue") or {}, flat, pmap
-        )
-        resp = await client._make_request(
-            "POST",
-            f"/trafficshaper/settings/set_queue/{uid}",
-            json=payload,
-        )
-        _require_api_ok("set_queue", uid, resp)
-        results.append({"action": "set_queue", "uuid": uid, "result": resp})
+        pipe_ref = flat.get("pipe_uuid", "")
+        flat["pipe_uuid"] = uuid_map.get(pipe_ref, pipe_ref)
+        if uid in live_ids["queue"]:
+            gui_resp = await client._make_request(
+                "GET", f"/trafficshaper/settings/get_queue/{uid}"
+            )
+            payload = merge_flat_into_queue_api_post(
+                gui_resp.get("queue") or {}, flat, pmap
+            )
+            resp = await client._make_request(
+                "POST",
+                f"/trafficshaper/settings/set_queue/{uid}",
+                json=payload,
+            )
+            _require_api_ok("set_queue", uid, resp)
+            results.append({"action": "set_queue", "uuid": uid, "result": resp})
+        else:
+            flat["uuid"] = ""
+            new_uuid, resp = await _add_shaper_resource(
+                client, "queue", uid, serialize_queue_api_post(flat, pmap)
+            )
+            uuid_map[uid] = new_uuid
+            tmap[new_uuid] = tmap.get(uid, new_uuid)
+            results.append(
+                {
+                    "action": "add_queue",
+                    "uuid": new_uuid,
+                    "snapshot_uuid": uid,
+                    "result": resp,
+                }
+            )
         resource_updates += 1
 
     for step in plan["rules"]:
@@ -213,18 +305,37 @@ async def apply_snapshot_restore(
         row = step.get("search_row") or {}
         if not uid:
             continue
-        gui_resp = await client._make_request(
-            "GET", f"/trafficshaper/settings/get_rule/{uid}"
-        )
         flat = normalize_rule({**row, "uuid": uid})
-        payload = merge_flat_into_rule_api_post(gui_resp.get("rule") or {}, flat, tmap)
-        resp = await client._make_request(
-            "POST",
-            f"/trafficshaper/settings/set_rule/{uid}",
-            json=payload,
-        )
-        _require_api_ok("set_rule", uid, resp)
-        results.append({"action": "set_rule", "uuid": uid, "result": resp})
+        target_ref = flat.get("target_uuid", "")
+        flat["target_uuid"] = uuid_map.get(target_ref, target_ref)
+        if uid in live_ids["rule"]:
+            gui_resp = await client._make_request(
+                "GET", f"/trafficshaper/settings/get_rule/{uid}"
+            )
+            payload = merge_flat_into_rule_api_post(
+                gui_resp.get("rule") or {}, flat, tmap
+            )
+            resp = await client._make_request(
+                "POST",
+                f"/trafficshaper/settings/set_rule/{uid}",
+                json=payload,
+            )
+            _require_api_ok("set_rule", uid, resp)
+            results.append({"action": "set_rule", "uuid": uid, "result": resp})
+        else:
+            flat["uuid"] = ""
+            new_uuid, resp = await _add_shaper_resource(
+                client, "rule", uid, serialize_rule_api_post(flat, tmap)
+            )
+            uuid_map[uid] = new_uuid
+            results.append(
+                {
+                    "action": "add_rule",
+                    "uuid": new_uuid,
+                    "snapshot_uuid": uid,
+                    "result": resp,
+                }
+            )
         resource_updates += 1
 
     settings_raw = plan.get("settings")
@@ -237,9 +348,8 @@ async def apply_snapshot_restore(
         _require_api_ok("set_settings", "global", settings_resp)
         results.append({"action": "set_settings", "result": settings_resp})
 
-    if remove_orphans:
-        orphan_results = await remove_orphan_shaper_resources(client, snapshot)
-        results.extend(orphan_results)
+    if orphans:
+        await remove_orphan_shaper_resources(client, orphans, results)
 
     return results, resource_updates
 

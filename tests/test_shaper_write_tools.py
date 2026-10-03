@@ -346,8 +346,17 @@ async def test_restore_shaper_snapshot_remove_orphans(
     )
     assert extra["status"] == TOOL_STATUS_SUCCESS
     restore = RestoreShaperSnapshotTool(mock_client)
-    resp = await restore.execute(
+    plan = await restore.execute(
         {"snapshot_id": snapshot_id, "apply": False, "remove_orphans": True}
+    )
+    assert plan["status"] == TOOL_STATUS_CONFIRMATION_REQUIRED
+    resp = await restore.execute(
+        {
+            "snapshot_id": snapshot_id,
+            "apply": False,
+            "remove_orphans": True,
+            "confirm": plan["structured"]["confirm_token"],
+        }
     )
     assert resp["status"] == TOOL_STATUS_SUCCESS
     pipes = await search_shaper_pipes(mock_client)
