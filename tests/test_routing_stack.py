@@ -132,7 +132,7 @@ def _stub(client: OPNsenseClient, responses: dict[str, Any]) -> list[dict[str, A
             if key in endpoint:
                 if isinstance(value, Exception):
                     raise value
-                return value
+                return value() if callable(value) else value
         return {"result": "saved", "uuid": "new-uuid"}
 
     client._make_request = AsyncMock(side_effect=fake)
@@ -242,6 +242,24 @@ async def test_mk_gateway_is_idempotent_on_interface_and_address() -> None:
     )
 
     assert result["created"] is False
+    assert not [c for c in calls if "add_gateway" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_mk_gateway_refuses_an_ipv6_scope_id() -> None:
+    client = _client()
+    calls = _stub(client, {"search_gateway": {"rows": [], "total": 0}})
+
+    result = await MkGatewayTool(client).execute(
+        {
+            "name": "SCOPED",
+            "interface": "opt2",
+            "gateway": "fe80::1%$(reboot)",
+            "ipprotocol": "inet6",
+        }
+    )
+
+    assert result["status"] == "error"
     assert not [c for c in calls if "add_gateway" in c["endpoint"]]
 
 
@@ -464,26 +482,104 @@ async def _run_rm_gateway(client: OPNsenseClient) -> dict[str, Any]:
 
 EMPTY = {"rows": [], "total": 0}
 
-# site -> (what to run, what the reads answer, the field the write itself sets
-# and the value it must still hold once the apply has failed)
+
+def _sequence(*values: Any) -> Any:
+    """Return successive stub responses for repeated reads of one endpoint."""
+    remaining = iter(values)
+    return lambda: next(remaining)
+
+
+def _mk_vlan_reads(state: str) -> dict[str, Any]:
+    if state == "verified":
+        created = {
+            "rows": [{"uuid": "new-uuid", "if": "ax0", "tag": "900"}],
+            "total": 1,
+        }
+        return {"search_item": _sequence(EMPTY, created)}
+    return {"search_item": EMPTY}
+
+
+def _mk_gateway_reads(state: str) -> dict[str, Any]:
+    if state == "verified":
+        created = {
+            "rows": [
+                {
+                    "uuid": "new-uuid",
+                    "interface": "opt3",
+                    "gateway": "172.31.9.2",
+                }
+            ],
+            "total": 1,
+        }
+        return {"search_gateway": _sequence(EMPTY, created)}
+    return {"search_gateway": EMPTY}
+
+
+def _toggle_gateway_reads(state: str) -> dict[str, Any]:
+    rows = {
+        "rows": [
+            dict(GW_ROWS["rows"][0], disabled="1" if state == "verified" else "0")
+        ],
+        "total": 1,
+    }
+    return {"get_gateway": GET_GW, "search_gateway": rows}
+
+
+def _mk_route_reads(state: str) -> dict[str, Any]:
+    if state == "verified":
+        created = {
+            "rows": [
+                {
+                    "uuid": "new-uuid",
+                    "network": "172.20.9.0/24",
+                    "gateway": "TRANSIT_INTERNAL",
+                    "enabled": "1",
+                }
+            ],
+            "total": 1,
+        }
+        return {"searchroute": _sequence(EMPTY, created)}
+    return {"searchroute": EMPTY}
+
+
+def _toggle_route_reads(state: str) -> dict[str, Any]:
+    rows = {
+        "rows": [
+            dict(ROUTE_ROWS["rows"][0], enabled="0" if state == "verified" else "1")
+        ],
+        "total": 1,
+    }
+    return {"getroute": GET_ROUTE, "searchroute": rows}
+
+
+def _rm_route_reads(state: str) -> dict[str, Any]:
+    return {"searchroute": EMPTY if state == "verified" else ROUTE_ROWS}
+
+
+def _rm_gateway_reads(state: str) -> dict[str, Any]:
+    return {"search_gateway": EMPTY if state == "verified" else GW_ROWS}
+
+
+# site -> (what to run, fresh read fixtures, and a field proving the write itself
+# landed even when apply or verification fails)
 APPLY_SITES = [
-    ("mk_vlan", _run_mk_vlan, {"search_item": EMPTY}, ("created", True)),
-    ("mk_gateway", _run_mk_gateway, {"search_gateway": EMPTY}, ("created", True)),
+    ("mk_vlan", _run_mk_vlan, _mk_vlan_reads, ("created", True)),
+    ("mk_gateway", _run_mk_gateway, _mk_gateway_reads, ("created", True)),
     (
         "toggle_gateway",
         _run_toggle_gateway,
-        {"get_gateway": GET_GW},
+        _toggle_gateway_reads,
         ("enabled", False),
     ),
-    ("mk_route", _run_mk_route, {"searchroute": EMPTY}, ("created", True)),
-    ("toggle_route", _run_toggle_route, {"getroute": GET_ROUTE}, ("enabled", False)),
-    ("rm_route", _run_rm_route, {}, ("deleted", True)),
-    ("rm_gateway", _run_rm_gateway, {}, ("deleted", True)),
+    ("mk_route", _run_mk_route, _mk_route_reads, ("created", True)),
+    ("toggle_route", _run_toggle_route, _toggle_route_reads, ("enabled", False)),
+    ("rm_route", _run_rm_route, _rm_route_reads, ("deleted", True)),
+    ("rm_gateway", _run_rm_gateway, _rm_gateway_reads, ("deleted", True)),
 ]
 
 
 @pytest.mark.parametrize(
-    ("site", "run", "reads", "wrote"),
+    ("site", "run", "read_fixture", "wrote"),
     APPLY_SITES,
     ids=[case[0] for case in APPLY_SITES],
 )
@@ -491,7 +587,7 @@ APPLY_SITES = [
 async def test_a_refused_reconfigure_is_reported_as_not_applied(
     site: str,
     run: Any,
-    reads: dict[str, Any],
+    read_fixture: Any,
     wrote: tuple[str, bool],
 ) -> None:
     """The write happened; the apply did not. Both must be said, separately.
@@ -501,13 +597,13 @@ async def test_a_refused_reconfigure_is_reported_as_not_applied(
     is to try again.
     """
     client = _client()
-    calls = _stub(client, {**reads, "reconfigure": APPLY_REFUSED})
+    calls = _stub(client, {**read_fixture("stale"), "reconfigure": APPLY_REFUSED})
 
     result = await run(client)
 
-    assert [c for c in calls if "reconfigure" in c["endpoint"]], (
-        f"{site} never called reconfigure"
-    )
+    assert [
+        c for c in calls if "reconfigure" in c["endpoint"]
+    ], f"{site} never called reconfigure"
     assert result["status"] == "success"
     assert result[wrote[0]] is wrote[1]
     assert result["applied"] is False
@@ -516,7 +612,7 @@ async def test_a_refused_reconfigure_is_reported_as_not_applied(
 
 
 @pytest.mark.parametrize(
-    ("site", "run", "reads", "wrote"),
+    ("site", "run", "read_fixture", "wrote"),
     APPLY_SITES,
     ids=[case[0] for case in APPLY_SITES],
 )
@@ -524,22 +620,48 @@ async def test_a_refused_reconfigure_is_reported_as_not_applied(
 async def test_an_accepted_reconfigure_is_reported_as_applied(
     site: str,
     run: Any,
-    reads: dict[str, Any],
+    read_fixture: Any,
     wrote: tuple[str, bool],
 ) -> None:
     """The counterpart: `applied` is not hardcoded false."""
     client = _client()
-    _stub(client, {**reads, "reconfigure": APPLY_OK})
+    _stub(client, {**read_fixture("verified"), "reconfigure": APPLY_OK})
 
     result = await run(client)
 
     assert result["status"] == "success"
     assert result["applied"] is True
+    assert result["verified"] is True
     assert "apply_error" not in result
 
 
 @pytest.mark.parametrize(
-    ("site", "run", "reads", "wrote"),
+    ("site", "run", "read_fixture", "wrote"),
+    APPLY_SITES,
+    ids=[case[0] for case in APPLY_SITES],
+)
+@pytest.mark.asyncio
+async def test_an_accepted_reconfigure_with_stale_state_is_not_applied(
+    site: str,
+    run: Any,
+    read_fixture: Any,
+    wrote: tuple[str, bool],
+) -> None:
+    """An accepted configd request does not prove the requested state landed."""
+    client = _client()
+    _stub(client, {**read_fixture("stale"), "reconfigure": APPLY_OK})
+
+    result = await run(client)
+
+    assert result["status"] == "success"
+    assert result[wrote[0]] is wrote[1]
+    assert result["applied"] is False
+    assert result["verified"] is False
+    assert "verify_error" in result
+
+
+@pytest.mark.parametrize(
+    ("site", "run", "read_fixture", "wrote"),
     APPLY_SITES,
     ids=[case[0] for case in APPLY_SITES],
 )
@@ -547,12 +669,18 @@ async def test_an_accepted_reconfigure_is_reported_as_applied(
 async def test_a_reconfigure_that_never_answers_is_not_applied(
     site: str,
     run: Any,
-    reads: dict[str, Any],
+    read_fixture: Any,
     wrote: tuple[str, bool],
 ) -> None:
     """A transport failure applying is also not a write failure."""
     client = _client()
-    _stub(client, {**reads, "reconfigure": RequestError("configd timed out")})
+    _stub(
+        client,
+        {
+            **read_fixture("stale"),
+            "reconfigure": RequestError("configd timed out"),
+        },
+    )
 
     result = await run(client)
 
