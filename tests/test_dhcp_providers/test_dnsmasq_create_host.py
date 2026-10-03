@@ -70,6 +70,8 @@ async def test_apply_creates_and_reconfigures():
             return {"rows": []}
         if endpoint == _HOST_ADD_ENDPOINT:
             return {"result": "saved", "uuid": "new-uuid"}
+        if endpoint == _RECONFIGURE_ENDPOINT:
+            return {"status": "ok"}
         return {}
 
     provider = DnsmasqProvider(fake_request)
@@ -81,6 +83,7 @@ async def test_apply_creates_and_reconfigures():
     )
     assert result["status"] == "success"
     assert result["created"]["uuid"] == "new-uuid"
+    assert result["applied"] is True
     assert _RECONFIGURE_ENDPOINT in calls
 
 
@@ -194,6 +197,8 @@ async def test_apply_includes_client_id():
         if endpoint == _HOST_ADD_ENDPOINT:
             captured["payload"] = kwargs.get("json", {}).get("host", {})
             return {"result": "saved", "uuid": "new-uuid"}
+        if endpoint == _RECONFIGURE_ENDPOINT:
+            return {"status": "ok"}
         return {}
 
     provider = DnsmasqProvider(fake_request)
@@ -206,6 +211,7 @@ async def test_apply_includes_client_id():
         dry_run=False,
     )
     assert result["status"] == "success"
+    assert result["applied"] is True
     assert captured["payload"]["ip"] == "172.20.3.13,::13"
     assert captured["payload"]["client_id"] == "52:54:00:7e:9c:f4:00:ab:cd:01"
 
