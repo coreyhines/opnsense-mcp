@@ -70,6 +70,22 @@ def test_captured_rules_round_trip_their_values_not_just_their_keys() -> None:
         assert mapped["action"] == row["action"]
 
 
+def test_captured_rule_inversion_flags_normalize_to_booleans() -> None:
+    """An inverted endpoint must not be reported as the endpoint itself."""
+    from opnsense_mcp.tools.fw_rules import _map_search_rule_row
+
+    row = {
+        **_rows("filter_searchrule_rows.json")[0],
+        "source_not": "1",
+        "destination_not": "0",
+    }
+
+    mapped = _map_search_rule_row(row)
+
+    assert mapped["source_not"] is True
+    assert mapped["destination_not"] is False
+
+
 def test_the_captured_rules_cover_more_than_one_action() -> None:
     """A fixture of only `pass` rules cannot catch an action defect."""
     actions = {row["action"] for row in _rows("filter_searchrule_rows.json")}
