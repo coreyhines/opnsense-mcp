@@ -34,6 +34,7 @@ from opnsense_mcp.utils.shaper_write_helpers import (
     detect_idempotent_set,
     issue_delete_confirm_token,
     next_shaper_rule_sequence,
+    shaper_api_result_ok,
     validate_delete_confirm_token,
     warn_lan_interface,
 )
@@ -45,6 +46,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ClientT = "OPNsenseClient | MockOPNsenseClient | None"
+
+
+def _failed_write_response(
+    result: Any, *, action: str, snapshot_id: str | None = None
+) -> dict[str, Any] | None:
+    """Return an error envelope when the write endpoint rejected the request."""
+    payload = result if isinstance(result, dict) else {}
+    ok, detail = shaper_api_result_ok(payload)
+    if ok:
+        return None
+    msg = detail or "write rejected"
+    return make_tool_response(
+        status=TOOL_STATUS_ERROR,
+        structured={"error": msg, "api_result": result, "applied": False},
+        summary=f"**Error:** Failed to {action} — {msg}",
+        snapshot_id=snapshot_id,
+    )
 
 
 def _filter_rules(
@@ -370,6 +388,11 @@ class AddShaperRuleTool:
             result = await self.client._make_request(
                 "POST", "/trafficshaper/settings/add_rule/", json=payload
             )
+            rejected = _failed_write_response(
+                result, action="add rule", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
             rule_uuid = result.get("id") or result.get("uuid", "")
             flat["uuid"] = str(rule_uuid)
         except Exception as exc:
@@ -470,6 +493,11 @@ class SetShaperRuleTool:
             result = await self.client._make_request(
                 "POST", f"/trafficshaper/settings/set_rule/{uuid}", json=payload
             )
+            rejected = _failed_write_response(
+                result, action="set rule", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to set shaper rule")
             return make_tool_response(
@@ -522,6 +550,11 @@ class ToggleShaperRuleTool:
             result = await self.client._make_request(
                 "POST", f"/trafficshaper/settings/toggle_rule/{uuid}"
             )
+            rejected = _failed_write_response(
+                result, action="toggle rule", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to toggle shaper rule")
             return make_tool_response(
@@ -581,6 +614,11 @@ class DeleteShaperRuleTool:
             result = await self.client._make_request(
                 "POST", f"/trafficshaper/settings/del_rule/{uuid}"
             )
+            rejected = _failed_write_response(
+                result, action="delete rule", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to delete shaper rule")
             return make_tool_response(

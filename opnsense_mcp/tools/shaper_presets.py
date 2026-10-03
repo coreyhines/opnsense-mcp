@@ -125,6 +125,7 @@ class ApplyShaperPresetTool:
             "bandwidth": bandwidth,
             "scheduler": "fq_codel",
             "codel_ecn_enable": True,
+            "enabled": True,
             "apply": False,
             "mutation_snapshot_id": mutation_snapshot_id,
         }
@@ -166,6 +167,7 @@ class ApplyShaperPresetTool:
             "description": description,
             "pipe_uuid": pipe_uuid,
             "weight": 100,
+            "enabled": True,
             "apply": False,
             "mutation_snapshot_id": mutation_snapshot_id,
         }
@@ -209,6 +211,7 @@ class ApplyShaperPresetTool:
             "direction": spec["direction"],
             "proto": spec["proto"],
             "target_uuid": target_uuid,
+            "enabled": True,
             "apply": False,
             "mutation_snapshot_id": mutation_snapshot_id,
         }

@@ -403,7 +403,11 @@ async def finish_mutation(
         sync_fields, sync_hints = await _kernel_sync_fields(client)
         merged.update(sync_fields)
         all_hints.extend(sync_hints)
-        if sync_fields.get("kernel_in_sync") is False:
+        # Reconfigure accepted the config, but applied means the runtime
+        # matches. Orphans or an unverifiable kernel leave applied false.
+        if sync_fields.get("kernel_in_sync") is not True:
+            merged["config_applied"] = True
+            merged["applied"] = False
             final_status = TOOL_STATUS_WARNING
 
     return build_mutation_response(

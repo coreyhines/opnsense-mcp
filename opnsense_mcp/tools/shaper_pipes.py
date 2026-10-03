@@ -33,6 +33,7 @@ from opnsense_mcp.utils.shaper_write_helpers import (
     detect_idempotent_set,
     has_bandwidth_guardrail_error,
     issue_delete_confirm_token,
+    shaper_api_result_ok,
     validate_delete_confirm_token,
 )
 
@@ -43,6 +44,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ClientT = "OPNsenseClient | MockOPNsenseClient | None"
+
+
+def _failed_write_response(
+    result: Any, *, action: str, snapshot_id: str | None = None
+) -> dict[str, Any] | None:
+    """Return an error envelope when the write endpoint rejected the request."""
+    payload = result if isinstance(result, dict) else {}
+    ok, detail = shaper_api_result_ok(payload)
+    if ok:
+        return None
+    msg = detail or "write rejected"
+    return make_tool_response(
+        status=TOOL_STATUS_ERROR,
+        structured={"error": msg, "api_result": result, "applied": False},
+        summary=f"**Error:** Failed to {action} — {msg}",
+        snapshot_id=snapshot_id,
+    )
 
 
 def _filter_pipes(
@@ -345,6 +363,11 @@ class AddShaperPipeTool:
                 "/trafficshaper/settings/add_pipe/",
                 json=payload,
             )
+            rejected = _failed_write_response(
+                result, action="add pipe", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
             pipe_uuid = result.get("id") or result.get("uuid", "")
             flat["uuid"] = str(pipe_uuid)
         except Exception as exc:
@@ -452,6 +475,11 @@ class SetShaperPipeTool:
                 f"/trafficshaper/settings/set_pipe/{uuid}",
                 json=payload,
             )
+            rejected = _failed_write_response(
+                result, action="set pipe", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to set shaper pipe")
             return make_tool_response(
@@ -503,6 +531,11 @@ class ToggleShaperPipeTool:
                 "POST",
                 f"/trafficshaper/settings/toggle_pipe/{uuid}",
             )
+            rejected = _failed_write_response(
+                result, action="toggle pipe", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to toggle shaper pipe")
             return make_tool_response(
@@ -565,6 +598,11 @@ class DeleteShaperPipeTool:
                 "POST",
                 f"/trafficshaper/settings/del_pipe/{uuid}",
             )
+            rejected = _failed_write_response(
+                result, action="delete pipe", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to delete shaper pipe")
             return make_tool_response(
