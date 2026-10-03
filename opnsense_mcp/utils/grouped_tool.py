@@ -32,6 +32,12 @@ HELP_ACTION = "help"
 # `help` still surfaces it; dropped from the wire.
 DEAD_SCHEMA_KEYS = frozenset({"optional"})
 
+# A grouped property starts with one member's schema. Its default is safe to
+# advertise only when every action accepting that field has the same relevant
+# shape and default. Per-action defaults remain available through `help`.
+DEFAULT_COMPATIBILITY_KEYS = ("default", "enum", "type", "items")
+_MISSING = object()
+
 # Cursor's MCP client validates `inputSchema.properties` with Zod's
 # `z.record(...)`. Own-properties named `constructor` / `__proto__` /
 # `prototype` make that check fail as `expected: "record"` and Cursor then
@@ -113,6 +119,7 @@ class GroupedTool:
         # field -> actions that accept it, so a collision can name them all.
         used_by: dict[str, list[str]] = {}
         raw: dict[str, dict[str, Any]] = {}
+        member_specs: dict[str, list[dict[str, Any]]] = {}
 
         for action, tool in sorted(self.members.items()):
             schema = getattr(tool, "input_schema", {}) or {}
@@ -121,12 +128,22 @@ class GroupedTool:
                 advertised = aliases.get(field, field)
                 used_by.setdefault(advertised, []).append(action)
                 raw.setdefault(advertised, spec)
+                member_specs.setdefault(advertised, []).append(spec)
 
         for field, spec in raw.items():
             if is_shared(field):
                 properties[field] = SHARED_FIELDS[field]
                 continue
             merged = strip_dead_keys(spec)
+            first_values = tuple(
+                spec.get(key, _MISSING) for key in DEFAULT_COMPATIBILITY_KEYS
+            )
+            if "default" in merged and any(
+                tuple(other.get(key, _MISSING) for key in DEFAULT_COMPATIBILITY_KEYS)
+                != first_values
+                for other in member_specs[field][1:]
+            ):
+                merged.pop("default")
             text = spec.get("description", field)
             merged["description"] = (
                 f"[{', '.join(used_by[field])}] {text}"
