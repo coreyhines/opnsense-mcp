@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from opnsense_mcp.tools.ipv6_stack import (
+    REASON_EXISTING_NPT_RULE_MISMATCH,
     REASON_TRACKIF_DOES_NOT_TRANSLATE,
     ListLoopbackTool,
     ListNptRulesTool,
@@ -168,14 +169,19 @@ async def test_npt_rejects_a_prefix_shorter_than_64() -> None:
     one rule per /64. A short prefix silently covers the wrong ranges.
     """
     client = _client()
-    _stub(client, {"search_rule": {"rows": [], "total": 0}})
+    calls = _stub(client, {"search_rule": {"rows": [], "total": 0}})
 
     result = await MkNptRuleTool(client).execute(
-        {"interface": "wan", "source_net": "fd0b:b022:1e5::/48", "trackif": "lan"}
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5::/48",
+            "destination_net": "2001:db8:1e5::/48",
+        }
     )
 
     assert result["status"] == "error"
     assert "/64" in result["error"]
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
 
 
 @pytest.mark.asyncio
@@ -250,7 +256,11 @@ async def test_npt_creates_with_the_real_field_names() -> None:
 @pytest.mark.asyncio
 async def test_npt_is_idempotent_on_interface_and_source() -> None:
     client = _client()
-    calls = _stub(client, {"search_rule": NPT_ROWS})
+    translating = {
+        "rows": [dict(NPT_ROWS["rows"][0], destination_net="2001:db8:2::/64")],
+        "total": 1,
+    }
+    calls = _stub(client, {"search_rule": translating})
 
     result = await MkNptRuleTool(client).execute(
         {
@@ -262,6 +272,51 @@ async def test_npt_is_idempotent_on_interface_and_source() -> None:
 
     assert result["created"] is False
     assert result["uuid"] == NPT_UUID
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_npt_does_not_reuse_a_non_translating_rule() -> None:
+    client = _client()
+    calls = _stub(client, {"search_rule": NPT_ROWS})
+
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "destination_net": "2001:db8:2::/64",
+        }
+    )
+
+    assert result["status"] == "error"
+    assert result["created"] is False
+    assert result["reason"] == REASON_EXISTING_NPT_RULE_MISMATCH
+    assert result["translating"] is False
+    assert result["requested_destination_net"] == "2001:db8:2::/64"
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_npt_does_not_reuse_a_rule_with_a_different_destination() -> None:
+    client = _client()
+    existing = {
+        "rows": [dict(NPT_ROWS["rows"][0], destination_net="2001:db8:1::/64")],
+        "total": 1,
+    }
+    calls = _stub(client, {"search_rule": existing})
+
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "destination_net": "2001:db8:2::/64",
+        }
+    )
+
+    assert result["status"] == "error"
+    assert result["reason"] == REASON_EXISTING_NPT_RULE_MISMATCH
+    assert result["translating"] is True
+    assert result["destination_net"] == "2001:db8:1::/64"
     assert not [c for c in calls if "add_rule" in c["endpoint"]]
 
 
@@ -775,4 +830,76 @@ async def test_reconcile_npt_reports_unverified_when_the_re_read_disagrees() -> 
     result = await ReconcileNptTool(client).execute({"dry_run": False})
 
     assert result["rewritten"] == 1
+    assert result["verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_reconcile_npt_reports_unverified_when_every_rewrite_fails() -> None:
+    client = _client()
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "overview/export" in endpoint:
+            return DRIFTED_IFACES
+        if "search_rule" in endpoint:
+            return DRIFTED_RULE
+        if "set_rule" in endpoint:
+            raise RuntimeError("write refused")
+        return {"result": "saved"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ReconcileNptTool(client).execute({"dry_run": False})
+
+    assert result["rewritten"] == 0
+    assert result["results"][0]["rewritten"] is False
+    assert result["verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_reconcile_npt_reports_unverified_when_one_rewrite_fails() -> None:
+    client = _client()
+    second_uuid = "22222222-3333-4444-5555-666666666666"
+    second_rule = dict(
+        DRIFTED_RULE["rows"][0],
+        uuid=second_uuid,
+        source_net="fd0b:b022:1e5:20::/64",
+        destination_net="2001:db8:1e5:b502::/64",
+    )
+    before = {"rows": [DRIFTED_RULE["rows"][0], second_rule], "total": 2}
+    interfaces = DRIFTED_IFACES + [
+        _iface(
+            "opt14",
+            ["fd0b:b022:1e5:20::1/64", "2001:db8:1e5:c002::1/64"],
+        )
+    ]
+    searches = 0
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        nonlocal searches
+        if "overview/export" in endpoint:
+            return interfaces
+        if "search_rule" in endpoint:
+            searches += 1
+            if searches == 1:
+                return before
+            return {
+                "rows": [
+                    dict(
+                        DRIFTED_RULE["rows"][0],
+                        destination_net="2001:db8:1e5:c001::/64",
+                    ),
+                    second_rule,
+                ],
+                "total": 2,
+            }
+        if endpoint.endswith(second_uuid):
+            raise RuntimeError("write refused")
+        return {"result": "saved"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await ReconcileNptTool(client).execute({"dry_run": False})
+
+    assert result["rewritten"] == 1
+    assert [r["rewritten"] for r in result["results"]] == [True, False]
     assert result["verified"] is False

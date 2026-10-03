@@ -63,6 +63,7 @@ UNIQUE_LOCAL = ipaddress.ip_network("fc00::/7")
 # in search_rule, but pf holds no mapping for it, so the ULA source reaches WAN
 # untranslated. Callers key off this rather than the message wording.
 REASON_TRACKIF_DOES_NOT_TRANSLATE = "trackif_does_not_translate"
+REASON_EXISTING_NPT_RULE_MISMATCH = "existing_npt_rule_mismatch"
 
 
 class _V6ToolBase:
@@ -310,10 +311,27 @@ class MkNptRuleTool(_V6ToolBase):
                     row.get("interface") == interface
                     and row.get("source_net") == source_net
                 ):
+                    existing_destination = row.get("destination_net", "")
+                    if existing_destination != destination_net:
+                        return {
+                            "status": "error",
+                            "created": False,
+                            "uuid": row.get("uuid", ""),
+                            "reason": REASON_EXISTING_NPT_RULE_MISMATCH,
+                            "translating": bool(existing_destination),
+                            "destination_net": existing_destination,
+                            "requested_destination_net": destination_net,
+                            "error": (
+                                "A rule for this interface and source prefix exists "
+                                "with a different external prefix. Refusing to treat "
+                                "it as idempotent."
+                            ),
+                        }
                     return {
                         "status": "success",
                         "created": False,
                         "uuid": row.get("uuid", ""),
+                        "translating": True,
                         "note": "A rule for this interface and source prefix exists.",
                     }
 
@@ -694,10 +712,10 @@ class ReconcileNptTool(_V6ToolBase):
             logger.warning("Could not re-read NPT rules after rewriting: %s", exc)
             out["verified"] = False
         else:
-            out["verified"] = all(
-                after.get(r["uuid"], {}).get("destination_net") == r["expected"]
+            out["verified"] = bool(drifted) and all(
+                r.get("rewritten")
+                and after.get(r["uuid"], {}).get("destination_net") == r["expected"]
                 for r in drifted
-                if r.get("rewritten")
             )
 
         applied = False
