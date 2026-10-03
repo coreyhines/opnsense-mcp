@@ -225,6 +225,11 @@
           "optional": true,
           "type": "string"
         },
+        "ipv6": {
+          "description": "Filter NDP entries by IPv6 address",
+          "optional": true,
+          "type": "string"
+        },
         "mac": {
           "description": "Filter by MAC address",
           "optional": true,
@@ -3282,7 +3287,16 @@
   "system": {
     "description": "Show system status information",
     "inputSchema": {
-      "properties": {},
+      "properties": {
+        "action": {
+          "description": "'status' (default) or 'diagnose_mcp'. diagnose_mcp is read-only: it reports issues and suggested fixes and runs none of them.",
+          "enum": [
+            "status",
+            "diagnose_mcp"
+          ],
+          "type": "string"
+        }
+      },
       "required": [],
       "type": "object"
     }
