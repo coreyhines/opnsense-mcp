@@ -72,6 +72,18 @@ def test_gif_params_to_wire_defaults_tunnel_remote_net_to_32() -> None:
     assert wire["tunnel-remote-net"] == "32"
 
 
+def test_gif_params_to_wire_refuses_ipv6_inners_without_tunnel_remote_net() -> None:
+    with pytest.raises(ValueError):
+        gif_params_to_wire(
+            {
+                "parent": "wan",
+                "remote": "203.0.113.10",
+                "tunnel_local": "2001:db8:1::2",
+                "tunnel_remote": "2001:db8:1::1",
+            }
+        )
+
+
 def test_gif_params_to_wire_maps_parent_as_ipaddr() -> None:
     wire = gif_params_to_wire(
         {
@@ -200,6 +212,63 @@ async def test_mk_gif_reuses_identical_tunnel() -> None:
     assert result["status"] == "success"
     assert result["created"] is False
     assert result["device"] == "gif0"
+    assert result["tunnel_remote_net"] == "64"
+    assert not any(
+        "add_item" in str(c.args[1])
+        for c in client._make_request.await_args_list
+        if c.args
+    )
+
+
+@pytest.mark.asyncio
+async def test_mk_gif_refuses_ipv6_inners_without_tunnel_remote_net() -> None:
+    client = AsyncMock()
+    client._make_request = AsyncMock()
+    tool = MkGifTool(client)
+    result = await tool.execute(
+        {
+            "parent": "wan",
+            "remote": "203.0.113.10",
+            "tunnel_local": "2001:db8:1::2",
+            "tunnel_remote": "2001:db8:1::1",
+        }
+    )
+    assert result["status"] == "error"
+    assert client._make_request.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_mk_gif_refuses_reuse_when_tunnel_remote_net_differs() -> None:
+    existing = {
+        "rows": [
+            {
+                "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "gifif": "gif0",
+                "if": "wan",
+                "remote-addr": "203.0.113.10",
+                "tunnel-local-addr": "2001:db8:1::2",
+                "tunnel-remote-addr": "2001:db8:1::1",
+                "tunnel-remote-net": "32",
+                "descr": "lab",
+            }
+        ]
+    }
+    client = AsyncMock()
+    client._make_request = AsyncMock(return_value=existing)
+    tool = MkGifTool(client)
+    result = await tool.execute(
+        {
+            "parent": "wan",
+            "remote": "203.0.113.10",
+            "tunnel_local": "2001:db8:1::2",
+            "tunnel_remote": "2001:db8:1::1",
+            "tunnel_remote_net": 64,
+        }
+    )
+    assert result["status"] == "error"
+    assert result["created"] is False
+    assert result["tunnel_remote_net"] == "32"
+    assert result["uuid"] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     assert not any(
         "add_item" in str(c.args[1])
         for c in client._make_request.await_args_list

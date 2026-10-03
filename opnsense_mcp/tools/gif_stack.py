@@ -113,14 +113,62 @@ def _gif_update_changes(params: dict[str, Any]) -> tuple[dict[str, Any], str | N
     return changes, None
 
 
+def _is_ipv6_addr(addr: str) -> bool:
+    """Return True when *addr* parses as IPv6 (scope id stripped)."""
+    try:
+        return isinstance(
+            ipaddress.ip_address(addr.split("%", 1)[0].strip()),
+            ipaddress.IPv6Address,
+        )
+    except ValueError:
+        return False
+
+
+def _tunnel_inners_need_explicit_net(tunnel_local: str, tunnel_remote: str) -> bool:
+    """IPv6 inner endpoints must not inherit the firmware /32 default."""
+    return _is_ipv6_addr(tunnel_local) or _is_ipv6_addr(tunnel_remote)
+
+
+def resolve_tunnel_remote_net(
+    params: dict[str, Any],
+    tunnel_local: str,
+    tunnel_remote: str,
+) -> tuple[int | None, str | None]:
+    """Resolve tunnel_remote_net; IPv6 inners require an explicit value.
+
+    Returns ``(net_int, None)`` on success, or ``(None, error)`` on refusal.
+    IPv4 inners still default to 32 when the field is omitted.
+    """
+    if "tunnel_remote_net" not in params:
+        if _tunnel_inners_need_explicit_net(tunnel_local, tunnel_remote):
+            return None, (
+                "tunnel_remote_net is required when tunnel_local or "
+                "tunnel_remote is IPv6; refusing silent default 32"
+            )
+        return 32, None
+    tunnel_remote_net = params.get("tunnel_remote_net")
+    try:
+        net_int = int(tunnel_remote_net)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None, f"tunnel_remote_net {tunnel_remote_net!r} is not a number"
+    if not 1 <= net_int <= 128:
+        return None, "tunnel_remote_net must be between 1 and 128"
+    return net_int, None
+
+
 def gif_params_to_wire(params: dict[str, Any]) -> dict[str, Any]:
     """Map MCP create/update fields to Gif.xml wire keys."""
     parent = str(params.get("parent") or "").strip()
+    tunnel_local = str(params.get("tunnel_local") or "").strip()
+    tunnel_remote = str(params.get("tunnel_remote") or "").strip()
+    net_int, net_error = resolve_tunnel_remote_net(params, tunnel_local, tunnel_remote)
+    if net_error is not None or net_int is None:
+        raise ValueError(net_error or "tunnel_remote_net is required")
     wire: dict[str, Any] = {
         "remote-addr": str(params.get("remote") or "").strip(),
-        "tunnel-local-addr": str(params.get("tunnel_local") or "").strip(),
-        "tunnel-remote-addr": str(params.get("tunnel_remote") or "").strip(),
-        "tunnel-remote-net": str(params.get("tunnel_remote_net", 32)),
+        "tunnel-local-addr": tunnel_local,
+        "tunnel-remote-addr": tunnel_remote,
+        "tunnel-remote-net": str(net_int),
         "descr": str(params.get("description") or ""),
         "link1": "1" if params.get("ecn") else "0",
         "link2": "1" if params.get("link2") else "0",
@@ -175,14 +223,14 @@ def _parent_matches(row: dict[str, Any], parent: str) -> bool:
         return row_parent == parent
 
 
-def _gif_identity_matches(
+def _gif_endpoints_match(
     row: dict[str, Any],
     parent: str,
     remote: str,
     tunnel_local: str,
     tunnel_remote: str,
 ) -> bool:
-    """Return True when the row describes the same GIF tunnel identity."""
+    """Return True when parent and tunnel endpoints match (ignores net)."""
     if not _parent_matches(row, parent):
         return False
     try:
@@ -195,6 +243,31 @@ def _gif_identity_matches(
         )
     except ValueError:
         return False
+
+
+def _row_tunnel_remote_net(row: dict[str, Any]) -> str:
+    """Stored tunnel-remote-net as a normalized digit string, or empty."""
+    raw = str(row.get("tunnel-remote-net", "")).strip()
+    if not raw:
+        return ""
+    try:
+        return str(int(raw))
+    except ValueError:
+        return raw
+
+
+def _gif_identity_matches(
+    row: dict[str, Any],
+    parent: str,
+    remote: str,
+    tunnel_local: str,
+    tunnel_remote: str,
+    tunnel_remote_net: int | str,
+) -> bool:
+    """Return True when the row matches endpoints and tunnel_remote_net."""
+    if not _gif_endpoints_match(row, parent, remote, tunnel_local, tunnel_remote):
+        return False
+    return _row_tunnel_remote_net(row) == str(int(tunnel_remote_net))
 
 
 def _assignable_devices(blank: dict[str, Any]) -> set[str]:
@@ -347,8 +420,10 @@ class MkGifTool(_GifToolBase):
             "tunnel_remote_net": {
                 "type": "number",
                 "description": (
-                    "Prefix length for tunnel remote (1-128, default 32). "
-                    "IPv6 tunnel-broker setups must pass 64."
+                    "Prefix length for tunnel remote (1-128). "
+                    "Default 32 for IPv4 inners only; required when "
+                    "tunnel_local or tunnel_remote is IPv6 (broker setups "
+                    "typically pass 64)."
                 ),
                 "optional": True,
             },
@@ -400,33 +475,54 @@ class MkGifTool(_GifToolBase):
                     "error": f"{label} {addr!r} is not a valid address",
                 }
 
-        tunnel_remote_net = params.get("tunnel_remote_net", 32)
-        try:
-            net_int = int(tunnel_remote_net)
-        except (TypeError, ValueError):
-            return {
-                "status": "error",
-                "error": f"tunnel_remote_net {tunnel_remote_net!r} is not a number",
-            }
-        if not 1 <= net_int <= 128:
-            return {
-                "status": "error",
-                "error": "tunnel_remote_net must be between 1 and 128",
-            }
+        net_int, net_error = resolve_tunnel_remote_net(
+            params, tunnel_local, tunnel_remote
+        )
+        if net_error is not None or net_int is None:
+            return {"status": "error", "error": net_error}
 
         try:
             for row in await self._rows(GIF["search"], what="GIF devices"):
                 if _gif_identity_matches(
-                    row, parent, remote, tunnel_local, tunnel_remote
+                    row,
+                    parent,
+                    remote,
+                    tunnel_local,
+                    tunnel_remote,
+                    net_int,
                 ):
+                    projected = project_gif_row(row)
                     return {
                         "status": "success",
                         "created": False,
-                        "uuid": row.get("uuid", ""),
-                        "device": row.get("gifif", ""),
+                        "uuid": projected["uuid"],
+                        "device": projected["device"],
+                        "tunnel_remote_net": projected["tunnel_remote_net"],
+                        "parent": projected["parent"],
+                        "remote": projected["remote"],
+                        "tunnel_local": projected["tunnel_local"],
+                        "tunnel_remote": projected["tunnel_remote"],
                         "note": (
                             "This tunnel identity already exists; reused, not replaced."
                         ),
+                    }
+                if _gif_endpoints_match(
+                    row, parent, remote, tunnel_local, tunnel_remote
+                ):
+                    projected = project_gif_row(row)
+                    return {
+                        "status": "error",
+                        "error": (
+                            "GIF tunnel exists with a different "
+                            f"tunnel_remote_net "
+                            f"(stored={projected['tunnel_remote_net']}, "
+                            f"requested={net_int}); use set_gif to change "
+                            "the net, or rm_gif then recreate"
+                        ),
+                        "uuid": projected["uuid"],
+                        "device": projected["device"],
+                        "tunnel_remote_net": projected["tunnel_remote_net"],
+                        "created": False,
                     }
 
             wire = gif_params_to_wire({**params, "tunnel_remote_net": net_int})
