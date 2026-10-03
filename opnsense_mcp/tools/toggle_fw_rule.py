@@ -81,18 +81,27 @@ class ToggleFwRuleTool:
 
         try:
             await self.client.toggle_firewall_rule(rule_uuid, enabled)
-
-            applied = False
-            if apply_changes:
-                await self.client.apply_firewall_changes()
-                applied = True
-
-            return {
-                "uuid": rule_uuid,
-                "enabled": enabled,
-                "applied": applied,
-                "status": "success",
-            }
         except Exception as e:
             logger.exception("Failed to toggle firewall rule")
             return {"status": "error", "error": str(e)}
+
+        # Applied as its own phase: a failed reload must not report the
+        # completed toggle as failed.
+        applied, apply_error = False, ""
+        if apply_changes:
+            try:
+                await self.client.apply_firewall_changes()
+                applied = True
+            except Exception as e:  # noqa: BLE001 - surfaced as apply_error
+                logger.warning("Rule %s toggled but not applied: %s", rule_uuid, e)
+                apply_error = str(e)
+
+        out: dict[str, Any] = {
+            "uuid": rule_uuid,
+            "enabled": enabled,
+            "applied": applied,
+            "status": "success",
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
