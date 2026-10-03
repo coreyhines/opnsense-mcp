@@ -339,7 +339,12 @@ if [[ ! -f "${ENV_HOST_PATH}" ]]; then
   sed "s|/opt/containerdata/opnsense-mcp|${INSTALL_ROOT}|g" \
     "${SRC_DIR}/deploy/environment.example" >"${ENV_HOST_PATH}"
   chmod 600 "${ENV_HOST_PATH}"
-  echo "Created ${ENV_HOST_PATH} — edit credentials before relying on the service." >&2
+  # The server refuses to start an HTTP listener without a bearer secret.
+  mcp_secret="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+  sed -i.bak "s|^MCP_SECRET_KEY=\$|MCP_SECRET_KEY=${mcp_secret}|" "${ENV_HOST_PATH}"
+  rm -f "${ENV_HOST_PATH}.bak"
+  unset mcp_secret
+  echo "Created ${ENV_HOST_PATH} with a random MCP_SECRET_KEY — set the OPNSENSE_* credentials; the server will not start without them." >&2
 fi
 
 if [[ ! -f "${CADDYFILE_HOST}" ]]; then

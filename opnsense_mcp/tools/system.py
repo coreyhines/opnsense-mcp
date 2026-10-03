@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from opnsense_mcp.build_info import get_build_info
 from opnsense_mcp.utils.api import OPNsenseClient
 from opnsense_mcp.utils.deploy_probe import runtime_paths_report
+from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,11 @@ class SystemStatus(BaseModel):
     memory_usage: float | None = None
     disk_usage: dict[str, Any] | None = None
     temperature: dict[str, Any] | None = None
+
+
+def client_kind(client: object) -> str:
+    """Return "mock" for the fixture-backed client, "live" for anything else."""
+    return "mock" if isinstance(client, MockOPNsenseClient) else "live"
 
 
 class SystemTool:
@@ -98,6 +104,9 @@ class SystemTool:
 
             return {
                 "status": "success",
+                # Mock data is shaped like the firewall's, so without this a
+                # caller could not tell fixture output from live state (#99).
+                "client": client_kind(self.client),
                 "system": combined_status,
                 "mcp_server": {
                     **get_build_info(),
@@ -113,7 +122,12 @@ class SystemTool:
 
         except Exception as e:
             logger.exception("Failed to get system status")
-            return {"status": "error", "error": str(e), "system": {}}
+            return {
+                "status": "error",
+                "error": str(e),
+                "client": client_kind(self.client),
+                "system": {},
+            }
 
     async def diagnose_mcp_server(self) -> dict[str, Any]:
         """Diagnose MCP server issues and suggest fixes, changing nothing.

@@ -33,5 +33,14 @@ OPNSENSE_API_SECRET=
 # it elsewhere. Keep it outside the git checkout.
 # OPNSENSE_BACKUP_DIR=/opt/containerdata/opnsense-mcp/backups
 
-MCP_SECRET_KEY=change-me-long-random
+# Bearer token for the HTTP listener. Required: the server refuses to start
+# when it is blank or a placeholder. install.sh fills it with a random value
+# when it creates this file. Clients send `Authorization: Bearer <value>`;
+# Caddy passes the header through.
+MCP_SECRET_KEY=
+
+# Blank OPNSENSE_* credentials stop the server from starting. Set this to 1
+# only to serve examples/mock_data on purpose; `system` then reports
+# client: mock.
+# OPNSENSE_USE_MOCK=1
 # LOG_LEVEL=INFO

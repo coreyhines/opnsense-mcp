@@ -43,6 +43,7 @@ https://mcp.example.com/mcp
 - App container runs FastMCP natively (`python3 main.py --transport streamable-http --host 0.0.0.0 --port 8765`).
 - App listens on HTTP `8765` inside the pod/network; MCP endpoint is `/mcp`.
 - TLS is terminated by Caddy (`deploy/TLS.md`).
+- Every HTTP request needs `Authorization: Bearer $MCP_SECRET_KEY`. The app exits at startup when that is blank, or when the `OPNSENSE_*` credentials are blank and `OPNSENSE_USE_MOCK=1` is not set.
 
 ## Required follow-ups
 
