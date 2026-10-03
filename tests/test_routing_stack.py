@@ -194,6 +194,72 @@ async def test_rm_vlan_refuses_while_assigned() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rm_vlan_stages_without_apply_by_default() -> None:
+    """Delete stages; kernel VLAN devices stay until reconfigure."""
+    client = _client()
+    calls = _stub(
+        client,
+        {"search_item": VLAN_ROWS, "overview/export": []},
+    )
+
+    result = await _confirmed(RmVlanTool(client), {"uuid": VLAN_UUID})
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+    assert result["applied"] is False
+    assert not [c for c in calls if "reconfigure" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_rm_vlan_apply_posts_reconfigure() -> None:
+    """apply=true is what tears the device down after del_item."""
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "search_item": VLAN_ROWS,
+            "overview/export": [],
+            "reconfigure": APPLY_OK,
+        },
+    )
+
+    result = await _confirmed(RmVlanTool(client), {"uuid": VLAN_UUID, "apply": True})
+
+    assert result["deleted"] is True
+    assert result["applied"] is True
+    assert [c for c in calls if "reconfigure" in c["endpoint"]]
+    assert result["verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_rm_vlan_reports_unverified_when_device_still_in_overview() -> None:
+    """Reconfigure ok is not 'device gone' — overview still listing it fails verify."""
+    client = _client()
+    # First overview (guard): empty so delete proceeds. After apply, still listed.
+    overview_calls = {"n": 0}
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "search_item" in endpoint:
+            return VLAN_ROWS
+        if "overview/export" in endpoint:
+            overview_calls["n"] += 1
+            if overview_calls["n"] == 1:
+                return []
+            return [{"device": "ax0_vlan2", "identifier": "opt2"}]
+        if "reconfigure" in endpoint:
+            return APPLY_OK
+        return {"result": "deleted"}
+
+    client._make_request = AsyncMock(side_effect=fake)
+
+    result = await _confirmed(RmVlanTool(client), {"uuid": VLAN_UUID, "apply": True})
+
+    assert result["deleted"] is True
+    assert result["applied"] is True
+    assert result["verified"] is False
+
+
+@pytest.mark.asyncio
 async def test_list_vlans_projects_fields() -> None:
     client = _client()
     _stub(client, {"search_item": VLAN_ROWS})
@@ -462,6 +528,10 @@ async def _run_rm_gateway(client: OPNsenseClient) -> dict[str, Any]:
     return await _confirmed(RmGatewayTool(client), {"uuid": GW_UUID, "apply": True})
 
 
+async def _run_rm_vlan(client: OPNsenseClient) -> dict[str, Any]:
+    return await _confirmed(RmVlanTool(client), {"uuid": VLAN_UUID, "apply": True})
+
+
 EMPTY = {"rows": [], "total": 0}
 
 # site -> (what to run, what the reads answer, the field the write itself sets
@@ -479,6 +549,12 @@ APPLY_SITES = [
     ("toggle_route", _run_toggle_route, {"getroute": GET_ROUTE}, ("enabled", False)),
     ("rm_route", _run_rm_route, {}, ("deleted", True)),
     ("rm_gateway", _run_rm_gateway, {}, ("deleted", True)),
+    (
+        "rm_vlan",
+        _run_rm_vlan,
+        {"search_item": VLAN_ROWS, "overview/export": []},
+        ("deleted", True),
+    ),
 ]
 
 

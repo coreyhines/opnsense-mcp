@@ -1472,7 +1472,7 @@
           "type": "string"
         },
         "tunnel_remote_net": {
-          "description": "Prefix length for tunnel remote (1-128, default 32). IPv6 tunnel-broker setups must pass 64.",
+          "description": "Prefix length for tunnel remote (1-128). Default 32 for IPv4 inners only; required when tunnel_local or tunnel_remote is IPv6 (broker setups typically pass 64).",
           "optional": true,
           "type": "number"
         }
@@ -2322,6 +2322,12 @@
     "description": "Delete an outbound source NAT rule; requires a confirm token",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reload the filter afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
         "confirm": {
           "optional": true,
           "type": "string"
@@ -2403,6 +2409,12 @@
     "description": "Delete a VLAN device; refuses while it is assigned to an interface",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reconfigure VLAN devices afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
         "confirm": {
           "optional": true,
           "type": "string"
@@ -3425,6 +3437,12 @@
     "description": "Enable or disable an outbound source NAT rule",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reload the filter afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
         "enabled": {
           "description": "Target state",
           "type": "boolean"

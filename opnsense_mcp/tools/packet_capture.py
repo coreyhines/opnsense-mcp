@@ -603,23 +603,45 @@ class PacketCaptureTool2:
             }
 
     def stop_capture(self) -> dict[str, Any]:
-        """Stop all running tcpdump processes started by this tool."""
-        cmd = "sudo pkill -f 'tcpdump -i'"
+        """Stop only the tcpdump writing this tool's capture file.
+
+        A bare ``tcpdump -i`` pattern matches every capture on the firewall,
+        including ones this tool did not start. Scope to ``capture_file`` so
+        foreign captures survive. ``pkill`` exit 1 means nothing matched.
+        """
+        # Full remote path is unique enough; do not match bare ``tcpdump -i``.
+        cmd = f"sudo pkill -f {shlex.quote(self.capture_file)}"
         try:
             client = self._get_client()
-            stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — inputs sanitized via shlex.quote
-            stdout.channel.recv_exit_status()
+            _stdin, stdout, stderr = client.exec_command(cmd)  # nosec B601 — path quoted
+            exit_status = stdout.channel.recv_exit_status()
+            err = stderr.read().decode(errors="replace")
             client.close()
+            if exit_status != 0:
+                return {
+                    "status": "error",
+                    "stopped": False,
+                    "error": "No tool-owned packet capture was running",
+                    "exit_status": exit_status,
+                    "command": cmd,
+                    "stderr": err,
+                }
             return {
                 "status": "success",
+                "stopped": True,
                 "message": "Packet capture stopped successfully",
+                "command": cmd,
             }
         except Exception as e:
             logger.exception("Failed to stop packet capture")
             return {
                 "status": "error",
+                "stopped": False,
                 "error": str(e),
-                "guidance": "Failed to stop packet capture. This may be normal if no capture was running.",
+                "guidance": (
+                    "Failed to stop packet capture. This may be normal if no "
+                    "capture was running."
+                ),
             }
 
     def fetch_pcap(self, local_path: str = None) -> dict[str, Any]:

@@ -267,6 +267,12 @@ class RmVlanTool(_RoutingToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "VLAN uuid"},
             "confirm": {"type": "string", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "description": "Reconfigure VLAN devices afterwards (default false)",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }
@@ -284,6 +290,7 @@ class RmVlanTool(_RoutingToolBase):
         if pending:
             return pending
 
+        device = ""
         try:
             rows = await self._rows(VLAN["search"])
             row = next((r for r in rows if r.get("uuid") == uuid), None)
@@ -315,7 +322,32 @@ class RmVlanTool(_RoutingToolBase):
             logger.exception("Failed to delete VLAN")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "uuid": uuid, "deleted": True}
+        # Apply sits outside the write try: a refused reconfigure is not a
+        # failed delete. Kernel VLAN devices stay until reconfigure runs.
+        applied, apply_error = await self._apply(params, VLAN["reconfigure"], "VLAN")
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        elif applied and device:
+            # Reconfigure ok is not "device gone". Re-read overview.
+            try:
+                overview = await self.client._make_request("GET", INTERFACE_OVERVIEW)
+                entries = overview if isinstance(overview, list) else []
+                still_present = any(
+                    isinstance(entry, dict) and entry.get("device") == device
+                    for entry in entries
+                )
+                out["verified"] = not still_present
+            except Exception as exc:  # noqa: BLE001
+                out["verified"] = False
+                out["verify_error"] = str(exc)
+        return out
 
 
 class ListGatewaysTool(_RoutingToolBase):
