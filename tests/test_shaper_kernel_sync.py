@@ -122,6 +122,38 @@ def test_finish_mutation_flags_the_divergence_it_used_to_hide() -> None:
 
     assert structured["kernel_in_sync"] is False
     assert structured["orphaned_kernel_pipes"] == ["10002"]
+    assert structured["applied"] is False
+    assert structured["config_applied"] is True
+    assert result["status"] == "warning"
+
+
+def test_applied_stays_false_when_kernel_sync_is_unknown() -> None:
+    """Unverified runtime must not keep the applied claim from reconfigure."""
+    import asyncio
+
+    from opnsense_mcp.utils.shaper_mutation import finish_mutation
+
+    class _Unreadable(_Client):
+        async def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> Any:
+            if "service/statistics" in endpoint:
+                raise RuntimeError("statistics unavailable")
+            return await super()._make_request(method, endpoint, **kwargs)
+
+    result = asyncio.run(
+        finish_mutation(
+            _Unreadable(orphan=False),
+            snapshot_id="snap-1",
+            apply=True,
+            summary="deleted",
+            structured={"uuid": "gone"},
+            verify_kernel=True,
+        )
+    )
+    structured = result.get("structured", result)
+
+    assert structured["kernel_in_sync"] is None
+    assert structured["applied"] is False
+    assert structured["config_applied"] is True
     assert result["status"] == "warning"
 
 
