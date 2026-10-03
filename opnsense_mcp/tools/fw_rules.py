@@ -51,6 +51,8 @@ def _map_search_rule_row(rule: dict[str, Any]) -> dict[str, Any]:
                 "net": str(dst.get("net", "")),
                 "port": str(dst.get("port", "")),
             },
+            "source_not": _parse_boolish(rule.get("source_not")),
+            "destination_not": _parse_boolish(rule.get("destination_not")),
             "action": str(rule.get("action", "")),
             "enabled": _parse_boolish(rule.get("enabled")),
             "description": str(rule.get("description") or ""),
@@ -78,6 +80,8 @@ def _map_search_rule_row(rule: dict[str, Any]) -> dict[str, Any]:
             "net": str(rule.get("destination_net") or rule.get("destination") or ""),
             "port": str(rule.get("destination_port", "")),
         },
+        "source_not": _parse_boolish(rule.get("source_not")),
+        "destination_not": _parse_boolish(rule.get("destination_not")),
         "action": str(rule.get("action", "")),
         "enabled": _parse_boolish(rule.get("enabled")),
         "description": str(rule.get("description") or ""),
@@ -105,6 +109,8 @@ class FirewallRule(BaseModel):
     protocol: str
     source: FirewallEndpoint
     destination: FirewallEndpoint
+    source_not: bool = False
+    destination_not: bool = False
     action: str
     enabled: bool
     description: str | None = None
@@ -297,7 +303,7 @@ class FwRulesTool:
         """
         Filter rules by interface name.
 
-        Filter rules by interface name with partial matching and group resolution.
+        Filter rules by exact interface token with group resolution.
 
         Args:
             rules: List of rule dictionaries to filter.
@@ -313,18 +319,20 @@ class FwRulesTool:
         # Resolve interface query to actual interface names
         resolved_interfaces = await self._resolve_interface_name(interface_query)
 
+        resolved_tokens = {
+            interface.strip().lower()
+            for interface in resolved_interfaces
+            if interface.strip()
+        }
         filtered_rules = []
         for rule in rules:
-            rule_interface = rule.get("interface", "")
-
-            # Check if rule interface matches any resolved interface
-            for resolved_iface in resolved_interfaces:
-                if (
-                    resolved_iface.lower() in rule_interface.lower()
-                    or rule_interface.lower() in resolved_iface.lower()
-                ):
-                    filtered_rules.append(rule)
-                    break  # Avoid duplicates
+            rule_interfaces = {
+                interface.strip().lower()
+                for interface in str(rule.get("interface", "")).split(",")
+                if interface.strip()
+            }
+            if rule_interfaces & resolved_tokens:
+                filtered_rules.append(rule)
 
         return filtered_rules
 
