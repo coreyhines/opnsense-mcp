@@ -245,19 +245,9 @@ async def test_move_host_applies_and_reconfigures():
 
 
 @pytest.mark.asyncio
-async def test_move_host_rolls_back_on_reconfigure_failure():
-    class Boom(FakeRequest):
-        async def __call__(self, method, endpoint, **kwargs):
-            self.calls.append((method, endpoint, kwargs))
-            if "reconfigure" in endpoint and not getattr(self, "_rolled", False):
-                self._rolled = True
-                raise RuntimeError("reconfigure failed")
-            for key, resp in self.responses.items():
-                if key in endpoint:
-                    return resp
-            return {}
-
-    fake = Boom(
+async def test_move_host_keeps_write_when_reconfigure_refuses():
+    """A refused apply is not a failed move: the reservation stays staged."""
+    fake = FakeRequest(
         {
             "search_host": {
                 "rows": [
@@ -282,15 +272,19 @@ async def test_move_host_rolls_back_on_reconfigure_failure():
             },
             "leases/search": {"rows": []},
             "set_host": {"result": "saved"},
+            "reconfigure": {"status": "failed"},
         }
     )
     p = DnsmasqProvider(fake)
     out = await p.move_host(
         identifier="printer", ipv4_target=2, ipv6_target=2, dry_run=False
     )
-    assert out["status"] == "error"
+    assert out["status"] == "success"
+    assert out["applied"] is False
+    assert "apply_error" in out
     set_calls = [c for c in fake.calls if "set_host" in c[1]]
-    assert set_calls[-1][2]["json"]["host"]["ip"] == "172.20.8.55,::55"
+    assert len(set_calls) == 1
+    assert set_calls[0][2]["json"]["host"]["ip"] == "172.20.8.2,::2"
 
 
 @pytest.mark.asyncio

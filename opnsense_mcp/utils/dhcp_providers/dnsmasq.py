@@ -16,6 +16,7 @@ from opnsense_mcp.utils.dhcp_host import (
     normalize_client_id,
     parse_ip_field,
 )
+from opnsense_mcp.utils.dhcp_providers._apply_client import RequestCallableClient
 from opnsense_mcp.utils.dhcp_scope import resolve_scope_from_selectors
 from opnsense_mcp.utils.dhcp_subnet_dns import (
     DhcpScope,
@@ -59,7 +60,6 @@ class DnsmasqProvider:
     RANGE_SET_ENDPOINT = "/api/dnsmasq/settings/set_range"
     RECONFIGURE_ENDPOINT = "/api/dnsmasq/service/reconfigure"
     WRITE_TIMEOUT_SECONDS = 30
-    RECONFIGURE_TIMEOUT_SECONDS = 60
     SUBNET_DNS_SUPPORTED = True
     HOST_SEARCH_ENDPOINT = "/api/dnsmasq/settings/search_host"
     HOST_GET_ENDPOINT = "/api/dnsmasq/settings/get_host"
@@ -372,11 +372,19 @@ class DnsmasqProvider:
         )
 
     async def _reconfigure(self) -> None:
-        """Apply dnsmasq configuration changes."""
-        await self._request(
-            "POST",
+        """Reload dnsmasq, or raise :class:`ApplyError`.
+
+        A configd refusal answers at HTTP 200 with a ``{"status": ...}``
+        document, so a raw POST cannot tell a reloaded service from one that
+        refused. ``run_apply`` reads that document and uses ``call_class="apply"``.
+
+        Imported lazily: ``apply`` → ``api`` → ``dhcp_provider`` → this module.
+        """
+        from opnsense_mcp.utils.apply import run_apply
+
+        await run_apply(
+            RequestCallableClient(self._request),
             self.RECONFIGURE_ENDPOINT,
-            timeout=self.RECONFIGURE_TIMEOUT_SECONDS,
         )
 
     async def set_subnet_dns(
@@ -403,7 +411,6 @@ class DnsmasqProvider:
             if created_new and after.backend_payload is None:
                 refreshed = await self._read_option_snapshot(scope, family, dhcp_tag)
                 after.backend_payload = refreshed.backend_payload
-            await self._reconfigure()
         except Exception as exc:
             logger.exception("dnsmasq subnet DNS update failed; rolling back")
             restore_error: str | None = None
@@ -416,7 +423,6 @@ class DnsmasqProvider:
                     await self._delete_option(str(after.backend_payload["uuid"]))
                 else:
                     await self._write_option_snapshot(scope, before, dhcp_tag)
-                await self._reconfigure()
             except Exception as restore_exc:
                 restore_error = str(restore_exc)
                 logger.exception("dnsmasq subnet DNS rollback failed")
@@ -436,7 +442,18 @@ class DnsmasqProvider:
                 "restore_error": restore_error,
             }
 
-        return {
+        # Apply is a separate phase: a refused reload leaves the option staged.
+        from opnsense_mcp.utils.apply import ApplyError
+
+        applied, apply_error = False, ""
+        try:
+            await self._reconfigure()
+            applied = True
+        except ApplyError as exc:
+            logger.warning("dnsmasq subnet DNS staged but not applied: %s", exc)
+            apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "backend": self.name,
             "family": family,
@@ -447,11 +464,14 @@ class DnsmasqProvider:
             },
             "before": before.servers,
             "after": servers,
-            "applied": True,
+            "applied": applied,
             "renewal_note": (
                 "DHCP clients keep prior DNS until they renew or reconnect"
             ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
     async def list_hosts(self, search: str = "") -> list[dict[str, Any]]:
         """Return host reservation rows (optionally filtered by searchPhrase)."""
@@ -678,13 +698,11 @@ class DnsmasqProvider:
             new_payload["host"] = new_host
         try:
             await self.set_host(rec.uuid, new_payload)
-            await self._reconfigure()
         except Exception as exc:
             logger.exception("host move failed; rolling back")
             restore_error: str | None = None
             try:
                 await self.set_host(rec.uuid, original_payload)
-                await self._reconfigure()
             except Exception as restore_exc:
                 restore_error = str(restore_exc)
                 logger.exception("host move rollback failed")
@@ -697,18 +715,32 @@ class DnsmasqProvider:
                 "restore_error": restore_error,
             }
 
-        return {
+        from opnsense_mcp.utils.apply import ApplyError
+
+        applied, apply_error = False, ""
+        try:
+            await self._reconfigure()
+            applied = True
+        except ApplyError as exc:
+            logger.warning("host move staged but not applied: %s", exc)
+            apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "backend": self.name,
             # `moved`, not `planned`: the change happened. create_host reports
             # `created` and delete_host reports `deleted`; `planned` is the
             # dry-run label and meant the opposite of what occurred here.
             "moved": planned,
+            "applied": applied,
             "renewal_note": (
                 "Reservation updated. Client keeps its old address until it "
                 "renews or reboots. IPv6 applies only to stateful-DHCPv6 clients."
             ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
     async def create_host(
         self,
@@ -863,7 +895,6 @@ class DnsmasqProvider:
                     "planned": planned,
                     "error": f"API returned: {result}",
                 }
-            await self._reconfigure()
         except Exception as exc:
             logger.exception("create_host failed for %s", hostname)
             return {
@@ -873,11 +904,25 @@ class DnsmasqProvider:
                 "error": str(exc),
             }
 
-        return {
+        from opnsense_mcp.utils.apply import ApplyError
+
+        applied, apply_error = False, ""
+        try:
+            await self._reconfigure()
+            applied = True
+        except ApplyError as exc:
+            logger.warning("create_host staged but not applied: %s", exc)
+            apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "backend": self.name,
             "created": {**planned, "uuid": str(result.get("uuid", ""))},
+            "applied": applied,
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
     async def _resolve_host_row(self, identifier: str) -> dict[str, Any] | None:
         """Find a host row by hostname, MAC, or reservation uuid."""
@@ -916,7 +961,6 @@ class DnsmasqProvider:
 
         try:
             await self.del_host(rec.uuid)
-            await self._reconfigure()
         except Exception as exc:
             logger.exception("host delete failed for %s", rec.host)
             return {
@@ -926,11 +970,25 @@ class DnsmasqProvider:
                 "error": str(exc),
             }
 
-        return {
+        from opnsense_mcp.utils.apply import ApplyError
+
+        applied, apply_error = False, ""
+        try:
+            await self._reconfigure()
+            applied = True
+        except ApplyError as exc:
+            logger.warning("host delete staged but not applied: %s", exc)
+            apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "backend": self.name,
             "deleted": planned,
+            "applied": applied,
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
     async def _find_range_row(
         self,
