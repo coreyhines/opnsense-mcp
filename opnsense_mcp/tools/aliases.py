@@ -39,11 +39,16 @@ class AliasesTool:
         """
         List firewall aliases with optional filtering.
 
+        Fails closed (#65): a transport or API error comes back as
+        ``status: error``. ``status: success`` with ``aliases: []`` means the
+        firewall genuinely has no matching aliases — the client raises on
+        failure rather than returning an empty list.
+
         Args:
             params: Optional dict with 'search' key.
 
         Returns:
-            Dictionary containing aliases and count.
+            Dictionary containing aliases and count, or an error.
 
         """
         if params is None:

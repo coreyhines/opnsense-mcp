@@ -13,6 +13,29 @@ from opnsense_mcp.utils.firewall_log_normalize import (
 
 logger = logging.getLogger(__name__)
 
+# The log endpoint pages by limit only (no offset/after), so a filtered read
+# cannot ask "give me `limit` matching rows". It over-fetches a wider window,
+# filters, and truncates to `limit`. The bounds keep a small `limit` from
+# under-fetching (floor) without turning a large one into an unbounded read
+# (cap) (#64).
+FILTER_OVERFETCH_FACTOR = 10
+FILTER_OVERFETCH_MIN = 200
+FILTER_OVERFETCH_MAX = 2000
+
+
+def _overfetch_window(limit: int | None) -> int | None:
+    """Fetch window for a filtered log read; see the constants above.
+
+    Falsy or negative limits mean "no limit" to the client and pass through
+    unchanged, so an unlimited filtered read stays unlimited.
+    """
+    if not limit or limit < 0:
+        return limit
+    return min(
+        max(limit * FILTER_OVERFETCH_FACTOR, FILTER_OVERFETCH_MIN),
+        FILTER_OVERFETCH_MAX,
+    )
+
 
 class FirewallLogsTool:
     """Tool for retrieving and analyzing firewall logs."""
@@ -44,7 +67,10 @@ class FirewallLogsTool:
 
         Args:
         ----
-            limit: Maximum number of logs to return.
+            limit: Maximum number of log entries to return. When any filter
+                is active this counts *matching* entries: the endpoint can
+                only page by limit, so a wider window is fetched and the
+                filtered result truncated back to `limit` (#64).
             src_ip: Filter by source IP address.
             dst_ip: Filter by destination IP address.
             protocol: Filter by protocol (tcp, udp, icmp, etc.).
@@ -63,10 +89,25 @@ class FirewallLogsTool:
                 logger.warning("No client available")
                 raise FirewallLogsFetchError("No client available")
 
-            logs = await self.client.get_firewall_logs(limit=limit)
-
             filter_src_port = parse_int(src_port)
             filter_dst_port = parse_int(dst_port)
+            filters_active = any(
+                (
+                    src_ip,
+                    dst_ip,
+                    protocol,
+                    action,
+                    filter_src_port is not None,
+                    filter_dst_port is not None,
+                    interface,
+                )
+            )
+            # Limiting before filtering is what made `limit=50,
+            # action=block` report only the matches inside the first 50 raw
+            # rows — often far fewer than exist just past the window (#64).
+            fetch_limit = _overfetch_window(limit) if filters_active else limit
+
+            logs = await self.client.get_firewall_logs(limit=fetch_limit)
 
             def match(log: dict[str, Any]) -> bool:
                 norm = normalize_log_dict(log)
@@ -99,7 +140,10 @@ class FirewallLogsTool:
             logger.exception("Failed to get firewall logs")
             raise FirewallLogsFetchError(str(exc)) from exc
         else:
-            return [log for log in logs if match(log)]
+            matched = [log for log in logs if match(log)]
+            if filters_active and limit and limit > 0:
+                matched = matched[:limit]
+            return matched
 
     async def get_logs(
         self: "FirewallLogsTool", *args: object, **kwargs: object
