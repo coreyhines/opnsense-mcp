@@ -244,6 +244,19 @@ async def test_create_neighbor_can_be_enabled_explicitly() -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_neighbor_refuses_an_ipv6_scope_id() -> None:
+    client = _client()
+    calls = _stub(client, {"searchNeighbor": {"rows": [], "total": 0}})
+
+    result = await MkBgpNeighborTool(client).execute(
+        {"address": "fe80::1%$(reboot)", "remote_as": "65009"}
+    )
+
+    assert result["status"] == "error"
+    assert not [c for c in calls if "addNeighbor" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
 async def test_create_neighbor_requires_an_as_or_a_mode() -> None:
     """A peer with neither is accepted by the model and never establishes."""
     client = _client()

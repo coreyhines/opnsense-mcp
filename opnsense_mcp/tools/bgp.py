@@ -384,6 +384,17 @@ class MkBgpNeighborTool(_BgpToolBase):
         address = (params.get("address") or "").strip()
         if not address:
             return {"status": "error", "error": "address is required"}
+        # Python's IP parser accepts arbitrary text after the IPv6 scope
+        # delimiter. A persisted BGP peer never needs a zone identifier, so
+        # reject it explicitly before the model can store it.
+        if "%" in address:
+            return {
+                "status": "error",
+                "error": (
+                    f"address {address!r} carries an IPv6 scope id, which is not "
+                    "valid in a persistent BGP neighbour address"
+                ),
+            }
 
         remote_as = str(params.get("remote_as") or "").strip()
         mode = (params.get("remote_as_mode") or "").strip()
@@ -454,12 +465,16 @@ class MkBgpNeighborTool(_BgpToolBase):
             "note": _staging_note(
                 applied,
                 apply_error,
-                staged="Staged and disabled. Enable it and apply when the peer is ready."
-                if not params.get("enabled")
-                else "Enabled but not applied. Apply to bring the session up.",
-                done="Applied."
-                if params.get("enabled")
-                else "Applied, and the neighbour is disabled until you enable it.",
+                staged=(
+                    "Staged and disabled. Enable it and apply when the peer is ready."
+                    if not params.get("enabled")
+                    else "Enabled but not applied. Apply to bring the session up."
+                ),
+                done=(
+                    "Applied."
+                    if params.get("enabled")
+                    else "Applied, and the neighbour is disabled until you enable it."
+                ),
             ),
         }
         if apply_error:
