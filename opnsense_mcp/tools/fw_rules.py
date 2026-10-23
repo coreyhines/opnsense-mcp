@@ -31,6 +31,31 @@ def _parse_boolish(val: Any) -> bool:
     return str(val).lower() in ("1", "true", "yes")
 
 
+def _parse_enabled_filter(val: Any) -> bool | None:
+    """Parse the `enabled` filter strictly; None when it is neither true nor false.
+
+    `_parse_boolish` reads anything unrecognised as False, which is right for a
+    row value but wrong for a filter: `enabled="maybe"` would quietly list only
+    the disabled rules.
+    """
+    if isinstance(val, bool):
+        return val
+    text = str(val).strip().lower()
+    if text in ("1", "true", "yes"):
+        return True
+    if text in ("0", "false", "no"):
+        return False
+    return None
+
+
+def _reported_total(response: dict[str, Any], row_count: int) -> int:
+    """The rule count searchRule says exists, falling back to the rows it sent."""
+    try:
+        return int(response.get("total"))
+    except (TypeError, ValueError):
+        return row_count
+
+
 def _map_search_rule_row(rule: dict[str, Any]) -> dict[str, Any]:
     """Normalize searchRule API row or mock rule dict into the fw_rules output shape."""
     if isinstance(rule.get("source"), dict):
@@ -273,23 +298,27 @@ class FwRulesTool:
 
         return resolved
 
-    async def _get_rules(self) -> tuple[list[dict[str, Any]], str | None]:
+    async def _get_rules(self) -> tuple[list[dict[str, Any]], int, str | None]:
         """
         Get firewall rules via the client (POST searchRule on real API).
 
         Returns:
-            (rules, error_message). error_message is set when the fetch fails.
+            (rules, reported_total, error_message). reported_total is the
+            API's own `total`; error_message is set when the fetch fails.
 
         """
         if self.client is None:
-            return [], "No client available"
+            return [], 0, "No client available"
         try:
-            raw_rows = await self.client.get_firewall_rules(row_count=1000)
+            response = await self.client.search_firewall_rules(row_count=1000)
         except Exception as e:
             logger.exception("Failed to get firewall rules")
-            return [], str(e)
-        rules = [_map_search_rule_row(r) for r in raw_rows]
-        return rules, None
+            return [], 0, str(e)
+        raw_rows = response.get("rows") if isinstance(response, dict) else None
+        if not isinstance(raw_rows, list):
+            return [], 0, "searchRule response carries no rows list"
+        rules = [_map_search_rule_row(r) for r in raw_rows if isinstance(r, dict)]
+        return rules, _reported_total(response, len(raw_rows)), None
 
     async def _filter_rules_by_interface(
         self, rules: list[dict[str, Any]], interface_query: str
@@ -399,8 +428,17 @@ class FwRulesTool:
             Dictionary containing firewall rules and metadata.
 
         """
-        if params is None:
-            params = {}
+        # FastMCP passes every omitted optional argument as an explicit None.
+        # Filters used to run on key presence, so `enabled=None` compared every
+        # rule against None and returned none of them while total_all said 204
+        # (#113). Dropping the nulls here means a filter runs only when given.
+        params = {k: v for k, v in (params or {}).items() if v is not None}
+        filters_applied = {
+            "interface": params.get("interface"),
+            "action": params.get("action"),
+            "protocol": params.get("protocol"),
+            "enabled": params.get("enabled"),
+        }
 
         try:
             if not self.client:
@@ -411,8 +449,22 @@ class FwRulesTool:
                     "error": "No client available",
                 }
 
+            enabled_filter: bool | None = None
+            if "enabled" in params:
+                enabled_filter = _parse_enabled_filter(params["enabled"])
+                if enabled_filter is None:
+                    return {
+                        "rules": [],
+                        "total": 0,
+                        "status": "error",
+                        "error": (
+                            f"enabled must be true or false, got {params['enabled']!r}"
+                        ),
+                        "filters_applied": filters_applied,
+                    }
+
             # Get all rules (same endpoint as OPNsenseClient.get_firewall_rules)
-            all_rules, fetch_error = await self._get_rules()
+            all_rules, reported_total, fetch_error = await self._get_rules()
             if fetch_error:
                 return {
                     "rules": [],
@@ -420,12 +472,23 @@ class FwRulesTool:
                     "total_all": 0,
                     "status": "error",
                     "error": fetch_error,
-                    "filters_applied": {
-                        "interface": params.get("interface"),
-                        "action": params.get("action"),
-                        "protocol": params.get("protocol"),
-                        "enabled": params.get("enabled"),
-                    },
+                    "filters_applied": filters_applied,
+                }
+
+            # The firewall says rules exist and none survived the read: that is
+            # a failed read, not an empty ruleset.
+            if reported_total > 0 and not all_rules:
+                return {
+                    "rules": [],
+                    "total": 0,
+                    "total_all": 0,
+                    "total_reported": reported_total,
+                    "status": "error",
+                    "error": (
+                        f"searchRule reported {reported_total} rules but none "
+                        "could be read"
+                    ),
+                    "filters_applied": filters_applied,
                 }
 
             # Apply filters
@@ -449,23 +512,22 @@ class FwRulesTool:
                     filtered_rules, params["protocol"]
                 )
 
-            # Filter by enabled status (FastMCP passes explicit null for omitted args)
-            if params.get("enabled") is not None:
+            # Filter by enabled status
+            if enabled_filter is not None:
                 filtered_rules = await self._filter_rules_by_enabled(
-                    filtered_rules, params["enabled"]
+                    filtered_rules, enabled_filter
                 )
 
             return {
                 "rules": filtered_rules,
                 "total": len(filtered_rules),
                 "total_all": len(all_rules),
+                "total_reported": reported_total,
+                # searchRule is read with rowCount=1000; past that the list is
+                # partial and the caller should know.
+                "truncated": len(all_rules) < reported_total,
                 "status": "success",
-                "filters_applied": {
-                    "interface": params.get("interface"),
-                    "action": params.get("action"),
-                    "protocol": params.get("protocol"),
-                    "enabled": params.get("enabled"),
-                },
+                "filters_applied": filters_applied,
             }
 
         except Exception as e:
