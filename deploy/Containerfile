@@ -2,6 +2,8 @@
 #   podman build -f deploy/Containerfile -t localhost/opnsense-mcp:<tag> .
 # The MCP listener is HTTP only. Terminate TLS on the host (see deploy/TLS.md + Caddy examples).
 # Clients connect to /mcp path (Streamable HTTP, MCP spec 2025-03-26).
+# Startup requires MCP_SECRET_KEY (clients send it as a bearer token) and the
+# OPNSENSE_* credentials, unless OPNSENSE_USE_MOCK=1. Either missing exits.
 
 FROM docker.io/library/python:3.12-slim-bookworm
 

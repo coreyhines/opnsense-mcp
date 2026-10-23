@@ -461,6 +461,86 @@ async def test_create_peer_refuses_to_enrol_a_peer_nowhere() -> None:
     assert client.posted_to(WG_CLIENT_WRITE["add"]) == []
 
 
+@pytest.mark.asyncio
+async def test_create_peer_verify_fails_when_membership_did_not_land() -> None:
+    """Name and pubkey alone must not make verified true.
+
+    A peer can be saved without the requested servers selection and never
+    load. The re-read has to check membership (and tunneladdress when set).
+    """
+    name = "phone"
+    pubkey = "A" * 43 + "="
+    # Re-read agrees on identity but selects no instance — the defect.
+    empty_servers = {
+        key: {**opt, "selected": 0} for key, opt in CLIENT["client"]["servers"].items()
+    }
+    re_read = {
+        "client": {
+            **CLIENT["client"],
+            "name": name,
+            "pubkey": pubkey,
+            "servers": empty_servers,
+            "tunneladdress": {
+                "192.168.10.99/32": {"value": "192.168.10.99/32", "selected": 1}
+            },
+        }
+    }
+    client = _base_client().on("/api/wireguard/client/getClient", re_read)
+
+    result = await CreateWgPeerTool(client).execute(
+        {
+            "name": name,
+            "pubkey": pubkey,
+            "instances": [MEMBER_UUID],
+            "tunneladdress": "192.168.10.99/32",
+            "apply": True,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+    assert result["verified"] is False
+    assert "servers" in result["mismatched"]
+
+
+@pytest.mark.asyncio
+async def test_create_peer_verify_checks_tunneladdress_when_provided() -> None:
+    """Allowed IPs on create must be in the expected re-read, not only name/pubkey."""
+    name = "phone"
+    pubkey = "A" * 43 + "="
+    member_only = {
+        key: {**opt, "selected": 1 if key == MEMBER_UUID else 0}
+        for key, opt in CLIENT["client"]["servers"].items()
+    }
+    re_read = {
+        "client": {
+            **CLIENT["client"],
+            "name": name,
+            "pubkey": pubkey,
+            "servers": member_only,
+            # Wanted 192.168.10.99/32; stored something else.
+            "tunneladdress": {
+                "198.51.100.1/32": {"value": "198.51.100.1/32", "selected": 1}
+            },
+        }
+    }
+    client = _base_client().on("/api/wireguard/client/getClient", re_read)
+
+    result = await CreateWgPeerTool(client).execute(
+        {
+            "name": name,
+            "pubkey": pubkey,
+            "instances": [MEMBER_UUID],
+            "tunneladdress": "192.168.10.99/32",
+            "apply": True,
+        }
+    )
+
+    assert result["applied"] is True
+    assert result["verified"] is False
+    assert "tunneladdress" in result["mismatched"]
+
+
 # --- an apply is a request, not a state ------------------------------------
 
 

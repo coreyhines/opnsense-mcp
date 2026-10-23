@@ -34,6 +34,7 @@ from opnsense_mcp.utils.shaper_types import (
 from opnsense_mcp.utils.shaper_write_helpers import (
     detect_idempotent_set,
     issue_delete_confirm_token,
+    shaper_api_result_ok,
     validate_delete_confirm_token,
 )
 
@@ -44,6 +45,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ClientT = "OPNsenseClient | MockOPNsenseClient | None"
+
+
+def _failed_write_response(
+    result: Any, *, action: str, snapshot_id: str | None = None
+) -> dict[str, Any] | None:
+    """Return an error envelope when the write endpoint rejected the request."""
+    payload = result if isinstance(result, dict) else {}
+    ok, detail = shaper_api_result_ok(payload)
+    if ok:
+        return None
+    msg = detail or "write rejected"
+    return make_tool_response(
+        status=TOOL_STATUS_ERROR,
+        structured={"error": msg, "api_result": result, "applied": False},
+        summary=f"**Error:** Failed to {action} — {msg}",
+        snapshot_id=snapshot_id,
+    )
 
 
 def _filter_queues(
@@ -334,6 +352,11 @@ class AddShaperQueueTool:
             result = await self.client._make_request(
                 "POST", "/trafficshaper/settings/add_queue/", json=payload
             )
+            rejected = _failed_write_response(
+                result, action="add queue", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
             queue_uuid = result.get("id") or result.get("uuid", "")
             flat["uuid"] = str(queue_uuid)
         except Exception as exc:
@@ -423,6 +446,11 @@ class SetShaperQueueTool:
             result = await self.client._make_request(
                 "POST", f"/trafficshaper/settings/set_queue/{uuid}", json=payload
             )
+            rejected = _failed_write_response(
+                result, action="set queue", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to set shaper queue")
             return make_tool_response(
@@ -474,6 +502,11 @@ class ToggleShaperQueueTool:
             result = await self.client._make_request(
                 "POST", f"/trafficshaper/settings/toggle_queue/{uuid}"
             )
+            rejected = _failed_write_response(
+                result, action="toggle queue", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to toggle shaper queue")
             return make_tool_response(
@@ -533,6 +566,11 @@ class DeleteShaperQueueTool:
             result = await self.client._make_request(
                 "POST", f"/trafficshaper/settings/del_queue/{uuid}"
             )
+            rejected = _failed_write_response(
+                result, action="delete queue", snapshot_id=snapshot_id
+            )
+            if rejected is not None:
+                return rejected
         except Exception as exc:
             logger.exception("Failed to delete shaper queue")
             return make_tool_response(

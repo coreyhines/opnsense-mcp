@@ -225,6 +225,11 @@
           "optional": true,
           "type": "string"
         },
+        "ipv6": {
+          "description": "Filter NDP entries by IPv6 address",
+          "optional": true,
+          "type": "string"
+        },
         "mac": {
           "description": "Filter by MAC address",
           "optional": true,
@@ -1472,7 +1477,7 @@
           "type": "string"
         },
         "tunnel_remote_net": {
-          "description": "Prefix length for tunnel remote (1-128, default 32). IPv6 tunnel-broker setups must pass 64.",
+          "description": "Prefix length for tunnel remote (1-128). Default 32 for IPv4 inners only; required when tunnel_local or tunnel_remote is IPv6 (broker setups typically pass 64).",
           "optional": true,
           "type": "number"
         }
@@ -2096,12 +2101,16 @@
     }
   },
   "restore_shaper_snapshot": {
-    "description": "Restore traffic shaper config from a prior snapshot_id. Set remove_orphans=true to delete pipes/queues/rules not in the snapshot.",
+    "description": "Restore traffic shaper config from a prior snapshot_id, recreating pipes/queues/rules deleted since. Set remove_orphans=true to also delete pipes/queues/rules not in the snapshot; that returns a deletion plan and a confirm token first.",
     "inputSchema": {
       "properties": {
         "apply": {
           "default": true,
           "type": "boolean"
+        },
+        "confirm": {
+          "description": "Token from a prior remove_orphans call; confirms that snapshot and that exact deletion set",
+          "type": "string"
         },
         "remove_orphans": {
           "default": false,
@@ -2318,6 +2327,12 @@
     "description": "Delete an outbound source NAT rule; requires a confirm token",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reload the filter afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
         "confirm": {
           "optional": true,
           "type": "string"
@@ -2399,6 +2414,12 @@
     "description": "Delete a VLAN device; refuses while it is assigned to an interface",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reconfigure VLAN devices afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
         "confirm": {
           "optional": true,
           "type": "string"
@@ -3278,7 +3299,16 @@
   "system": {
     "description": "Show system status information",
     "inputSchema": {
-      "properties": {},
+      "properties": {
+        "action": {
+          "description": "'status' (default) or 'diagnose_mcp'. diagnose_mcp is read-only: it reports issues and suggested fixes and runs none of them.",
+          "enum": [
+            "status",
+            "diagnose_mcp"
+          ],
+          "type": "string"
+        }
+      },
       "required": [],
       "type": "object"
     }
@@ -3421,6 +3451,12 @@
     "description": "Enable or disable an outbound source NAT rule",
     "inputSchema": {
       "properties": {
+        "apply": {
+          "default": false,
+          "description": "Reload the filter afterwards (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
         "enabled": {
           "description": "Target state",
           "type": "boolean"

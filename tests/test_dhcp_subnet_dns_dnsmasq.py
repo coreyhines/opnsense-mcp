@@ -108,9 +108,10 @@ async def test_set_subnet_dns_updates_and_reconfigures(make_request: AsyncMock) 
 
 
 @pytest.mark.asyncio
-async def test_set_subnet_dns_rolls_back_on_reconfigure_failure(
+async def test_set_subnet_dns_keeps_write_when_reconfigure_refuses(
     make_request: AsyncMock,
 ) -> None:
+    """A refused apply leaves the option staged; it is not a failed write."""
     make_request.side_effect = [
         {"opt2": {"identifier": "opt2", "ipaddr": "172.20.2.1", "subnet": "24"}},
         {"rows": []},
@@ -125,9 +126,7 @@ async def test_set_subnet_dns_rolls_back_on_reconfigure_failure(
             ]
         },
         {"result": "saved"},
-        RuntimeError("reconfigure failed"),
-        {"result": "saved"},
-        {"result": "done"},
+        {"status": "failed"},
     ]
 
     provider = DnsmasqProvider(make_request)
@@ -137,9 +136,11 @@ async def test_set_subnet_dns_rolls_back_on_reconfigure_failure(
         servers=["172.20.10.4"],
     )
 
-    assert result["status"] == "error"
-    assert result["restored"] is True
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    assert "apply_error" in result
     assert result["before"] == ["172.20.10.5"]
+    assert result["after"] == ["172.20.10.4"]
 
 
 @pytest.mark.asyncio

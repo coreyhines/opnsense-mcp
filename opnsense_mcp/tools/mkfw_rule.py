@@ -170,31 +170,34 @@ class MkfwRuleTool:
             # Create the rule using the client
             result = await self.client.add_firewall_rule(rule_spec.model_dump())
             rule_uuid = result.get("uuid")
-
-            if apply_changes:
-                await self.client.apply_firewall_changes()
-                return {
-                    "rule_uuid": rule_uuid,
-                    "description": rule_spec.description,
-                    "interface": rule_spec.interface,
-                    "action": rule_spec.action,
-                    "applied": True,
-                    "status": "success",
-                }
-
-            return {
-                "rule_uuid": rule_uuid,
-                "description": rule_spec.description,
-                "interface": rule_spec.interface,
-                "action": rule_spec.action,
-                "applied": False,
-                "status": "success",
-                "note": (
-                    "Rule created but not applied. Call "
-                    "fw_rule action='apply' to activate."
-                ),
-            }
-
         except Exception as e:
             logger.exception("Failed to create firewall rule")
             return {"status": "error", "error": str(e)}
+
+        # Applied as its own phase. Inside the write's try, a failed reload
+        # reported a created rule as not created and dropped its uuid, so a
+        # retry made a duplicate.
+        applied, apply_error = False, ""
+        if apply_changes:
+            try:
+                await self.client.apply_firewall_changes()
+                applied = True
+            except Exception as e:  # noqa: BLE001 - surfaced as apply_error
+                logger.warning("Rule %s created but not applied: %s", rule_uuid, e)
+                apply_error = str(e)
+
+        out: dict[str, Any] = {
+            "rule_uuid": rule_uuid,
+            "description": rule_spec.description,
+            "interface": rule_spec.interface,
+            "action": rule_spec.action,
+            "applied": applied,
+            "status": "success",
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        elif not applied:
+            out["note"] = (
+                "Rule created but not applied. Call fw_rule action='apply' to activate."
+            )
+        return out

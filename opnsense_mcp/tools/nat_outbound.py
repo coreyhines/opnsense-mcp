@@ -344,6 +344,12 @@ class ToggleNatOutboundTool(_NatToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Rule uuid"},
             "enabled": {"type": "boolean", "description": "Target state"},
+            "apply": {
+                "type": "boolean",
+                "description": "Reload the filter afterwards (default false)",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid", "enabled"],
     }
@@ -367,7 +373,32 @@ class ToggleNatOutboundTool(_NatToolBase):
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to toggle outbound NAT rule")
             return {"status": "error", "error": str(exc)}
-        return {"status": "success", "uuid": uuid, "enabled": bool(params["enabled"])}
+
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, SNAT["apply"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning(
+                    "Outbound NAT rule toggled but filter reload failed: %s", exc
+                )
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "enabled": bool(params["enabled"]),
+            "applied": applied,
+            "note": (
+                "Rule state loaded into the packet filter."
+                if applied
+                else "Staged. Apply the filter to load it."
+            ),
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class RmNatOutboundTool(_NatToolBase):
@@ -380,6 +411,12 @@ class RmNatOutboundTool(_NatToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "Rule uuid"},
             "confirm": {"type": "string", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "description": "Reload the filter afterwards (default false)",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }
@@ -409,13 +446,55 @@ class RmNatOutboundTool(_NatToolBase):
             }
 
         try:
-            await self.client._make_request(
+            result = await self.client._make_request(
                 "POST", f"{SNAT['delete']}/{uuid}", call_class="write", json={}
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete outbound NAT rule")
             return {"status": "error", "error": str(exc)}
-        return {"status": "success", "uuid": uuid, "deleted": True}
+
+        # delBase answers an unknown uuid with {"result": "not found"} at HTTP
+        # 200; _make_request only raises on "failed", so treat anything other
+        # than "deleted" as a failed delete rather than reporting success.
+        if not isinstance(result, dict) or result.get("result") != "deleted":
+            if isinstance(result, dict) and result.get("result") == "not found":
+                return {
+                    "status": "error",
+                    "error": (
+                        f"no outbound NAT rule with uuid {uuid}; "
+                        f"it may already be gone."
+                    ),
+                }
+            return {
+                "status": "error",
+                "error": f"delete failed: {result!r}",
+            }
+
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, SNAT["apply"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning(
+                    "Outbound NAT rule deleted but filter reload failed: %s", exc
+                )
+                apply_error = str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+            "note": (
+                "Rule deleted and loaded into the packet filter."
+                if applied
+                else "Staged. Apply the filter to load it."
+            ),
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
 
 class FwPingTool(_NatToolBase):

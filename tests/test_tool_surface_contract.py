@@ -257,3 +257,41 @@ def test_exposed_group_schemas_avoid_type_unions() -> None:
         "exposed schemas must not use JSON Schema type unions "
         "(Cursor MCP / Zod loads zero tools): " + "; ".join(problems)
     )
+
+
+def test_exposed_group_defaults_match_every_tagged_member() -> None:
+    """A grouped default must be true for every action named in its tag."""
+    import re
+
+    problems = []
+    for group_name, group in sorted(_exposed_groups().items()):
+        members = getattr(group, "members", None)
+        if not members:
+            continue
+        props = (getattr(group, "input_schema", None) or {}).get("properties") or {}
+        for field, advertised in props.items():
+            if "default" not in advertised:
+                continue
+            tag = re.match(r"^\[([^]]+)] ", advertised.get("description", ""))
+            if tag is None:
+                problems.append(f"{group_name}.{field}: default has no action tag")
+                continue
+            for action in tag.group(1).split(", "):
+                member = members[action]
+                aliases = group._aliases_for(member)
+                member_props = (member.input_schema.get("properties") or {}).items()
+                own_spec = next(
+                    (
+                        spec
+                        for own_field, spec in member_props
+                        if aliases.get(own_field, own_field) == field
+                    ),
+                    {},
+                )
+                if own_spec.get("default", object()) != advertised["default"]:
+                    problems.append(
+                        f"{group_name}.{field}: advertised default "
+                        f"{advertised['default']!r} disagrees with {action}"
+                    )
+
+    assert not problems, "\n".join(problems)

@@ -16,12 +16,18 @@ from opnsense_mcp.tools.shaper_presets import PRESET_RULES, ApplyShaperPresetToo
 from opnsense_mcp.tools.shaper_queues import (
     AddShaperQueueTool,
     DeleteShaperQueueTool,
+    SetShaperQueueTool,
     ToggleShaperQueueTool,
 )
-from opnsense_mcp.tools.shaper_rules import AddShaperRuleTool, DeleteShaperRuleTool
+from opnsense_mcp.tools.shaper_rules import (
+    AddShaperRuleTool,
+    DeleteShaperRuleTool,
+    SetShaperRuleTool,
+)
 from opnsense_mcp.tools.shaper_service import ApplyShaperTool
 from opnsense_mcp.tools.shaper_settings import (
     search_shaper_pipes,
+    search_shaper_queues,
     search_shaper_rules,
 )
 from opnsense_mcp.tools.shaper_snapshot import RestoreShaperSnapshotTool
@@ -30,6 +36,7 @@ from opnsense_mcp.utils.shaper_mutation import capture_pre_mutation_snapshot
 from opnsense_mcp.utils.shaper_snapshot_store import clear_snapshots, get_snapshot
 from opnsense_mcp.utils.shaper_types import (
     TOOL_STATUS_CONFIRMATION_REQUIRED,
+    TOOL_STATUS_ERROR,
     TOOL_STATUS_SUCCESS,
     TOOL_STATUS_WARNING,
 )
@@ -339,8 +346,17 @@ async def test_restore_shaper_snapshot_remove_orphans(
     )
     assert extra["status"] == TOOL_STATUS_SUCCESS
     restore = RestoreShaperSnapshotTool(mock_client)
-    resp = await restore.execute(
+    plan = await restore.execute(
         {"snapshot_id": snapshot_id, "apply": False, "remove_orphans": True}
+    )
+    assert plan["status"] == TOOL_STATUS_CONFIRMATION_REQUIRED
+    resp = await restore.execute(
+        {
+            "snapshot_id": snapshot_id,
+            "apply": False,
+            "remove_orphans": True,
+            "confirm": plan["structured"]["confirm_token"],
+        }
     )
     assert resp["status"] == TOOL_STATUS_SUCCESS
     pipes = await search_shaper_pipes(mock_client)
@@ -413,3 +429,119 @@ async def test_preset_uses_single_parent_snapshot(
     await preset.execute({"download_mbit": 100, "upload_mbit": 40, "apply": False})
     assert len(capture_calls) == 1
     assert capture_calls[0] == "Before bufferbloat_wan preset"
+
+
+async def _stub_failed_write(mock_client: MockOPNsenseClient, needle: str) -> None:
+    """Force a CRUD endpoint to answer HTTP-200 status=failed."""
+    original = mock_client._make_request
+
+    async def failing(
+        method: str, endpoint: str, **kwargs: object
+    ) -> dict[str, object]:
+        if needle in endpoint:
+            return {"status": "failed", "error": "validation failed"}
+        return await original(method, endpoint, **kwargs)
+
+    mock_client._make_request = failing  # type: ignore[method-assign]
+
+
+@pytest.mark.asyncio
+async def test_add_pipe_rejects_failed_write_before_apply(
+    mock_client: MockOPNsenseClient,
+) -> None:
+    await _stub_failed_write(mock_client, "add_pipe")
+    resp = await AddShaperPipeTool(mock_client).execute(
+        {"description": "Reject pipe", "bandwidth": 100, "apply": True}
+    )
+    assert resp["status"] == TOOL_STATUS_ERROR
+    assert resp["structured"]["applied"] is False
+    assert resp["structured"]["error"]
+    assert "reconfigure_result" not in resp["structured"]
+
+
+@pytest.mark.asyncio
+async def test_set_pipe_rejects_failed_write_before_apply(
+    mock_client: MockOPNsenseClient,
+) -> None:
+    await _stub_failed_write(mock_client, "set_pipe")
+    resp = await SetShaperPipeTool(mock_client).execute(
+        {"uuid": DOWNLOAD_PIPE, "bandwidth": 900, "apply": True}
+    )
+    assert resp["status"] == TOOL_STATUS_ERROR
+    assert resp["structured"]["applied"] is False
+    assert "reconfigure_result" not in resp["structured"]
+
+
+@pytest.mark.asyncio
+async def test_toggle_pipe_rejects_failed_write_before_apply(
+    mock_client: MockOPNsenseClient,
+) -> None:
+    await _stub_failed_write(mock_client, "toggle_pipe")
+    resp = await ToggleShaperPipeTool(mock_client).execute(
+        {"uuid": DOWNLOAD_PIPE, "apply": True}
+    )
+    assert resp["status"] == TOOL_STATUS_ERROR
+    assert resp["structured"]["applied"] is False
+    assert "reconfigure_result" not in resp["structured"]
+
+
+@pytest.mark.asyncio
+async def test_delete_pipe_rejects_failed_write_before_apply(
+    mock_client: MockOPNsenseClient,
+) -> None:
+    await _stub_failed_write(mock_client, "del_pipe")
+    tool = DeleteShaperPipeTool(mock_client)
+    token = (await tool.execute({"uuid": DOWNLOAD_PIPE}))["structured"]["confirm_token"]
+    resp = await tool.execute({"uuid": DOWNLOAD_PIPE, "confirm": token, "apply": True})
+    assert resp["status"] == TOOL_STATUS_ERROR
+    assert resp["structured"]["applied"] is False
+    assert "reconfigure_result" not in resp["structured"]
+
+
+@pytest.mark.asyncio
+async def test_preset_reenables_disabled_matching_objects(
+    mock_client: MockOPNsenseClient,
+) -> None:
+    """Reconciliation must not leave managed objects disabled (#79)."""
+    await SetShaperPipeTool(mock_client).execute(
+        {"uuid": DOWNLOAD_PIPE, "enabled": False, "apply": False}
+    )
+    await SetShaperQueueTool(mock_client).execute(
+        {"uuid": DOWNLOAD_QUEUE, "enabled": False, "apply": False}
+    )
+    await SetShaperRuleTool(mock_client).execute(
+        {"uuid": DOWNLOAD_RULE, "enabled": False, "apply": False}
+    )
+
+    pipes_before = await search_shaper_pipes(mock_client)
+    queues_before = await search_shaper_queues(mock_client)
+    rules_before = await search_shaper_rules(mock_client)
+    assert (
+        next(p for p in pipes_before if p["uuid"] == DOWNLOAD_PIPE)["enabled"] is False
+    )
+    assert (
+        next(q for q in queues_before if q["uuid"] == DOWNLOAD_QUEUE)["enabled"]
+        is False
+    )
+    assert (
+        next(r for r in rules_before if r["uuid"] == DOWNLOAD_RULE)["enabled"] is False
+    )
+
+    resp = await ApplyShaperPresetTool(mock_client).execute(
+        {"download_mbit": 1000, "upload_mbit": 500, "apply": False}
+    )
+    assert resp["status"] == TOOL_STATUS_SUCCESS
+
+    pipes = await search_shaper_pipes(mock_client)
+    queues = await search_shaper_queues(mock_client)
+    rules = await search_shaper_rules(mock_client)
+    assert next(p for p in pipes if p["uuid"] == DOWNLOAD_PIPE)["enabled"] is True
+    assert next(q for q in queues if q["uuid"] == DOWNLOAD_QUEUE)["enabled"] is True
+    assert next(r for r in rules if r["uuid"] == DOWNLOAD_RULE)["enabled"] is True
+    for spec in PRESET_RULES:
+        match = next(
+            r
+            for r in rules
+            if (r.get("description") or "").lower() == spec["description"].lower()
+        )
+        assert match["enabled"] is True

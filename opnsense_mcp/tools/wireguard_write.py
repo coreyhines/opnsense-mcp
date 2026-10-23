@@ -245,7 +245,7 @@ class _WgWriteBase(_WgToolBase):
         mismatched = {
             field: {"wanted": wanted, "stored": record.get(field)}
             for field, wanted in expected.items()
-            if _stored_value(record.get(field)) != str(wanted)
+            if not _expected_matches(wanted, record.get(field))
         }
         out["verified"] = not mismatched
         if mismatched:
@@ -263,6 +263,20 @@ def _stored_value(value: Any) -> str:
     if isinstance(value, dict):
         return ",".join(selected_option_keys(value))
     return str(value if value is not None else "")
+
+
+def _expected_matches(wanted: Any, stored: Any) -> bool:
+    """True when the re-read field matches what the write asked for.
+
+    ``servers`` and ``tunneladdress`` are membership lists: order on the wire
+    and in the node map need not match, so compare as sorted sets. Scalars stay
+    exact string compares.
+    """
+    wanted_s = str(wanted)
+    stored_s = _stored_value(stored)
+    if isinstance(stored, dict) or "," in wanted_s or "," in stored_s:
+        return sorted(split_list(wanted_s)) == sorted(split_list(stored_s))
+    return stored_s == wanted_s
 
 
 def _overlay(params: dict[str, Any], settable: frozenset[str]) -> dict[str, Any]:
@@ -692,13 +706,23 @@ class CreateWgPeerTool(_WgWriteBase):
             result["applied"] = False
             result["staged"] = True
             return result
+        expected: dict[str, Any] = {
+            "name": name,
+            "pubkey": pubkey,
+            # Membership is the write channel; name/pubkey alone can verify a
+            # peer that landed with empty servers and never loads.
+            "servers": ",".join(resolved),
+        }
+        tunneladdress = str(params.get("tunneladdress") or "")
+        if tunneladdress:
+            expected["tunneladdress"] = tunneladdress
         result.update(
             await self._apply_and_verify(
                 should_apply=bool(params.get("apply")),
                 base=WG_CLIENT["get"],
                 key="client",
                 uuid=uuid,
-                expected={"name": name, "pubkey": pubkey},
+                expected=expected,
             )
         )
         return result

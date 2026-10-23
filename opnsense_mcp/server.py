@@ -85,7 +85,10 @@ def _ensure_runtime_deps() -> None:
 _ensure_runtime_deps()
 
 import asyncio
+import hmac
 import json
+
+from fastmcp.server.auth import AccessToken, TokenVerifier
 
 from opnsense_mcp.build_info import get_build_info
 from opnsense_mcp.tools.aliases import AliasesTool
@@ -162,6 +165,81 @@ logger = logging.getLogger(__name__)
 load_opnsense_env()
 
 
+MOCK_FLAG = "OPNSENSE_USE_MOCK"
+CREDENTIAL_VARS = ("OPNSENSE_FIREWALL_HOST", "OPNSENSE_API_KEY", "OPNSENSE_API_SECRET")
+SECRET_VAR = "MCP_SECRET_KEY"  # nosec B105 — env var name, not a value
+
+# Values that shipped in examples or as a hardcoded default. A server started
+# with one of these is as open as one started with none.
+PLACEHOLDER_SECRETS = frozenset(
+    {"change-me-long-random", "replace_me", "development-secret-key"}
+)
+
+
+def missing_credentials() -> list[str]:
+    """Return the OPNsense credential variables that are unset or blank."""
+    return [v for v in CREDENTIAL_VARS if not os.getenv(v, "").strip()]
+
+
+def mock_requested() -> bool:
+    """Return True only when the operator explicitly asked for the mock client."""
+    return os.getenv(MOCK_FLAG, "").strip().lower() in {"1", "true", "yes"}
+
+
+def require_live_credentials_or_mock_flag() -> None:
+    """Refuse to start when credentials are blank and mock was not asked for.
+
+    Without this, a deploy whose environment file still had empty credentials
+    started, served examples/mock_data, and answered every call with fixture
+    data indistinguishable from the live firewall (#99).
+
+    Raises:
+        SystemExit: when any credential is blank and OPNSENSE_USE_MOCK is unset.
+
+    """
+    missing = missing_credentials()
+    if missing and not mock_requested():
+        raise SystemExit(
+            f"Refusing to start: {', '.join(missing)} unset or blank. "
+            f"Set the credentials, or set {MOCK_FLAG}=1 to serve mock data."
+        )
+
+
+class SharedSecretVerifier(TokenVerifier):
+    """Accept exactly one bearer token: the configured MCP_SECRET_KEY."""
+
+    def __init__(self, secret: str) -> None:
+        """Store the secret the Authorization header must match."""
+        super().__init__()
+        self._secret = secret.encode()
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Return an access token when *token* equals the secret, else None."""
+        if hmac.compare_digest(token.encode(), self._secret):
+            return AccessToken(token=token, client_id="mcp-secret-key", scopes=[])
+        return None
+
+
+def http_auth_from_env() -> SharedSecretVerifier:
+    """Build the bearer verifier for HTTP transports, failing closed.
+
+    MCP_SECRET_KEY used to be defaulted to a fixed string and then never read,
+    so the HTTP listener served every tool to anyone who could reach it (#100).
+
+    Raises:
+        SystemExit: when MCP_SECRET_KEY is unset, blank, or a shipped placeholder.
+
+    """
+    secret = os.getenv(SECRET_VAR, "").strip()
+    if not secret or secret in PLACEHOLDER_SECRETS:
+        raise SystemExit(
+            f"Refusing to start an HTTP transport: {SECRET_VAR} is unset or a "
+            "placeholder. Set it to a long random value; clients send it as "
+            "'Authorization: Bearer <value>'."
+        )
+    return SharedSecretVerifier(secret)
+
+
 def get_opnsense_client(config: dict[str, Any]) -> Any:
     """Get an OPNsense client instance based on environment variables."""
     host = os.getenv("OPNSENSE_FIREWALL_HOST")  # Use correct env var name
@@ -174,7 +252,7 @@ def get_opnsense_client(config: dict[str, Any]) -> Any:
     ssh_user = os.getenv("OPNSENSE_SSH_USER", "root")
     ssh_key = os.getenv("OPNSENSE_SSH_KEY")
 
-    if host and api_key and api_secret:
+    if not missing_credentials():
         logger.info("Using real OPNsense client")
         client = OPNsenseClient(
             {
@@ -196,7 +274,11 @@ def get_opnsense_client(config: dict[str, Any]) -> Any:
 
         return client
 
-    logger.warning("No OPNsense credentials found, using mock client")
+    logger.warning(
+        "OPNSENSE_* connection settings are blank; using mock client (%s=%s)",
+        MOCK_FLAG,
+        os.getenv(MOCK_FLAG, ""),
+    )
     workspace_root = Path(__file__).parent.parent
     mock_data_path = workspace_root / "examples" / "mock_data"
     config = {"development": {"mock_data_path": str(mock_data_path)}}
@@ -436,7 +518,7 @@ def main() -> None:
         stream=sys.stderr,
     )
 
-    # Initialize client
+    require_live_credentials_or_mock_flag()
     client = get_opnsense_client({})
 
     # Every non-shaper tool comes from the registry.

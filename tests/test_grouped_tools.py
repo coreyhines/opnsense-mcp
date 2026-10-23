@@ -87,6 +87,50 @@ def test_group_schema_unions_member_properties() -> None:
     assert {"name", "size", "uuid", "confirm"} <= set(props)
 
 
+@pytest.mark.parametrize("conflicting_key", ["default", "enum", "type", "items"])
+def test_group_drops_default_when_member_specs_conflict(
+    conflicting_key: str,
+) -> None:
+    """A merged default is safe only when every accepting action agrees."""
+    first = {
+        "type": "string",
+        "enum": ["one", "two"],
+        "items": {"type": "string"},
+        "default": "one",
+    }
+    second = dict(first)
+    second[conflicting_key] = {
+        "default": "two",
+        "enum": ["one", "three"],
+        "type": "integer",
+        "items": {"type": "integer"},
+    }[conflicting_key]
+    group = GroupedTool(
+        name="thing",
+        description="Manage things",
+        members={
+            "create": _FakeTool("mk_thing", [], {"mode": first}),
+            "update": _FakeTool("set_thing", [], {"mode": second}),
+        },
+    )
+
+    assert "default" not in group.input_schema["properties"]["mode"]
+
+
+def test_group_keeps_default_when_every_member_spec_agrees() -> None:
+    spec = {"type": "string", "enum": ["one", "two"], "default": "one"}
+    group = GroupedTool(
+        name="thing",
+        description="Manage things",
+        members={
+            "create": _FakeTool("mk_thing", [], {"mode": spec}),
+            "update": _FakeTool("set_thing", [], {"mode": dict(spec)}),
+        },
+    )
+
+    assert group.input_schema["properties"]["mode"]["default"] == "one"
+
+
 def test_group_dispatches_to_the_right_member() -> None:
     group, members = _group()
 

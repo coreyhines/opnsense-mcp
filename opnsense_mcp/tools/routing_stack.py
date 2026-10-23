@@ -18,17 +18,20 @@ back. The state asked for is the state written, whatever the endpoint would
 have done.
 
 Applying is its own phase. `reconfigure` answers `{"status": ...}` at HTTP 200
-even when configd refuses, so every apply here goes through `run_apply`, which
-reads that answer, and every result carries `applied` saying whether the change
-is live. The apply sits outside the write's `try` so a reconfigure failure is
-never reported as the write having failed.
+even when configd refuses, so every apply here goes through `run_apply`, then
+re-reads the resource before claiming the requested state was applied. The
+apply sits outside the write's `try` so a reconfigure or verification failure
+is never reported as the write having failed.
 """
 
 from __future__ import annotations
 
 import ipaddress
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import flatten_mvc_node
@@ -100,25 +103,53 @@ class _RoutingToolBase:
         return data.get("rows", []) if isinstance(data, dict) else []
 
     async def _apply(
-        self, params: dict[str, Any], endpoint: str, what: str
-    ) -> tuple[bool, str]:
-        """Reconfigure as a separate phase, and report what it answered.
+        self,
+        params: dict[str, Any],
+        endpoint: str,
+        what: str,
+        verify_endpoint: str,
+        verify: Callable[[list[dict[str, Any]]], bool],
+    ) -> dict[str, Any]:
+        """Reconfigure, re-read the resource, and report verified state.
 
         Called after the write's `try` has closed, never inside it: an apply
         that failed is not a write that failed, and for a delete saying so
         inverts the truth. The record is gone and the caller is told it is not,
         so the natural next move is to try again.
 
-        Returns whether the change is live, and the reason when it is not.
+        A successful reconfigure only says configd accepted the request. The
+        requested state must also appear on a fresh read before this reports
+        ``applied: true``.
         """
         if not params.get("apply", False):
-            return False, ""
+            return {"applied": False}
         try:
             await run_apply(self.client, endpoint)
         except ApplyError as exc:
             logger.warning("%s written but not applied: %s", what, exc)
-            return False, str(exc)
-        return True, ""
+            return {"applied": False, "apply_error": str(exc)}
+
+        try:
+            rows = await self._rows(verify_endpoint)
+            verified = verify(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "%s reconfigure accepted but could not be verified: %s", what, exc
+            )
+            return {
+                "applied": False,
+                "verified": False,
+                "verify_error": f"could not re-read {what.lower()}: {exc}",
+            }
+        if not verified:
+            return {
+                "applied": False,
+                "verified": False,
+                "verify_error": (
+                    f"the {what.lower()} re-read did not match the requested state"
+                ),
+            }
+        return {"applied": True, "verified": True}
 
     def _confirm(self, resource: str, uuid: str, confirm: Any) -> dict[str, Any] | None:
         """Return a confirmation response, or None when the token is valid."""
@@ -238,22 +269,29 @@ class MkVlanTool(_RoutingToolBase):
             logger.exception("Failed to create VLAN")
             return {"status": "error", "error": str(exc)}
 
-        applied, apply_error = await self._apply(params, VLAN["reconfigure"], "VLAN")
+        apply_result = await self._apply(
+            params,
+            VLAN["reconfigure"],
+            "VLAN",
+            VLAN["search"],
+            lambda rows: any(
+                row.get("if") == parent and str(row.get("tag")) == str(tag_int)
+                for row in rows
+            ),
+        )
 
         out: dict[str, Any] = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "applied": applied,
             "note": (
                 "Created and reconfigured, so the device exists on the system. "
                 "Assigning and addressing the interface stays a UI step."
-                if applied
+                if apply_result["applied"]
                 else "Staged. Assigning and addressing the interface stays a UI step."
             ),
         }
-        if apply_error:
-            out["apply_error"] = apply_error
+        out.update(apply_result)
         return out
 
 
@@ -267,6 +305,12 @@ class RmVlanTool(_RoutingToolBase):
         "properties": {
             "uuid": {"type": "string", "description": "VLAN uuid"},
             "confirm": {"type": "string", "optional": True},
+            "apply": {
+                "type": "boolean",
+                "description": "Reconfigure VLAN devices afterwards (default false)",
+                "optional": True,
+                "default": False,
+            },
         },
         "required": ["uuid"],
     }
@@ -284,6 +328,7 @@ class RmVlanTool(_RoutingToolBase):
         if pending:
             return pending
 
+        device = ""
         try:
             rows = await self._rows(VLAN["search"])
             row = next((r for r in rows if r.get("uuid") == uuid), None)
@@ -315,7 +360,54 @@ class RmVlanTool(_RoutingToolBase):
             logger.exception("Failed to delete VLAN")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "uuid": uuid, "deleted": True}
+        # Apply sits outside the write try: a refused reconfigure is not a
+        # failed delete. Kernel VLAN devices stay until reconfigure runs.
+        # Verify against overview (device gone), not vlan search — _apply's
+        # row reader is the wrong shape for GET /overview/export.
+        if not params.get("apply", False):
+            return {
+                "status": "success",
+                "uuid": uuid,
+                "deleted": True,
+                "applied": False,
+            }
+        try:
+            await run_apply(self.client, VLAN["reconfigure"])
+        except ApplyError as exc:
+            logger.warning("VLAN written but not applied: %s", exc)
+            return {
+                "status": "success",
+                "uuid": uuid,
+                "deleted": True,
+                "applied": False,
+                "apply_error": str(exc),
+            }
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+        }
+        try:
+            overview = await self.client._make_request("GET", INTERFACE_OVERVIEW)
+            entries = overview if isinstance(overview, list) else []
+            still_present = bool(device) and any(
+                isinstance(entry, dict) and entry.get("device") == device
+                for entry in entries
+            )
+        except Exception as exc:  # noqa: BLE001
+            out["applied"] = False
+            out["verified"] = False
+            out["verify_error"] = f"could not re-read vlan: {exc}"
+            return out
+        if still_present:
+            out["applied"] = False
+            out["verified"] = False
+            out["verify_error"] = "the vlan re-read did not match the requested state"
+            return out
+        out["applied"] = True
+        out["verified"] = True
+        return out
 
 
 class ListGatewaysTool(_RoutingToolBase):
@@ -399,11 +491,19 @@ class MkGatewayTool(_RoutingToolBase):
                 "error": "name, interface and gateway are required",
             }
         try:
-            ipaddress.ip_address(gateway)
+            address = ipaddress.ip_address(gateway)
         except ValueError:
             return {
                 "status": "error",
                 "error": f"gateway {gateway!r} is not a valid address",
+            }
+        if getattr(address, "scope_id", None):
+            return {
+                "status": "error",
+                "error": (
+                    f"gateway {gateway!r} carries an IPv6 scope id, which is not "
+                    "valid in a persistent gateway address"
+                ),
             }
 
         try:
@@ -437,19 +537,26 @@ class MkGatewayTool(_RoutingToolBase):
             logger.exception("Failed to create gateway")
             return {"status": "error", "error": str(exc)}
 
-        applied, apply_error = await self._apply(
-            params, GATEWAY["reconfigure"], "Gateway"
+        apply_result = await self._apply(
+            params,
+            GATEWAY["reconfigure"],
+            "Gateway",
+            GATEWAY["search"],
+            lambda rows: any(
+                row.get("interface") == interface and row.get("gateway") == gateway
+                for row in rows
+            ),
         )
 
         out: dict[str, Any] = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "applied": applied,
-            "note": "Created and reconfigured." if applied else "Staged.",
+            "note": (
+                "Created and reconfigured." if apply_result["applied"] else "Staged."
+            ),
         }
-        if apply_error:
-            out["apply_error"] = apply_error
+        out.update(apply_result)
         return out
 
 
@@ -508,8 +615,16 @@ class ToggleGatewayTool(_RoutingToolBase):
             logger.exception("Failed to toggle gateway")
             return {"status": "error", "error": str(exc)}
 
-        applied, apply_error = await self._apply(
-            params, GATEWAY["reconfigure"], "Gateway"
+        apply_result = await self._apply(
+            params,
+            GATEWAY["reconfigure"],
+            "Gateway",
+            GATEWAY["search"],
+            lambda rows: any(
+                row.get("uuid") == uuid
+                and str(row.get("disabled")) == payload["disabled"]
+                for row in rows
+            ),
         )
 
         out: dict[str, Any] = {
@@ -517,10 +632,8 @@ class ToggleGatewayTool(_RoutingToolBase):
             "uuid": uuid,
             "enabled": bool(params["enabled"]),
             "disabled_field": payload["disabled"],
-            "applied": applied,
         }
-        if apply_error:
-            out["apply_error"] = apply_error
+        out.update(apply_result)
         return out
 
 
@@ -631,17 +744,26 @@ class MkRouteTool(_RoutingToolBase):
             logger.exception("Failed to create route")
             return {"status": "error", "error": str(exc)}
 
-        applied, apply_error = await self._apply(params, ROUTE["reconfigure"], "Route")
+        apply_result = await self._apply(
+            params,
+            ROUTE["reconfigure"],
+            "Route",
+            ROUTE["search"],
+            lambda rows: any(
+                row.get("network") == network and row.get("gateway") == gateway
+                for row in rows
+            ),
+        )
 
         out: dict[str, Any] = {
             "status": "success",
             "created": True,
             "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
-            "applied": applied,
-            "note": "Created and reconfigured." if applied else "Staged.",
+            "note": (
+                "Created and reconfigured." if apply_result["applied"] else "Staged."
+            ),
         }
-        if apply_error:
-            out["apply_error"] = apply_error
+        out.update(apply_result)
         return out
 
 
@@ -698,16 +820,24 @@ class ToggleRouteTool(_RoutingToolBase):
             logger.exception("Failed to toggle route")
             return {"status": "error", "error": str(exc)}
 
-        applied, apply_error = await self._apply(params, ROUTE["reconfigure"], "Route")
+        apply_result = await self._apply(
+            params,
+            ROUTE["reconfigure"],
+            "Route",
+            ROUTE["search"],
+            lambda rows: any(
+                row.get("uuid") == uuid
+                and str(row.get("enabled")) == payload["enabled"]
+                for row in rows
+            ),
+        )
 
         out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "enabled": bool(params["enabled"]),
-            "applied": applied,
         }
-        if apply_error:
-            out["apply_error"] = apply_error
+        out.update(apply_result)
         return out
 
 
@@ -751,16 +881,20 @@ class RmRouteTool(_RoutingToolBase):
             logger.exception("Failed to delete route")
             return {"status": "error", "error": str(exc)}
 
-        applied, apply_error = await self._apply(params, ROUTE["reconfigure"], "Route")
+        apply_result = await self._apply(
+            params,
+            ROUTE["reconfigure"],
+            "Route",
+            ROUTE["search"],
+            lambda rows: all(row.get("uuid") != uuid for row in rows),
+        )
 
         out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "deleted": True,
-            "applied": applied,
         }
-        if apply_error:
-            out["apply_error"] = apply_error
+        out.update(apply_result)
         return out
 
 
@@ -822,16 +956,18 @@ class RmGatewayTool(_RoutingToolBase):
                 "error": f"no gateway with uuid {uuid}; it may already be gone.",
             }
 
-        applied, apply_error = await self._apply(
-            params, GATEWAY["reconfigure"], "Gateway"
+        apply_result = await self._apply(
+            params,
+            GATEWAY["reconfigure"],
+            "Gateway",
+            GATEWAY["search"],
+            lambda rows: all(row.get("uuid") != uuid for row in rows),
         )
 
         out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "deleted": True,
-            "applied": applied,
         }
-        if apply_error:
-            out["apply_error"] = apply_error
+        out.update(apply_result)
         return out

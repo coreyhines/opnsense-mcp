@@ -8,8 +8,28 @@ It redirects to the actual MCP server implementation in opnsense_mcp.server.
 
 import argparse
 import os
+from typing import Any
 
 from opnsense_mcp.utils.logging import setup_logging
+
+
+def build_http_server() -> Any:
+    """Build the FastMCP server for an HTTP transport, bearer auth enforced.
+
+    Both checks run before the server is built, so a misconfigured container
+    exits instead of listening.
+    """
+    from opnsense_mcp.fastmcp_server import build_mcp_server
+    from opnsense_mcp.server import (
+        http_auth_from_env,
+        require_live_credentials_or_mock_flag,
+    )
+
+    auth = http_auth_from_env()
+    require_live_credentials_or_mock_flag()
+    mcp = build_mcp_server()
+    mcp.auth = auth
+    return mcp
 
 
 def main() -> None:
@@ -51,11 +71,6 @@ def main() -> None:
 
     setup_logging(args.log_file, args.log_level)
 
-    if not os.environ.get("MCP_SECRET_KEY"):
-        os.environ["MCP_SECRET_KEY"] = (
-            "development-secret-key"  # pragma: allowlist secret
-        )
-
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["PYTHONIOENCODING"] = "utf-8"
 
@@ -65,9 +80,7 @@ def main() -> None:
 
         mcp_main()
     else:
-        from opnsense_mcp.fastmcp_server import build_mcp_server
-
-        mcp = build_mcp_server()
+        mcp = build_http_server()
         mcp.run(
             transport=args.transport,
             host=args.host,

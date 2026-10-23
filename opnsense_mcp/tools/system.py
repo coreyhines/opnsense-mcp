@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from opnsense_mcp.build_info import get_build_info
 from opnsense_mcp.utils.api import OPNsenseClient
 from opnsense_mcp.utils.deploy_probe import runtime_paths_report
+from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,31 @@ class SystemStatus(BaseModel):
     temperature: dict[str, Any] | None = None
 
 
+def client_kind(client: object) -> str:
+    """Return "mock" for the fixture-backed client, "live" for anything else."""
+    return "mock" if isinstance(client, MockOPNsenseClient) else "live"
+
+
 class SystemTool:
     """Tool for retrieving system status information from OPNsense."""
 
     name = "system"
     description = "Show system status information"
-    input_schema = {"properties": {}, "required": [], "type": "object"}
+    input_schema = {
+        "properties": {
+            "action": {
+                "description": (
+                    "'status' (default) or 'diagnose_mcp'. diagnose_mcp is "
+                    "read-only: it reports issues and suggested fixes and "
+                    "runs none of them."
+                ),
+                "enum": ["status", "diagnose_mcp"],
+                "type": "string",
+            },
+        },
+        "required": [],
+        "type": "object",
+    }
 
     def __init__(self, client: OPNsenseClient | None) -> None:
         """
@@ -84,6 +104,9 @@ class SystemTool:
 
             return {
                 "status": "success",
+                # Mock data is shaped like the firewall's, so without this a
+                # caller could not tell fixture output from live state (#99).
+                "client": client_kind(self.client),
                 "system": combined_status,
                 "mcp_server": {
                     **get_build_info(),
@@ -99,99 +122,57 @@ class SystemTool:
 
         except Exception as e:
             logger.exception("Failed to get system status")
-            return {"status": "error", "error": str(e), "system": {}}
+            return {
+                "status": "error",
+                "error": str(e),
+                "client": client_kind(self.client),
+                "system": {},
+            }
 
     async def diagnose_mcp_server(self) -> dict[str, Any]:
-        """Diagnose MCP server issues and provide solutions."""
-        import subprocess  # nosec B404 — subprocess required for local process management
-        import time
+        """Diagnose MCP server issues and suggest fixes, changing nothing.
+
+        This used to run ``./mcp_start.sh``, ``python3 -m venv .venv`` and
+        ``pip install`` as "auto-corrections" from a status tool (#93). The
+        only subprocess left is ``pgrep``, which reads the process table.
+        """
+        import subprocess  # nosec B404 — read-only pgrep only
         from pathlib import Path
 
         issues = []
         solutions = []
-        corrections = []
 
-        # Check if MCP server process is running
         try:
             result = subprocess.run(
                 ["pgrep", "-f", "opnsense_mcp/server.py"],
                 capture_output=True,
                 text=True,
+                timeout=5,
             )  # nosec B603 B607 — hardcoded command, no user input
             if result.returncode != 0:
                 issues.append("OPNsense MCP server is not running")
                 solutions.append("Restart the MCP server using: ./mcp_start.sh")
-
-                # Try to auto-restart
-                try:
-                    subprocess.run(
-                        ["./mcp_start.sh"],
-                        cwd=Path.cwd(),
-                        timeout=10,
-                        capture_output=True,
-                    )  # nosec B603 B607 — hardcoded command, no user input
-                    corrections.append("Attempted to restart MCP server")
-                    time.sleep(2)
-                except Exception as e:
-                    issues.append(f"Failed to restart MCP server: {e}")
         except Exception as e:
             issues.append(f"Could not check MCP server status: {e}")
 
-        # Check virtual environment
-        venv_path = Path.cwd() / ".venv"
-        if not venv_path.exists():
+        if not (Path.cwd() / ".venv").exists():
             issues.append("Virtual environment (.venv) is missing")
-            solutions.append("Recreate virtual environment: python3 -m venv .venv")
+            solutions.append("Recreate virtual environment: uv sync")
 
-            # Try to auto-recreate
-            try:
-                subprocess.run(
-                    ["python3", "-m", "venv", ".venv"],
-                    cwd=Path.cwd(),
-                    timeout=30,
-                    capture_output=True,
-                )  # nosec B603 B607 — hardcoded command, no user input
-                corrections.append("Recreated virtual environment")
-            except Exception as e:
-                issues.append(f"Failed to recreate virtual environment: {e}")
-
-        # Check dependencies
         try:
-            import dotenv
-            import paramiko
+            import dotenv  # noqa: F401
+            import paramiko  # noqa: F401
         except ImportError as e:
             issues.append(f"Missing dependency: {e}")
-            solutions.append("Install dependencies: pip install -r requirements.txt")
+            solutions.append("Install dependencies: uv sync")
 
-            # Try to auto-install
-            try:
-                subprocess.run(
-                    [
-                        str(Path.cwd() / ".venv" / "bin" / "pip"),
-                        "install",
-                        "-r",
-                        "requirements.txt",
-                    ],
-                    cwd=Path.cwd(),
-                    timeout=60,
-                    capture_output=True,
-                )  # nosec B603 B607 — hardcoded command, no user input
-                corrections.append("Installed dependencies")
-            except Exception as e:
-                issues.append(f"Failed to install dependencies: {e}")
-
-        # Check SSH connectivity
-        try:
-            if self.client is None:
-                raise RuntimeError("No OPNsense client available")
-        except Exception as e:
-            issues.append(f"SSH connection failed: {e}")
-            solutions.append("Check SSH configuration and firewall connectivity")
+        if self.client is None:
+            issues.append("No OPNsense client available")
+            solutions.append("Check OPNSENSE_* credentials and firewall connectivity")
 
         return {
-            "status": "healthy" if len(issues) == 0 else "needs_attention",
+            "status": "healthy" if not issues else "needs_attention",
             "issues": issues,
             "solutions": solutions,
-            "auto_corrections": corrections,
-            "summary": f"Found {len(issues)} issues, applied {len(corrections)} auto-corrections",
+            "summary": f"Found {len(issues)} issues",
         }

@@ -19,14 +19,10 @@ from tests._schema_ast import execute_ast, leaf_tools, param_keys_read
 # this to paper over a new tool that forgot its schema — fix the schema.
 _ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
     {
-        # Optional filter used by execute; schema never declared it. Not B3.
-        ("arp", "ipv6"),
         # Optional logical-name resolve; schema is empty. Not B3.
         ("interface_list", "resolve"),
         # Capture mode (text/raw); schema never declared it. Not B3.
         ("packet_capture", "mode"),
-        # Internal selector; schema is empty and the tool is ungrouped. Not B3.
-        ("system", "action"),
     }
 )
 

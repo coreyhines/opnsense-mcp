@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from opnsense_mcp.utils.dhcp_providers._apply_client import RequestCallableClient
 from opnsense_mcp.utils.dhcp_scope import resolve_kea_scope
 from opnsense_mcp.utils.dhcp_subnet_dns import (
     DhcpScope,
@@ -294,13 +295,11 @@ class KeaProvider:
 
         try:
             await self._write_subnet_snapshot(after)
-            await self._request("POST", self.RECONFIGURE_ENDPOINT)
         except Exception as exc:
             logger.exception("Kea subnet DNS update failed; rolling back")
             restore_error: str | None = None
             try:
                 await self._write_subnet_snapshot(before)
-                await self._request("POST", self.RECONFIGURE_ENDPOINT)
             except Exception as restore_exc:
                 restore_error = str(restore_exc)
                 logger.exception("Kea subnet DNS rollback failed")
@@ -320,7 +319,21 @@ class KeaProvider:
                 "restore_error": restore_error,
             }
 
-        return {
+        # Lazy import: apply → api → dhcp_provider → this package.
+        from opnsense_mcp.utils.apply import ApplyError, run_apply
+
+        applied, apply_error = False, ""
+        try:
+            await run_apply(
+                RequestCallableClient(self._request),
+                self.RECONFIGURE_ENDPOINT,
+            )
+            applied = True
+        except ApplyError as exc:
+            logger.warning("Kea subnet DNS staged but not applied: %s", exc)
+            apply_error = str(exc)
+
+        out: dict[str, Any] = {
             "status": "success",
             "backend": self.name,
             "family": family,
@@ -331,11 +344,14 @@ class KeaProvider:
             },
             "before": before.servers,
             "after": servers,
-            "applied": True,
+            "applied": applied,
             "renewal_note": (
                 "DHCP clients keep prior DNS until they renew or reconnect"
             ),
         }
+        if apply_error:
+            out["apply_error"] = apply_error
+        return out
 
     async def move_host(
         self,

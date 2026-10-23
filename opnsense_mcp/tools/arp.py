@@ -69,6 +69,11 @@ class ARPTool:
                 "optional": True,
                 "type": "string",
             },
+            "ipv6": {
+                "description": "Filter NDP entries by IPv6 address",
+                "optional": True,
+                "type": "string",
+            },
             "search": {
                 "description": "Targeted search by IP/MAC/hostname",
                 "optional": True,
@@ -105,8 +110,7 @@ class ARPTool:
         """
         try:
             if self.client is None:
-                logger.warning("No OPNsense client available, returning dummy data")
-                return self._get_dummy_data()
+                return self._error("No OPNsense client available")
 
             search_query = params.get("search") if params else None
             if search_query:
@@ -235,9 +239,10 @@ class ARPTool:
             }
         except Exception as e:
             logger.exception("Failed to get ARP/NDP tables")
-            logger.error(f"Exception details: {e}")
-            # Fallback to dummy data on error
-            return self._get_dummy_data()
+            # This used to return a fabricated neighbour (192.168.1.1,
+            # TestCorp) under status "success", so a caller could not tell a
+            # dead API from a real table (#87).
+            return self._error(str(e))
 
     def _fill_manufacturer(self, entry):
         if not entry.get("manufacturer"):
@@ -246,24 +251,7 @@ class ARPTool:
                 entry["manufacturer"] = oui_lookup.lookup(mac) or ""
         return entry
 
-    def _get_dummy_data(self) -> dict[str, Any]:
-        """Return dummy data for testing."""
-        return {
-            "arp": [
-                {
-                    "ip": "192.168.1.1",
-                    "mac": "aa:bb:cc:dd:ee:ff",
-                    "intf": "em0",
-                    "manufacturer": "TestCorp",
-                }
-            ],
-            "ndp": [
-                {
-                    "ip": "fe80::1",
-                    "mac": "aa:bb:cc:dd:ee:ff",
-                    "intf": "em0",
-                    "manufacturer": "TestCorp",
-                }
-            ],
-            "status": "success",
-        }
+    @staticmethod
+    def _error(message: str) -> dict[str, Any]:
+        """Report a lookup that did not run, with no table data at all."""
+        return {"status": "error", "error": message}

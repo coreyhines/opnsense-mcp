@@ -1723,12 +1723,21 @@ class OPNsenseClient:
         return out
 
     async def search_aliases(self, search: str = "") -> list[dict[str, Any]]:
-        """List firewall aliases, optionally filtered."""
+        """List firewall aliases, optionally filtered.
+
+        Raises on API failure instead of returning an empty list (#65): an
+        empty list must mean "the firewall has no matching aliases", never
+        "the request died". The tool layer turns the raise into
+        ``status: error``; swallowing it here made a dead request
+        indistinguishable from an empty alias table.
+        """
         try:
             return await self._search_all_rows(ENDPOINTS["alias"]["search"], search)
-        except Exception:
+        except APIError:
+            raise
+        except Exception as exc:
             logger.exception("Failed to search aliases")
-            return []
+            raise RequestError(f"Failed to search aliases: {exc}") from exc
 
     async def get_gateway_status(self) -> list[dict[str, Any]]:
         """Get WAN/gateway health status."""

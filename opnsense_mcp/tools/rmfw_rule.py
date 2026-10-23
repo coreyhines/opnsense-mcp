@@ -100,29 +100,33 @@ class RmfwRuleTool:
         try:
             # delete_firewall_rule raises on API failure; success is {"result": "success"}
             await self.client.delete_firewall_rule(rule_uuid)
-
-            # Apply changes if requested (default: true)
-            apply_changes = params.get("apply", True)
-            if apply_changes:
-                await self.client.apply_firewall_changes()
-                return {
-                    "rule_uuid": rule_uuid,
-                    "deleted": True,
-                    "applied": True,
-                    "status": "success",
-                }
-
-            return {
-                "rule_uuid": rule_uuid,
-                "deleted": True,
-                "applied": False,
-                "status": "success",
-                "note": (
-                    "Rule deleted but not applied. Call "
-                    "fw_rule action='apply' to activate."
-                ),
-            }
-
         except Exception as e:
             logger.exception("Failed to delete firewall rule")
             return {"status": "error", "error": str(e)}
+
+        apply_changes = params.get("apply", True)
+        # Applied as its own phase. The confirm token is single-use, so a
+        # delete reported as failed sent the caller into a retry that could
+        # only fail: the rule was already gone.
+        applied, apply_error = False, ""
+        if apply_changes:
+            try:
+                await self.client.apply_firewall_changes()
+                applied = True
+            except Exception as e:  # noqa: BLE001 - surfaced as apply_error
+                logger.warning("Rule %s deleted but not applied: %s", rule_uuid, e)
+                apply_error = str(e)
+
+        out: dict[str, Any] = {
+            "rule_uuid": rule_uuid,
+            "deleted": True,
+            "applied": applied,
+            "status": "success",
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        elif not applied:
+            out["note"] = (
+                "Rule deleted but not applied. Call fw_rule action='apply' to activate."
+            )
+        return out
