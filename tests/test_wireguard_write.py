@@ -519,7 +519,9 @@ async def test_create_peer_verify_checks_tunneladdress_when_provided() -> None:
             "pubkey": pubkey,
             "servers": member_only,
             # Wanted 192.168.10.99/32; stored something else.
-            "tunneladdress": {"198.51.100.1/32": {"value": "198.51.100.1/32", "selected": 1}},
+            "tunneladdress": {
+                "198.51.100.1/32": {"value": "198.51.100.1/32", "selected": 1}
+            },
         }
     }
     client = _base_client().on("/api/wireguard/client/getClient", re_read)
