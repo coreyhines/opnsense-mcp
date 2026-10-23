@@ -626,16 +626,19 @@ class OPNsenseClient:
     # Keep this alias — used by search_ndp_table
     _get_ndp_table = get_ndp_table
 
-    async def get_firewall_rules(
+    async def search_firewall_rules(
         self: "OPNsenseClient",
         *,
         row_count: int = 1000,
-    ) -> list[dict[str, Any]]:
-        """Get firewall rules from OPNsense (Firewall Automation searchRule rows)."""
+    ) -> dict[str, Any]:
+        """POST firewall/filter/searchRule and return the whole response.
+
+        Callers that report a rule count need the API's own `total`, not just
+        the rows: a count taken from the rows cannot tell an empty ruleset from
+        rows that were lost on the way (#113).
+        """
         try:
             logger.debug("Fetching firewall rules...")
-            # Use the searchRule endpoint as per OPNsense API docs
-            # This should be a POST request with JSON body, not GET with params
             data = await self._make_request(
                 "POST",
                 "/api/firewall/filter/searchRule",
@@ -648,12 +651,22 @@ class OPNsenseClient:
             logger.exception("Failed to get firewall rules")
             raise RequestError(f"Firewall rules error: {e!s}") from e
         else:
-            rules = list(data.get("rows", []))
+            rows = data.get("rows")
             logger.debug(
-                "Successfully retrieved %d firewall rules",
-                len(rules),
+                "Retrieved %d of %s firewall rules",
+                len(rows) if isinstance(rows, list) else 0,
+                data.get("total"),
             )
-            return rules
+            return data
+
+    async def get_firewall_rules(
+        self: "OPNsenseClient",
+        *,
+        row_count: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Get firewall rules from OPNsense (Firewall Automation searchRule rows)."""
+        data = await self.search_firewall_rules(row_count=row_count)
+        return list(data.get("rows") or [])
 
     async def get_system_status(self: "OPNsenseClient") -> dict[str, Any]:
         """Get system version and info from OPNsense."""

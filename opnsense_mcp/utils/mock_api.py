@@ -119,13 +119,18 @@ class MockOPNsenseClient:
         data = self.mock_data.get("interfaces", {})
         return data.get("interfaces", [])
 
+    async def search_firewall_rules(self, *, row_count: int = 1000) -> dict[str, Any]:
+        """Mock searchRule response (row_count matches OPNsense client; ignored)."""
+        _ = row_count
+        rows = list(self.mock_data.get("firewall_rules", {}).get("rules", []))
+        return {"rows": rows, "rowCount": len(rows), "total": len(rows), "current": 1}
+
     async def get_firewall_rules(
         self, *, row_count: int = 1000
     ) -> list[dict[str, Any]]:
         """Get mock firewall rules (row_count matches OPNsense client; ignored here)."""
-        _ = row_count
-        data = self.mock_data.get("firewall_rules", {})
-        return data.get("rules", [])
+        data = await self.search_firewall_rules(row_count=row_count)
+        return data["rows"]
 
     @staticmethod
     def _paginate_search_rows(

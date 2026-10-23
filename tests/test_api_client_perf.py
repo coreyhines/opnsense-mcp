@@ -186,11 +186,14 @@ async def test_fw_rules_tool_treats_null_enabled_as_unfiltered(client_config):
     from opnsense_mcp.tools.fw_rules import FwRulesTool
 
     mock_client = MagicMock()
-    mock_client.get_firewall_rules = AsyncMock(
-        return_value=[
-            {"uuid": "1", "enabled": "1", "interface": "lan", "action": "pass"},
-            {"uuid": "2", "enabled": "0", "interface": "wan", "action": "block"},
-        ]
+    mock_client.search_firewall_rules = AsyncMock(
+        return_value={
+            "rows": [
+                {"uuid": "1", "enabled": "1", "interface": "lan", "action": "pass"},
+                {"uuid": "2", "enabled": "0", "interface": "wan", "action": "block"},
+            ],
+            "total": 2,
+        }
     )
     mock_client.get_interfaces = AsyncMock(return_value=[])
     tool = FwRulesTool(mock_client)
