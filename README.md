@@ -46,7 +46,8 @@ Edit `~/.env`:
 OPNSENSE_API_KEY=your_api_key
 OPNSENSE_API_SECRET=your_api_secret
 OPNSENSE_FIREWALL_HOST=your.firewall.host
-MCP_SECRET_KEY=replace_me
+# HTTP/SSE only; stdio ignores it. Generate with: openssl rand -hex 32
+MCP_SECRET_KEY=
 ```
 
 ### 2) Choose mode
@@ -82,6 +83,9 @@ Clients connect to:
 ```text
 https://<your-hostname>/sse
 ```
+
+Every request must send `Authorization: Bearer <MCP_SECRET_KEY>`. The server
+refuses to start on an HTTP transport when the key is blank or a placeholder.
 
 See deployment docs:
 
