@@ -275,7 +275,7 @@ def get_opnsense_client(config: dict[str, Any]) -> Any:
         return client
 
     logger.warning(
-        "No OPNsense credentials found, using mock client (%s=%s)",
+        "OPNSENSE_* connection settings are blank; using mock client (%s=%s)",
         MOCK_FLAG,
         os.getenv(MOCK_FLAG, ""),
     )
