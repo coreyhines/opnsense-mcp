@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -123,7 +124,10 @@ def test_compute_image_tag_uses_pyproject_dev_suffix() -> None:
     )
     assert result.returncode == 0
     tag = result.stdout.strip()
-    assert tag.startswith("1.0.0-dev.")
+    version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"][
+        "version"
+    ]
+    assert tag.startswith(f"{version}-dev.")
     assert len(tag.split(".")[-1]) >= 7
 
 
