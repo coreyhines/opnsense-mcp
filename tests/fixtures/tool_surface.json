@@ -1781,6 +1781,11 @@
         "server": {
           "description": "IP address this hostname resolves to",
           "type": "string"
+        },
+        "server6": {
+          "description": "Optional IPv6 address for an AAAA record in the same call; `server` must then be IPv4",
+          "optional": true,
+          "type": "string"
         }
       },
       "required": [

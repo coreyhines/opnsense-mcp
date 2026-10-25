@@ -28,6 +28,11 @@ class MkdnsTool:
                 "type": "string",
                 "description": "IP address this hostname resolves to",
             },
+            "server6": {
+                "type": "string",
+                "description": "Optional IPv6 address for an AAAA record in the same call; `server` must then be IPv4",
+                "optional": True,
+            },
             "description": {
                 "type": "string",
                 "description": "Optional description",
@@ -72,6 +77,8 @@ class MkdnsTool:
         hostname = params.get("hostname", "").strip()
         domain = params.get("domain", "").strip()
         server = params.get("server", "").strip()
+        server6 = params.get("server6", "").strip()
+        paired = "server6" in params
 
         if not hostname or not domain or not server:
             return {
@@ -87,14 +94,44 @@ class MkdnsTool:
                 "error": f"Invalid IP address for server: {server}",
             }
 
+        if paired:
+            try:
+                record_type6 = _record_type_for_server(server6)
+            except ValueError:
+                return {
+                    "status": "error",
+                    "error": f"Invalid IP address for server6: {server6}",
+                }
+            if record_type != "A" or record_type6 != "AAAA":
+                return {
+                    "status": "error",
+                    "error": "server must be IPv4 and server6 must be IPv6",
+                }
+
         try:
-            result = await self.client.add_host_override(
-                hostname=hostname,
-                domain=domain,
-                server=server,
-                description=params.get("description", ""),
-                enabled=params.get("enabled", True),
-            )
+            existing = await self.client.search_host_overrides(hostname)
+            addresses = {server, server6} if paired else {server}
+            for row in existing:
+                if (
+                    row.get("hostname", "").casefold() == hostname.casefold()
+                    and row.get("domain", "").casefold() == domain.casefold()
+                    and row.get("server") in addresses
+                ):
+                    return {
+                        "status": "error",
+                        "error": f"DNS override already exists for {hostname}.{domain}: {row['server']}",
+                    }
+
+            add_params = {
+                "hostname": hostname,
+                "domain": domain,
+                "server": server,
+                "description": params.get("description", ""),
+                "enabled": params.get("enabled", True),
+            }
+            if paired:
+                add_params["rr"] = "A"
+            result = await self.client.add_host_override(**add_params)
 
             uuid = result.get("uuid", "")
             if not uuid:
@@ -103,17 +140,54 @@ class MkdnsTool:
                     "error": f"API did not return a UUID: {result}",
                 }
 
-            await self.client.reconfigure_unbound()
+            uuids = {record_type: uuid}
+            if paired:
+                try:
+                    result6 = await self.client.add_host_override(
+                        hostname=hostname,
+                        domain=domain,
+                        server=server6,
+                        description=params.get("description", ""),
+                        enabled=params.get("enabled", True),
+                        rr="AAAA",
+                    )
+                    uuid6 = result6.get("uuid", "")
+                    if not uuid6:
+                        raise ValueError(f"API did not return an AAAA UUID: {result6}")
+                except Exception as add_error:
+                    try:
+                        await self.client.del_host_override(uuid)
+                    except Exception as rollback_error:
+                        logger.exception(
+                            "Failed to roll back DNS host override %s", uuid
+                        )
+                        return {
+                            "status": "error",
+                            "error": (
+                                f"AAAA add failed: {add_error}; rollback failed for "
+                                f"{uuid}: {rollback_error}"
+                            ),
+                        }
+                    return {"status": "error", "error": f"AAAA add failed: {add_error}"}
+                uuids["AAAA"] = uuid6
 
-            return {
+            apply_result = await self.client.reconfigure_unbound()
+
+            response = {
                 "uuid": uuid,
+                "uuids": uuids,
                 "hostname": hostname,
                 "domain": domain,
                 "server": server,
-                "rr": record_type,
-                "applied": True,
+                "rr": "A+AAAA" if paired else record_type,
+                "applied": apply_result.get("applied", False),
                 "status": "success",
             }
+            if paired:
+                response["server6"] = server6
+            if "apply_error" in apply_result:
+                response["apply_error"] = apply_result["apply_error"]
+            return response
         except Exception as e:
             logger.exception("Failed to add DNS host override")
             return {"status": "error", "error": str(e)}
