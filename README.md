@@ -110,7 +110,7 @@ Five PRs landed recently. See [`docs/FEATURES_UPDATE.md`](docs/FEATURES_UPDATE.m
 
 - **Streamable HTTP transport** — native FastMCP server supports `stdio`, `sse`, and `streamable-http` (MCP spec 2025-03-26). Deployed via `deploy/install.sh`.
 - **DHCP client_id (DUID) support** — `mk_dhcp_host` and `move_dhcp_host` accept an optional DUID for stateful DHCPv6 matching.
-- **Semver image tags** — images are tagged from `pyproject.toml` version + git short SHA (`1.0.0-dev.a1b2c3d`) or release tags (`1.0.0`).
+- **Semver image tags** — main builds are tagged as a prerelease of the next patch after the `pyproject.toml` version (`1.0.1-dev.a1b2c3d` after 1.0.0) or release tags (`1.0.0`).
 - **Container registry** — pinned tags only; `:latest` is rejected. Set `OPNSENSE_MCP_IMAGE_REPO`, or build locally with `--build-local`.
 - **install.sh readonly fix** — Bash `readonly` clash between `install.sh` and `lib.sh` resolved.
 

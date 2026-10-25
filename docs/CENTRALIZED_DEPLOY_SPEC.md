@@ -10,7 +10,7 @@ Single planning/implementation reference for the **network service** path. **IDE
 - **Centralized:** long-lived service, **Linux amd64** only for now (no macOS/ARM in scope).
 - **Installer:** **`curl | bash`** loading the script from **raw on `main`** (treat merges as production).
 - **Source:** **Forgejo** for clone URLs and CI image builds.
-- **Images:** **Forgejo Actions** pushes **`hub.frobozz.example/opnsense-mcp:<semver>`** on git tag **`vX.Y.Z`**, or **`X.Y.Z-dev.<short-sha>`** on `main` (version from `pyproject.toml`). Host install **pulls** a pinned tag (no `:latest`).
+- **Images:** **Forgejo Actions** pushes **`hub.frobozz.example/opnsense-mcp:<semver>`** on git tag **`vX.Y.Z`**, or **`X.Y.Z-dev.<short-sha>`** on `main` (Z is one past the `pyproject.toml` version, so a dev build sorts after the release it follows). Host install **pulls** a pinned tag (no `:latest`).
 - **Podman** is the blessed server path (**rootful**, **UID 1000** convention for volume ownership where it matters).
 - **Docker:** supported as a first-class alternative; **do not** force Podman on Docker users.
 - **TLS:** **Caddy** in front; **TLS by default**; works with **real CA PEMs** or **self-signed** (paths to `fullchain` + `privkey` — client trust is the operator’s problem for self-signed).
@@ -55,7 +55,7 @@ Single planning/implementation reference for the **network service** path. **IDE
   ```bash
   curl -fsSL 'https://forgejo.frobozz.example/coreyhines/opnsense-mcp/raw/branch/main/deploy/install.sh' | sudo bash
   ```
-  (Installer auto-selects `$(pyproject version)-dev.<short-sha>` when **`OPNSENSE_MCP_IMAGE_TAG`** is unset.)
+  (Installer auto-selects `<next patch>-dev.<short-sha>` when **`OPNSENSE_MCP_IMAGE_TAG`** is unset.)
 - **Uninstall:** `sudo bash deploy/uninstall.sh` (from checkout) or copy the script to the host. **Docker:** `--runtime docker`. Optional **`--purge-env`** removes **`$INSTALL_ROOT/environment`**.
 
 ### Manual uninstall (no script)

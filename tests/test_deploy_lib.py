@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
-import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -114,21 +114,61 @@ def test_pull_accepts_any_real_registry() -> None:
     assert result.returncode == 0
 
 
-def test_compute_image_tag_uses_pyproject_dev_suffix() -> None:
-    result = subprocess.run(
-        ["bash", str(COMPUTE_TAG)],
+def _compute_tag(
+    tmp_path: Path, version: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run a copy of compute-image-tag.sh against a pyproject at `version`."""
+    script = tmp_path / "deploy" / "ci" / "compute-image-tag.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text(COMPUTE_TAG.read_text())
+    (tmp_path / "pyproject.toml").write_text(f'[project]\nversion = "{version}"\n')
+    return subprocess.run(
+        ["bash", str(script)],
         capture_output=True,
         text=True,
         check=False,
-        cwd=REPO_ROOT,
+        env={
+            "PATH": os.environ["PATH"],
+            "CI_COMMIT_SHORT_SHA": "44c13f6",
+            **(env or {}),
+        },
     )
-    assert result.returncode == 0
+
+
+def _core(tag: str) -> tuple[int, ...]:
+    return tuple(int(n) for n in tag.split("-", 1)[0].split("."))
+
+
+def test_dev_tag_sorts_after_the_release_it_follows(tmp_path: Path) -> None:
+    """A build after v1.1.0 was tagged 1.1.0-dev, which semver ranks below 1.1.0.
+
+    A deployer then treated 1.1.0 as an upgrade and dropped 32 commits of
+    fixes. The dev tag must be a prerelease of a later core version.
+    """
+    result = _compute_tag(tmp_path, "1.1.0")
+    assert result.returncode == 0, result.stderr
     tag = result.stdout.strip()
-    version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"][
-        "version"
-    ]
-    assert tag.startswith(f"{version}-dev.")
-    assert len(tag.split(".")[-1]) >= 7
+    assert tag == "1.1.1-dev.44c13f6"
+    assert _core(tag) > _core("1.1.0")
+
+
+def test_release_tag_must_match_pyproject(tmp_path: Path) -> None:
+    """Dev tags assume pyproject holds the last release, so a tag cannot drift."""
+    result = _compute_tag(tmp_path, "1.1.0", {"CI_COMMIT_TAG": "v1.1.1"})
+    assert result.returncode != 0
+    assert result.stdout == ""
+
+
+def test_release_tag_strips_the_v(tmp_path: Path) -> None:
+    result = _compute_tag(tmp_path, "1.1.1", {"CI_COMMIT_TAG": "v1.1.1"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "1.1.1"
+
+
+def test_dev_tag_refuses_a_non_semver_pyproject(tmp_path: Path) -> None:
+    result = _compute_tag(tmp_path, "1.2.0rc1")
+    assert result.returncode != 0
+    assert result.stdout == ""
 
 
 def test_is_interactive_shell_says_no_without_a_controlling_terminal() -> None:
