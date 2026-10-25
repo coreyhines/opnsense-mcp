@@ -93,7 +93,7 @@ Container images are now tagged with deterministic semver instead of floating `l
 
 | Source | Tag format | Example |
 |--------|-----------|---------|
-| `main` branch (CI) | `<pyproject-version>-dev.<short-sha>` | `1.0.0-dev.a1b2c3d` |
+| `main` branch (CI) | `<next patch after pyproject version>-dev.<short-sha>` | `1.0.1-dev.a1b2c3d` |
 | Git tag `vX.Y.Z` | `X.Y.Z` | `1.0.0` |
 
 The helper script `deploy/ci/compute-image-tag.sh` reads `version` from `pyproject.toml` and appends the git short SHA for non-tag builds. This makes every image traceable to a commit.
