@@ -1,6 +1,6 @@
 """Tests for single and paired Unbound host override creation."""
 
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
@@ -175,3 +175,45 @@ async def test_mkdns_applied_reflects_reconfigure() -> None:
     assert result["uuids"] == {"A": "u1"}
     assert result["applied"] is False
     assert result["apply_error"] == "x"
+
+
+@pytest.mark.asyncio
+async def test_mkdns_duplicate_check_compares_ipv6_spellings() -> None:
+    client = MagicMock()
+    client.search_host_overrides = AsyncMock(
+        return_value=[
+            {
+                "hostname": "svc",
+                "domain": "example.com",
+                "server": "2001:db8:5eed:b501:0:0:0:5",
+                "rr": "AAAA",
+            }
+        ]
+    )
+    client.add_host_override = AsyncMock()
+    result = await MkdnsTool(client).execute(
+        {
+            "hostname": "svc",
+            "domain": "example.com",
+            "server": "2001:db8:5eed:b501::5",
+        }
+    )
+    assert result["status"] == "error" and "already exists" in result["error"]
+    client.add_host_override.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_mkdns_null_server6_is_single_record() -> None:
+    client = MagicMock()
+    client.search_host_overrides = AsyncMock(return_value=[])
+    client.add_host_override = AsyncMock(return_value={"uuid": "u1"})
+    client.reconfigure_unbound = AsyncMock(return_value={"applied": True})
+    result = await MkdnsTool(client).execute(
+        {
+            "hostname": "svc",
+            "domain": "example.com",
+            "server": "192.0.2.5",
+            "server6": None,
+        }
+    )
+    assert result["status"] == "success" and result["rr"] == "A"

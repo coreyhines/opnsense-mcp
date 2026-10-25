@@ -1,11 +1,21 @@
 """Unbound DNS host override creation tool for OPNsense."""
 
+import ipaddress
 import logging
 from typing import Any
 
 from opnsense_mcp.utils.api import OPNsenseClient, _record_type_for_server
 
 logger = logging.getLogger(__name__)
+
+
+def _same_ip(value: str, addresses: set[str]) -> bool:
+    """True when value is one of addresses, comparing IPs (IPv6 has many spellings)."""
+    try:
+        ip = ipaddress.ip_address(value.strip())
+    except ValueError:
+        return value in addresses
+    return any(ip == ipaddress.ip_address(a) for a in addresses)
 
 
 class MkdnsTool:
@@ -77,8 +87,8 @@ class MkdnsTool:
         hostname = params.get("hostname", "").strip()
         domain = params.get("domain", "").strip()
         server = params.get("server", "").strip()
-        server6 = params.get("server6", "").strip()
-        paired = "server6" in params
+        server6 = str(params.get("server6") or "").strip()
+        paired = bool(server6)
 
         if not hostname or not domain or not server:
             return {
@@ -115,7 +125,7 @@ class MkdnsTool:
                 if (
                     row.get("hostname", "").casefold() == hostname.casefold()
                     and row.get("domain", "").casefold() == domain.casefold()
-                    and row.get("server") in addresses
+                    and _same_ip(str(row.get("server", "")), addresses)
                 ):
                     return {
                         "status": "error",
