@@ -1411,7 +1411,7 @@ class OPNsenseClient:
             self.search_ndp_table(query_lc),
             self.get_dhcpv4_leases(),
             self.get_dhcpv6_leases(),
-            self.search_host_overrides(query),
+            self._host_overrides_or_empty(query),
             self.resolve_dns_forward(query) if not is_ip_query else self._empty_list(),
         )
         result["dns_forward_ips"] = dns_forward_ips
@@ -1633,9 +1633,18 @@ class OPNsenseClient:
         return rows
 
     async def search_host_overrides(self, search: str = "") -> list[dict[str, Any]]:
-        """List Unbound DNS host overrides, optionally filtered by hostname/IP/description."""
+        """
+        List Unbound DNS host overrides, optionally filtered by hostname/IP/description.
+
+        Raises on failure: an empty list means the firewall has no matching rows,
+        never that the read failed.
+        """
+        return await self._search_all_rows(ENDPOINTS["unbound"]["search"], search)
+
+    async def _host_overrides_or_empty(self, search: str) -> list[dict[str, Any]]:
+        """Return host overrides, or [] if the read fails (lookup fallback only)."""
         try:
-            return await self._search_all_rows(ENDPOINTS["unbound"]["search"], search)
+            return await self.search_host_overrides(search)
         except Exception:
             logger.exception("Failed to search host overrides")
             return []
