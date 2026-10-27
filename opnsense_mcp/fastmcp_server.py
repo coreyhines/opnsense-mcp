@@ -116,9 +116,51 @@ def _make_handler(tool: Any):
     return handler
 
 
+# Strict MCP clients reject tool schemas that declare `"type": "array"`
+# without `"items"`; a Featherless-backed validator refused every call while
+# building for such a tool. Seven advertised properties were bare. The four
+# whose handlers parse structured values get explicit item types here; the
+# rest (plain string lists) fall through to the walker's string default.
+_ARRAY_ITEM_OVERRIDES: dict[tuple[str, str], dict[str, Any]] = {
+    ("alias", "content"): {"type": "string"},
+    ("ipv6", "records"): {"type": "object"},
+    ("ipv6", "domains"): {"type": "string"},
+    ("ipv6", "public_names"): {"type": "string"},
+}
+
+
+def _ensure_array_items(tool_name: str, schema: dict[str, Any]) -> None:
+    """Recursively add a JSON-Schema ``items`` to every array without one."""
+    seen = [schema]
+    while seen:
+        node = seen.pop()
+        if not isinstance(node, dict):
+            continue
+        props = node.get("properties")
+        if isinstance(props, dict):
+            for pname, p in props.items():
+                if not isinstance(p, dict):
+                    continue
+                if p.get("type") == "array" and "items" not in p:
+                    items = _ARRAY_ITEM_OVERRIDES.get((tool_name, pname))
+                    if items is None:
+                        items = {"type": "string"}
+                        logger.warning(
+                            "schema normalizer: %s.%s array had no items schema; "
+                            "defaulting to string — add an explicit override",
+                            tool_name,
+                            pname,
+                        )
+                    p["items"] = items
+                seen.append(p)
+        if isinstance(node.get("items"), dict):
+            seen.append(node["items"])
+
+
 def register_tools(mcp: FastMCP, tools: dict[str, Any]) -> None:
     """Register every tool on *mcp* from its own metadata."""
     for name, tool in tools.items():
+        _ensure_array_items(name, getattr(tool, "input_schema", {}))
         mcp.add_tool(
             FunctionTool(
                 name=name,
