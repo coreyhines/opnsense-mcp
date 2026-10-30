@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opnsense-mcp"
-version = "1.2.0"
+version = "1.2.1"
 description = "OPNsense MCP Server for network and firewall management"
 readme = "README.md"
 license = "MIT"
@@ -30,6 +30,12 @@ dependencies = [
     # CVE-2026-102268 family, urllib3 CVE-2026-97687/97689).
     "pyjwt>=2.14.0",
     "urllib3>=2.8.0",
+    # Transitive floors (fastmcp/mcp): Trivy CRITICAL/HIGH on the resolved lock
+    # (authlib CVE-2026-96760/114615/114616, dnspython CVE-2026-114605,
+    # joserfc CVE-2026-119283).
+    "authlib>=1.9.1",
+    "dnspython>=2.9.0",
+    "joserfc>=1.7.5",
 ]
 
 [tool.setuptools]

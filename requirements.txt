@@ -19,3 +19,6 @@ pydantic-settings>=2.15.0
 # Transitive floors for Trivy HIGH/CRITICAL (see pyproject.toml).
 pyjwt>=2.14.0
 urllib3>=2.8.0
+authlib>=1.9.1
+dnspython>=2.9.0
+joserfc>=1.7.5
