@@ -372,6 +372,9 @@ async def test_fw_rule_apply_action_applies_staged_changes() -> None:
         def __init__(self) -> None:
             self.applied = 0
 
+        async def _make_request(self, *_a: Any, **_k: Any) -> dict[str, Any]:
+            return {"status": "ok"}
+
         async def apply_firewall_changes(self) -> dict[str, Any]:
             self.applied += 1
             return {"result": "success"}
@@ -391,6 +394,9 @@ async def test_fw_rule_apply_reports_failure_rather_than_claiming_success() -> N
     from opnsense_mcp.tools.apply_fw_changes import ApplyFwChangesTool
 
     class FailingClient:
+        async def _make_request(self, *_a: Any, **_k: Any) -> dict[str, Any]:
+            return {"status": "ok"}
+
         async def apply_firewall_changes(self) -> dict[str, Any]:
             raise RuntimeError("filter reload failed")
 

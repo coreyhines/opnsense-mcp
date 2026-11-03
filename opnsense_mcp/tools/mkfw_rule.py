@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, field_validator
 
 from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.fw_placement import check_placement, placement_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,15 @@ class FirewallRuleSpec(BaseModel):
     action: str = "pass"
     enabled: bool = True
     gateway: str = ""
+    log: bool = False
+
+    @field_validator("sequence")
+    @classmethod
+    def validate_sequence(cls, v: int) -> int:
+        """Reject a negative sequence; 0 leaves placement to the firewall."""
+        if v < 0:
+            raise ValueError("sequence must be a positive integer")
+        return v
 
     @field_validator("action")
     @classmethod
@@ -113,6 +123,21 @@ class MkfwRuleTool:
             "action": {"type": "string", "default": "pass"},
             "enabled": {"type": "boolean", "default": True},
             "gateway": {"type": "string", "default": ""},
+            "sequence": {
+                "type": "integer",
+                "description": (
+                    "Position within the rule's priority group; lower runs first. "
+                    "Omitted, the firewall appends the rule at the end. A rule on "
+                    "several interfaces, or none, is floating and sorts ahead of "
+                    "every single-interface rule. The result's placement reports "
+                    "any enabled quick rule that matches first."
+                ),
+            },
+            "log": {
+                "type": "boolean",
+                "default": False,
+                "description": "Log packets matched by this rule",
+            },
             "apply": {"type": "boolean", "default": True},
         },
         "required": ["description"],
@@ -194,6 +219,12 @@ class MkfwRuleTool:
             "applied": applied,
             "status": "success",
         }
+        # Checked after the apply, so an alias it loaded is not reported empty.
+        if rule_uuid:
+            out["placement"] = await check_placement(self.client, rule_uuid)
+            warnings = placement_warnings(out["placement"])
+            if warnings:
+                out["warnings"] = warnings
         if apply_error:
             out["apply_error"] = apply_error
         elif not applied:
