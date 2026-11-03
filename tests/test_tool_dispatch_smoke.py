@@ -18,6 +18,8 @@ JSON-RPC -32601, which means the name is advertised but unreachable.
 from __future__ import annotations
 
 import inspect
+import os
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -40,8 +42,67 @@ from opnsense_mcp.tools.shaper_service import ApplyShaperTool, ShaperStatisticsT
 from opnsense_mcp.tools.shaper_settings import GetShaperSettingsTool
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 from opnsense_mcp.utils.registry import build_tools
+from opnsense_mcp.utils.ssh_client import OPNsenseSSHClient
 
 TOOL_NOT_FOUND = -32601
+
+
+@pytest.fixture(autouse=True)
+def offline(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[str]:
+    """No tool in this module may reach the network (#119).
+
+    SSH-backed tools fall back to host ``opnsense`` and read ``~/.env`` and
+    ``~/.ssh/config``, so on a dev machine they reached the live firewall. HOME
+    and the deploy root point at an empty tmp dir, every ``OPNSENSE_*`` variable
+    is cleared, and the SSH layer refuses to connect. Name lookups and outbound
+    IP connects are refused too. Each attempt is recorded so a test can fail on
+    it rather than on a tool error, which dispatch tolerates.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key in [k for k in os.environ if k.startswith("OPNSENSE_")]:
+        monkeypatch.delenv(key)
+    monkeypatch.setenv("OPNSENSE_MCP_INSTALL_ROOT", str(tmp_path / "install"))
+
+    attempts: list[str] = []
+
+    def refuse(kind: str, target: object) -> None:
+        attempts.append(f"{kind} {target!r}")
+        raise OSError(f"network disabled in the dispatch smoke test: {kind}")
+
+    def getaddrinfo(host: object, *args: Any, **kwargs: Any) -> Any:
+        refuse("getaddrinfo", host)
+
+    def create_connection(address: object, *args: Any, **kwargs: Any) -> Any:
+        refuse("create_connection", address)
+
+    real_connect = socket.socket.connect
+
+    def connect(self: socket.socket, address: Any) -> None:
+        if self.family in (socket.AF_INET, socket.AF_INET6):
+            refuse("connect", address)
+        real_connect(self, address)
+
+    def no_ssh(self: OPNsenseSSHClient) -> Any:
+        raise OSError("SSH disabled in the dispatch smoke test")
+
+    monkeypatch.setattr(OPNsenseSSHClient, "get_ssh_client", no_ssh)
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket, "create_connection", create_connection)
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    return attempts
+
+
+def test_offline_guard_records_and_refuses(offline: list[str]) -> None:
+    """The guard the dispatch test relies on actually trips."""
+    with pytest.raises(OSError):
+        socket.create_connection(("192.0.2.1", 22), timeout=1)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s, pytest.raises(OSError):
+        s.connect(("192.0.2.1", 22))
+    with pytest.raises(OSError):
+        socket.getaddrinfo("fw.example", 22)
+    assert len(offline) == 3
+    assert not (Path.home() / ".env").exists()
+    assert not (Path.home() / ".ssh" / "config").exists()
 
 
 def _mock_client() -> MockOPNsenseClient:
@@ -125,11 +186,12 @@ async def test_tools_list_advertises_the_expected_surface() -> None:
 
 
 @pytest.mark.asyncio
-async def test_every_advertised_tool_dispatches() -> None:
+async def test_every_advertised_tool_dispatches(offline: list[str]) -> None:
     """Advertised and unwired is the failure this catches.
 
     A tool erroring is fine here. -32601 is not: it means `tools/list` offers a
-    name the dispatch chain has no branch for.
+    name the dispatch chain has no branch for. Nor may any tool try the
+    network: a refused attempt still fails the test (#119).
     """
     client = _mock_client()
     bound = _bind_tools(client)
@@ -159,6 +221,7 @@ async def test_every_advertised_tool_dispatches() -> None:
     assert not unreachable, "advertised but not dispatchable:\n" + "\n".join(
         unreachable
     )
+    assert not offline, "tools tried the network:\n" + "\n".join(offline)
 
 
 @pytest.mark.asyncio
