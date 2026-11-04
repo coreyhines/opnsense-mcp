@@ -44,6 +44,36 @@ async def test_fastmcp_server_lists_tools():
         assert tool.inputSchema["type"] == "object"
 
 
+def _bare_array_paths(node, path):
+    """Yield paths to any ``{\"type\": \"array\"}`` lacking an ``items`` schema."""
+    if isinstance(node, dict):
+        if node.get("type") == "array" and "items" not in node:
+            yield path
+        for key, child in node.items():
+            yield from _bare_array_paths(child, f"{path}.{key}")
+    elif isinstance(node, list):
+        for index, child in enumerate(node):
+            yield from _bare_array_paths(child, f"{path}[{index}]")
+
+
+@pytest.mark.asyncio
+async def test_fastmcp_server_advertises_items_on_every_array():
+    """Strict clients reject arrays with no items schema.
+    A Featherless-backed validator refused the whole request while building
+    calls for tools that advertised ``\"type\": \"array\"`` with no ``items``,
+    so every advertised array needs one, whatever the client's leniency.
+    """
+    from fastmcp.client import Client
+
+    from opnsense_mcp.fastmcp_server import build_mcp_server
+
+    mcp = build_mcp_server()
+    async with Client(mcp) as client:
+        tools = await client.list_tools()
+    bare = [p for tool in tools for p in _bare_array_paths(tool.inputSchema, tool.name)]
+    assert not bare, f"arrays without items schema: {bare}"
+
+
 @pytest.mark.asyncio
 async def test_fastmcp_server_exposes_every_registered_tool():
     """Counted against the registry, not a literal.
