@@ -152,7 +152,7 @@
     }
   },
   "apply_fw_changes": {
-    "description": "Apply staged firewall filter changes, loading every rule written with apply=false into the running ruleset",
+    "description": "Apply staged firewall changes: reload alias tables, then load every rule written with apply=false into the running ruleset. Aliases staged with apply=false hold no entries until this runs",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -1839,9 +1839,18 @@
           "default": "inet",
           "type": "string"
         },
+        "log": {
+          "default": false,
+          "description": "Log packets matched by this rule",
+          "type": "boolean"
+        },
         "protocol": {
           "default": "any",
           "type": "string"
+        },
+        "sequence": {
+          "description": "Position within the rule's priority group; lower runs first. Omitted, the firewall appends the rule at the end. A rule on several interfaces, or none, is floating and sorts ahead of every single-interface rule. The result's placement reports any enabled quick rule that matches first.",
+          "type": "integer"
         },
         "source_net": {
           "default": "any",
@@ -2839,6 +2848,11 @@
         "rule_uuid": {
           "description": "UUID of the rule to edit (from fw_rules output)",
           "type": "string"
+        },
+        "sequence": {
+          "description": "Position within the rule's priority group; lower runs first. The result's placement reports any enabled quick rule that matches first.",
+          "optional": true,
+          "type": "integer"
         },
         "source_net": {
           "description": "Source network/IP (e.g. 'any', '192.168.1.0/24')",

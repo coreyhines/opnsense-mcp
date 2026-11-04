@@ -281,6 +281,8 @@ def _firewall_rule_inner_for_add_api(rule_data: dict[str, Any]) -> dict[str, Any
         inner["source_port"] = str(sport)
     if dport not in (None, "", "any"):
         inner["destination_port"] = str(dport)
+    if "log" in rule_data:
+        inner["log"] = "1" if rule_data["log"] is True else "0"
     seq = rule_data.get("sequence", 0)
     if isinstance(seq, int) and seq > 0:
         inner["sequence"] = seq

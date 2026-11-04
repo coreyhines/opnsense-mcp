@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from opnsense_mcp.utils.api import OPNsenseClient
+from opnsense_mcp.utils.fw_placement import check_placement, placement_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ _EDITABLE_FIELDS = {
     "action",
     "enabled",
     "gateway",
+    "sequence",
     "log",
     "quick",
     "source_not",
@@ -80,6 +82,15 @@ class SetFwRuleTool:
             "destination_port": {
                 "type": "string",
                 "description": "Destination port or 'any'",
+                "optional": True,
+            },
+            "sequence": {
+                "type": "integer",
+                "description": (
+                    "Position within the rule's priority group; lower runs first. "
+                    "The result's placement reports any enabled quick rule that "
+                    "matches first."
+                ),
                 "optional": True,
             },
             "log": {
@@ -179,6 +190,12 @@ class SetFwRuleTool:
         if not rule_data:
             return {"status": "error", "error": "No fields to update were provided"}
 
+        sequence = rule_data.get("sequence")
+        if "sequence" in rule_data and (
+            isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1
+        ):
+            return {"status": "error", "error": "sequence must be a positive integer"}
+
         apply_changes = params.get("apply", True)
 
         try:
@@ -204,6 +221,11 @@ class SetFwRuleTool:
             "applied": applied,
             "status": "success",
         }
+        # Checked after the apply, so an alias it loaded is not reported empty.
+        out["placement"] = await check_placement(self.client, rule_uuid)
+        warnings = placement_warnings(out["placement"])
+        if warnings:
+            out["warnings"] = warnings
         if apply_error:
             out["apply_error"] = apply_error
         return out
