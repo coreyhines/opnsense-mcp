@@ -85,6 +85,12 @@ def flatten_mvc_node(node: dict[str, Any]) -> dict[str, str]:
             flat[key] = ""
         elif isinstance(value, bool):
             flat[key] = "1" if value else "0"
+        elif isinstance(value, list):
+            # PHP serialises an empty option map as [] rather than {}. OPNsense
+            # 26.7.5 returns that for an unset multi-select such as a rule's
+            # `categories`; str([]) is "[]", which setRule rejects with
+            # "Related category not found".
+            flat[key] = ",".join(str(item) for item in value)
         else:
             flat[key] = str(value)
     return flat
