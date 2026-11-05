@@ -160,7 +160,7 @@ jobs:
           export CI_COMMIT_SHORT_SHA="$(git rev-parse --short HEAD)"
           TAG="$(bash deploy/ci/compute-image-tag.sh)"
           echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
-      - name: Build and push
+      - name: Build, scan and push
         id: build
         env:
           # Optional. Set the repo variable OPNSENSE_MCP_REGISTRY (e.g.
@@ -184,6 +184,22 @@ jobs:
             --build-arg GIT_REF="${{ github.ref_name }}" \
             --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -t "${IMAGE}" .
+          # docker-archive: Trivy --input wants a Docker save tar.
+          buildah push "${IMAGE}" "docker-archive:/tmp/opnsense-mcp-image.tar"
+          # Household image gate (same as bouncer and the approver): fail on a
+          # CRITICAL that has a fix; an unfixed CRITICAL is reported, not gated.
+          # The scan runs before the push, so a failing image never reaches
+          # the registry.
+          TRIVY_IMAGE="docker.io/aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f"
+          buildah pull -q "${TRIVY_IMAGE}" >/dev/null
+          cid="$(buildah from "${TRIVY_IMAGE}")"
+          mnt="$(buildah mount "${cid}")"
+          install -m 0755 "${mnt}/usr/local/bin/trivy" /usr/local/bin/trivy
+          buildah umount "${cid}" >/dev/null
+          buildah rm "${cid}" >/dev/null
+          trivy image --skip-version-check --input /tmp/opnsense-mcp-image.tar \
+            --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress
+          rm -f /tmp/opnsense-mcp-image.tar
           if [ -n "${REGISTRY:-}" ]; then
             if [ -n "${REGISTRY_USER:-}" ] && [ -n "${REGISTRY_PASSWORD:-}" ]; then
               buildah login -u "${REGISTRY_USER}" -p "${REGISTRY_PASSWORD}" "${REGISTRY}"

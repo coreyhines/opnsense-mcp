@@ -5,7 +5,7 @@
 # Startup requires MCP_SECRET_KEY (clients send it as a bearer token) and the
 # OPNSENSE_* credentials, unless OPNSENSE_USE_MOCK=1. Either missing exits.
 
-FROM docker.io/library/python:3.12-slim-bookworm
+FROM docker.io/library/python:3.12.16-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337
 
 ARG GIT_COMMIT=unknown
 ARG GIT_REF=unknown
