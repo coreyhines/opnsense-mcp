@@ -20,7 +20,7 @@ dependencies = [
     "typing-extensions>=4.16.0",
     "passlib[bcrypt]>=1.7.4",
     "python-dotenv>=1.2.3",
-    "fastmcp>=4.0.0b5,<5",
+    "fastmcp>=4.1.6,<5",
     "pyyaml>=6.0.3",
     "paramiko>=5.0.0",
     "idna>=3.19",
@@ -124,19 +124,14 @@ line-ending = "auto"
 exclude_dirs = ["tests", ".venv", "venv"]
 
 [tool.uv]
-# fastmcp 4 is the first line that depends on mcp>=2.0, which is the first SDK
-# implementing MCP 2026-07-28 (LATEST_PROTOCOL_VERSION). fastmcp 3.4.7 pins
-# mcp<2.0, so the stable line cannot reach the new spec at all. Drop this once
-# fastmcp 4 ships stable.
-prerelease = "allow"
-# The allowance above is global, so pin back anything that would otherwise
-# drift onto a prerelease we did not ask for.
+# Added while prereleases were allowed globally, to stop drift onto them.
+# Review each against current stable releases before removing.
 constraint-dependencies = ["pydantic<2.14", "beartype<0.23", "cyclopts<5.0"]
 
 [dependency-groups]
 # Mirrors requirements-dev.txt. Declared here so `uv sync` puts them in .venv:
 # without a group, `uv run pytest` resolves pytest into an ephemeral env, which
-# does not inherit this project's prerelease allowance and so drops pydantic.
+# does not use this project's resolution.
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",

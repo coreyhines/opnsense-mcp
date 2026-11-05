@@ -5,8 +5,7 @@ Run by `.forgejo/workflows/dependency-freshness.yml` on a schedule. Exits 1 when
 something is behind, so the workflow can raise it; exits 0 when everything is
 current.
 
-Prereleases are only acceptable when the declared floor names one, which is how
-fastmcp 4 is pinned. Anything else on a prerelease is drift, not a decision.
+Prereleases are only acceptable when the declared floor names one. Anything else on a prerelease is drift, not a decision.
 
 Usage:
     uv run python scripts/check_dependency_freshness.py
