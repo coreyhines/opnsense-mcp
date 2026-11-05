@@ -23,15 +23,6 @@ PINNED_IN_BOTH = ("fastmcp",)
 REQUIREMENTS_DEV = REPO / "requirements-dev.txt"
 
 
-def _specifier(text: str, package: str) -> str | None:
-    """The version specifier for a package, ignoring comments and extras."""
-    pattern = re.compile(
-        rf'^\s*"?{re.escape(package)}(?P<spec>[<>=!~][^"#\n]*)', re.MULTILINE
-    )
-    match = pattern.search(text)
-    return match.group("spec").strip().rstrip(",").strip() if match else None
-
-
 def _runtime_deps() -> dict[str, str]:
     """[project].dependencies from pyproject."""
     import tomllib
@@ -67,20 +58,22 @@ def test_the_deployed_pins_match_the_developed_ones() -> None:
     )
 
 
-def test_a_prerelease_pin_is_explicit_enough_for_pip() -> None:
-    """pip only installs a prerelease when the specifier names one.
+_PRERELEASE = re.compile(r"\d(a|b|rc|\.dev)\d+")
 
-    `fastmcp>=4,<5` would silently resolve to nothing installable while
-    `fastmcp>=4.0.0b5,<5` works, so the beta digits are load-bearing.
+
+def test_no_deployed_pin_names_a_prerelease() -> None:
+    """A prerelease in a specifier lets pip install any prerelease of it.
+
+    `fastmcp>=4.0.0b5,<5` was needed while fastmcp 4 was in beta, and it stayed
+    after 4.1 shipped stable. pip read it as permission, so the 1.3.0 image ran
+    fastmcp 4.2.0a3 while every test ran against the locked 4.0.0b5.
     """
-    deployed = _specifier(REQUIREMENTS.read_text(), "fastmcp")
-    assert deployed
-
-    if "4." in deployed:
-        assert re.search(r"\d+\.\d+\.\d+(a|b|rc)\d+", deployed), (
-            "the fastmcp 4 line is a prerelease; the pin must spell out the "
-            f"prerelease version or pip will refuse it: {deployed}"
-        )
+    named = sorted(
+        f"{name}{spec}"
+        for name, spec in _pins(REQUIREMENTS.read_text()).items()
+        if _PRERELEASE.search(spec)
+    )
+    assert not named, f"requirements.txt admits prereleases via: {named}"
 
 
 def _pins(text: str) -> dict[str, str]:
