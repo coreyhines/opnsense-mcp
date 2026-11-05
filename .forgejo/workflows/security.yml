@@ -238,7 +238,7 @@ jobs:
           pip install --quiet pip-audit
           python3 -m venv .ci-venv-prod-audit
           . .ci-venv-prod-audit/bin/activate
-          pip install --quiet -r requirements.txt
+          pip install --quiet --no-deps --require-hashes -r requirements.lock
           pip-audit --progress-spinner off -f json -o pip-audit-prod.json
       - name: Upload pip-audit-prod
         if: always()
@@ -287,7 +287,7 @@ jobs:
           pip install --quiet pip-audit
           python3 -m venv .ci-venv-sbom
           . .ci-venv-sbom/bin/activate
-          pip install --quiet -r requirements.txt
+          pip install --quiet --no-deps --require-hashes -r requirements.lock
           pip-audit --progress-spinner off -f cyclonedx-json -o sbom.cdx.json
       - name: Upload SBOM
         continue-on-error: true

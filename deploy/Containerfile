@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt pyproject.toml README.md ./
+COPY requirements.lock pyproject.toml README.md ./
 COPY opnsense_mcp ./opnsense_mcp
 COPY examples ./examples
 COPY main.py ./
@@ -35,9 +35,13 @@ RUN printf '%s\n' \
     "BUILD_TIME = \"${BUILD_TIME}\"" \
     > /app/opnsense_mcp/_build_info_generated.py
 
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -e .
+# requirements.lock is `uv export` of uv.lock: the versions the tests ran
+# against, hash-checked. --no-deps everywhere, so nothing outside the lock is
+# resolved at build time; `pip check` fails the build if the lock is
+# missing something. tests/test_image_installs_the_lock.py holds this.
+RUN pip install --no-cache-dir --no-deps --require-hashes -r requirements.lock && \
+    pip install --no-cache-dir --no-deps -e . && \
+    pip check
 
 EXPOSE 8765
 

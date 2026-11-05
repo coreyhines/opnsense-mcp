@@ -1,10 +1,11 @@
-"""The image installs from requirements.txt, not from pyproject.
+"""requirements.txt must carry the same floors as pyproject.
 
-`deploy/Containerfile` runs `pip install -r requirements.txt`, so a dependency
-bumped only in `pyproject.toml` ships the old version to production while every
-local test passes. That happened: pyproject moved to the fastmcp 4 beta for MCP
-2026-07-28 while requirements.txt still pinned `fastmcp>=3.2.4,<4`, which can
-never reach the new spec.
+The images install `requirements.lock` (see test_image_installs_the_lock.py),
+but `mcp_start.sh`, the import-time bootstrap in `server.py` and the freshness
+survey still install requirements.txt. A dependency bumped only in
+`pyproject.toml` reaches none of them. That happened when the image still used
+this file: pyproject moved to the fastmcp 4 beta for MCP 2026-07-28 while
+requirements.txt pinned `fastmcp>=3.2.4,<4`, which can never reach the new spec.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ def _runtime_deps() -> dict[str, str]:
 
 
 def test_the_deployed_pins_match_the_developed_ones() -> None:
-    """requirements.txt is what production gets; it must not lag pyproject.
+    """requirements.txt must not lag pyproject.
 
     Every runtime dependency is compared, not a chosen few: the first version
     of this test watched only fastmcp, which would not have noticed any other
@@ -44,7 +45,7 @@ def test_the_deployed_pins_match_the_developed_ones() -> None:
     only_pyproject = sorted(set(developed) - set(deployed))
     only_requirements = sorted(set(deployed) - set(developed))
     assert not only_pyproject, (
-        f"in pyproject but not requirements.txt, so the image will not install "
+        f"in pyproject but not requirements.txt, so installs from it miss "
         f"them: {only_pyproject}"
     )
     assert not only_requirements, (
@@ -53,8 +54,7 @@ def test_the_deployed_pins_match_the_developed_ones() -> None:
 
     differing = sorted(k for k in developed if developed[k] != deployed[k])
     assert not differing, (
-        f"pins differ between pyproject and requirements.txt; the image "
-        f"installs the latter: {differing}"
+        f"pins differ between pyproject and requirements.txt: {differing}"
     )
 
 

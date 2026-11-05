@@ -19,13 +19,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt pyproject.toml README.md LICENSE ./
+COPY requirements.lock pyproject.toml README.md LICENSE ./
 COPY opnsense_mcp ./opnsense_mcp
 COPY examples ./examples
 COPY main.py ./
 
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+# Same lock as deploy/Containerfile; see tests/test_image_installs_the_lock.py.
+RUN pip install --no-cache-dir --no-deps --require-hashes -r requirements.lock \
+    && pip check
 
 ENV PYTHONPATH=/app
 
