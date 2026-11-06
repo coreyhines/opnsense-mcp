@@ -86,17 +86,24 @@ class DHCPLeaseDeleteTool:
         matching_leases = []
 
         for lease in leases:
-            # Normalize lease data
-            lease_ip = lease.get("ip") or lease.get("address", "")
-            lease_mac = lease.get("mac", "").lower()
-            lease_hostname = lease.get("hostname", "").lower()
+            # Normalize lease data; providers send null for an absent field.
+            lease_ip = lease.get("ip") or lease.get("address") or ""
+            lease_mac = (lease.get("mac") or "").lower()
+            lease_hostname = (lease.get("hostname") or "").lower()
 
-            # Check if lease matches any criteria
-            if (
-                (ip and lease_ip == ip)
-                or (mac and self._normalize_mac(lease_mac) == self._normalize_mac(mac))
-                or (hostname and lease_hostname == hostname.lower())
-            ):
+            # Every given criterion must match. OR-ing them meant that a
+            # caller narrowing with ip+mac also deleted that MAC's lease at
+            # another address, and any other lease holding the IP.
+            checks = []
+            if ip:
+                checks.append(lease_ip == ip)
+            if mac:
+                checks.append(
+                    self._normalize_mac(lease_mac) == self._normalize_mac(mac)
+                )
+            if hostname:
+                checks.append(lease_hostname == hostname.lower())
+            if checks and all(checks):
                 matching_leases.append(lease)
 
         return matching_leases
