@@ -184,6 +184,81 @@ async def test_create_is_idempotent_on_interface_and_source() -> None:
     assert not [c for c in calls if "add_rule" in c["endpoint"]]
 
 
+# Key shape and value formats from a live source_nat/search_rule row: an
+# empty destination means any, an empty target means the interface address.
+LIVE_SHAPED_ROWS = {
+    "rows": [
+        {
+            "uuid": NAT_UUID,
+            "interface": "wan",
+            "source_net": "FABRIC_INTERNAL",
+            "source_not": "",
+            "destination_net": "",
+            "destination_not": "",
+            "target": "",
+            "target_port": "",
+            "staticnatport": "0",
+            "enabled": "1",
+            "log": "",
+            "description": "fabric out",
+        }
+    ],
+    "total": 1,
+}
+
+
+@pytest.mark.asyncio
+async def test_create_refuses_an_existing_rule_with_a_different_target() -> None:
+    """The dedup used to report success and leave the asked-for target unwritten."""
+    client = _client()
+    calls = _stub(client, {"search_rule": LIVE_SHAPED_ROWS})
+
+    result = await MkNatOutboundTool(client).execute(
+        {"interface": "wan", "source_net": "FABRIC_INTERNAL", "target": "203.0.113.5"}
+    )
+
+    assert result["status"] == "error"
+    assert result["created"] is False
+    assert result["uuid"] == NAT_UUID
+    assert set(result["differs"]) == {"target"}
+    assert result["differs"]["target"]["requested"] == "203.0.113.5"
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_create_refuses_a_different_static_port_or_destination() -> None:
+    client = _client()
+    _stub(client, {"search_rule": LIVE_SHAPED_ROWS})
+
+    result = await MkNatOutboundTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "FABRIC_INTERNAL",
+            "static_port": True,
+            "destination_net": "198.51.100.0/24",
+        }
+    )
+
+    assert result["status"] == "error"
+    assert set(result["differs"]) == {"staticnatport", "destination_net"}
+
+
+@pytest.mark.asyncio
+async def test_create_treats_an_empty_destination_as_any() -> None:
+    """search_rule sends '' where the rule was written with 'any'."""
+    client = _client()
+    calls = _stub(client, {"search_rule": LIVE_SHAPED_ROWS})
+
+    result = await MkNatOutboundTool(client).execute(
+        {"interface": "wan", "source_net": "FABRIC_INTERNAL", "destination_net": "any"}
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is False
+    assert "differs" not in result
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
 @pytest.mark.asyncio
 async def test_create_requires_a_source() -> None:
     """A rule with no source would translate everything leaving the interface."""
