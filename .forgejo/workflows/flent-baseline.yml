@@ -65,6 +65,7 @@ jobs:
         env:
           OPNSENSE_MCP_DEPLOY_SSH_KEY_B64: ${{ secrets.OPNSENSE_MCP_DEPLOY_SSH_KEY_B64 }}
           OPNSENSE_MCP_DEPLOY_HOST: ${{ secrets.OPNSENSE_MCP_DEPLOY_HOST }}
+          OPNSENSE_MCP_DEPLOY_HOST_KEY: ${{ secrets.OPNSENSE_MCP_DEPLOY_HOST_KEY }}
           FLENT_LABEL: ci-baseline-${{ github.run_id }}
           NETPERF_HOST: ${{ inputs.netperf_host || 'netperf-eu.bufferbloat.net' }}
           FLENT_LENGTH: ${{ inputs.flent_length || '60' }}
