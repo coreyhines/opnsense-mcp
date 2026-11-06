@@ -12,3 +12,12 @@ repos:
       - id: end-of-file-fixer
         exclude: ^(opnsense_mcp\.egg-info/.*|opnsense_mcp/utils/data/oui\.csv)$
       - id: check-yaml
+  - repo: local
+    hooks:
+      # The images install requirements.lock; keep it equal to uv.lock.
+      - id: uv-export-requirements-lock
+        name: export uv.lock to requirements.lock
+        entry: uv export --frozen --no-dev --no-emit-project -q -o requirements.lock
+        language: system
+        files: ^(uv\.lock|pyproject\.toml)$
+        pass_filenames: false

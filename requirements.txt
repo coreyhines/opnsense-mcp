@@ -1,6 +1,7 @@
-# Runtime dependencies. The image installs from this file, so it must
-# match [project].dependencies in pyproject.toml; a test fails when they
-# drift. Floors are the versions actually tested, not historical minimums.
+# Runtime dependency floors, matching [project].dependencies in pyproject.toml;
+# a test fails when they drift. The images install requirements.lock instead,
+# the exact set from uv.lock. Regenerate it after any lock change:
+#   uv export --frozen --no-dev --no-emit-project -o requirements.lock
 fastapi>=0.141.1
 uvicorn>=0.52.4
 ruamel.yaml>=0.19.1
