@@ -101,6 +101,29 @@ def _selected(field: Any) -> str:
     return ""
 
 
+def _translation_differences(
+    row: dict[str, Any], requested: dict[str, str]
+) -> dict[str, dict[str, str]]:
+    """Fields where an existing rule would translate differently than asked.
+
+    search_rule sends an empty destination for "any"; treat the two as one.
+    """
+
+    def norm(field: str, value: Any) -> str:
+        text = str(value if value is not None else "").strip()
+        if field == "destination_net" and text.lower() in {"", "any"}:
+            return "any"
+        if field == "staticnatport":
+            return "1" if text in {"1", "True", "true"} else "0"
+        return text
+
+    return {
+        field: {"existing": str(row.get(field, "")), "requested": wanted}
+        for field, wanted in requested.items()
+        if norm(field, row.get(field)) != norm(field, wanted)
+    }
+
+
 class NatOutboundModeTool(_NatToolBase):
     """Read or change how outbound NAT rules are generated."""
 
@@ -118,6 +141,15 @@ class NatOutboundModeTool(_NatToolBase):
                 "type": "string",
                 "description": f"When setting: one of {', '.join(SAFE_MODES)}",
                 "optional": True,
+            },
+            "apply": {
+                "type": "boolean",
+                "description": (
+                    "When setting: reload the filter so pf regenerates the "
+                    "outbound rules (default false)"
+                ),
+                "optional": True,
+                "default": False,
             },
         },
         "required": [],
@@ -185,7 +217,51 @@ class NatOutboundModeTool(_NatToolBase):
             logger.exception("Failed to handle outbound NAT mode")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "mode": wanted, "previous": mode}
+        # Outbound rules are regenerated on a filter reload, so until one runs
+        # pf keeps translating under the previous mode.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, SNAT["apply"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning("NAT mode saved but filter reload failed: %s", exc)
+                apply_error = str(exc)
+
+        # Report what the firewall now stores, not what was asked for.
+        reread_error = ""
+        try:
+            after = await self.client._make_request("GET", SNAT["get"])
+            now = _selected(
+                after.get("filter", {}).get("general", {}).get("snat_mode")
+                if isinstance(after, dict)
+                else None
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("NAT mode re-read failed: %s", exc)
+            now, reread_error = "", str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "mode": now,
+            "requested": wanted,
+            "previous": mode,
+            "verified": now == wanted,
+            "applied": applied,
+            "note": (
+                f"The firewall reports {now or 'no mode'!r} after the set, "
+                f"not {wanted!r}."
+                if now != wanted
+                else "Mode saved and the filter reloaded."
+                if applied
+                else "Mode saved. Apply the filter for pf to use it."
+            ),
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
+        return out
 
 
 class ListNatOutboundTool(_NatToolBase):
@@ -276,12 +352,33 @@ class MkNatOutboundTool(_NatToolBase):
                 ),
             }
 
+        requested = {
+            "destination_net": params.get("destination_net", "any"),
+            "target": params.get("target", ""),
+            "staticnatport": "1" if params.get("static_port") else "0",
+        }
+
         try:
             for row in await self._rows():
                 if (
                     row.get("interface") == interface
                     and row.get("source_net") == source_net
                 ):
+                    differs = _translation_differences(row, requested)
+                    if differs:
+                        # Reporting success here left the caller's target
+                        # unwritten with nothing saying so.
+                        return {
+                            "status": "error",
+                            "created": False,
+                            "uuid": row.get("uuid", ""),
+                            "differs": differs,
+                            "error": (
+                                "A rule for this interface and source already "
+                                "exists with different translation settings: "
+                                + ", ".join(sorted(differs))
+                            ),
+                        }
                     return {
                         "status": "success",
                         "created": False,
@@ -292,9 +389,7 @@ class MkNatOutboundTool(_NatToolBase):
             payload = {
                 "interface": interface,
                 "source_net": source_net,
-                "destination_net": params.get("destination_net", "any"),
-                "target": params.get("target", ""),
-                "staticnatport": "1" if params.get("static_port") else "0",
+                **requested,
                 "description": params.get("description", ""),
                 # Honored, not hardcoded: a rule asked for disabled used to be
                 # created live and translate traffic on the next apply.
