@@ -138,6 +138,7 @@ class MkAliasTool(_AliasToolBase):
             },
             "content": {
                 "type": "array",
+                "items": {"type": "string"},
                 "description": "Members: addresses, networks, ports or codes",
             },
             "description": {"type": "string", "optional": True},
@@ -232,6 +233,7 @@ class SetAliasTool(_AliasToolBase):
             "uuid": {"type": "string", "description": "Alias uuid"},
             "content": {
                 "type": "array",
+                "items": {"type": "string"},
                 "description": "Replacement members; omit to keep the current set",
                 "optional": True,
             },

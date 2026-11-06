@@ -194,6 +194,63 @@ async def test_rm_vlan_refuses_while_assigned() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rm_vlan_refuses_when_only_the_assignment_model_lists_it() -> None:
+    """Overview can miss an assigned device; the assignment model cannot.
+
+    The guard read overview only, so an empty overview let an assigned device
+    be deleted, leaving a locked orphan interface.
+    """
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "assignment/search_item": {
+                "rows": [
+                    {
+                        "uuid": "opt2",
+                        "descr": "VLAN2office",
+                        "if": "ax0_vlan2",
+                        "lock": "1",
+                    },
+                    {"uuid": "wan", "descr": "WAN", "if": "ax1", "lock": "1"},
+                ],
+                "total": 2,
+            },
+            "search_item": VLAN_ROWS,
+            "overview/export": [],
+        },
+    )
+
+    result = await _confirmed(RmVlanTool(client), {"uuid": VLAN_UUID})
+
+    assert result["status"] == "error"
+    assert result["assigned_to"] == ["opt2"]
+    assert not [c for c in calls if "del_item" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_rm_vlan_refuses_on_a_truncated_assignment_listing() -> None:
+    """A page that does not hold every assignment cannot prove absence."""
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "assignment/search_item": {
+                "rows": [{"uuid": "wan", "if": "ax1"}],
+                "total": 9000,
+            },
+            "search_item": VLAN_ROWS,
+            "overview/export": [],
+        },
+    )
+
+    result = await _confirmed(RmVlanTool(client), {"uuid": VLAN_UUID})
+
+    assert result["status"] == "error"
+    assert not [c for c in calls if "del_item" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
 async def test_rm_vlan_stages_without_apply_by_default() -> None:
     """Delete stages; kernel VLAN devices stay until reconfigure."""
     client = _client()
