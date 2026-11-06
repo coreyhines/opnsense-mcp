@@ -29,7 +29,7 @@ DEFAULT_PROVIDER = "this"
 # core/snapshots needs ZFS boot environments. Probed on 26.7.2: not supported.
 SNAPSHOT_UNSUPPORTED_REASON = (
     "This firewall does not run on ZFS boot environments, so core/snapshots "
-    "reports supported=false. Use download_config for a recovery artifact."
+    "reports supported=false. Use config_backup(action='download') for a recovery artifact."
 )
 
 
@@ -149,11 +149,11 @@ class DiffConfigBackupsTool(_BackupToolBase):
         "properties": {
             "rev_a": {
                 "type": "string",
-                "description": "Older revision id, from list_config_backups",
+                "description": "Older revision id, from config_backup(action='list')",
             },
             "rev_b": {
                 "type": "string",
-                "description": "Newer revision id, from list_config_backups",
+                "description": "Newer revision id, from config_backup(action='list')",
             },
             "provider": {
                 "type": "string",
