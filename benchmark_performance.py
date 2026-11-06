@@ -421,6 +421,23 @@ SHAPE_SOURCES: dict[str, ShapeSource] = {
     # Scoped: the capture keeps the one WireGuard device, so a live key the
     # slice lacks belongs to some other interface rather than being a gap.
     # What still matters is that every key it does hold still exists.
+    # Bare-list endpoints. Both fixtures are slices: log rows differ in key
+    # set by protocol and family, and the overview capture keeps only the
+    # three keys the log filter reads.
+    "firewall_log_rows.json": ShapeSource(
+        "GET",
+        "/api/diagnostics/firewall/log",
+        None,
+        kind="rows",
+        scoped=True,
+    ),
+    "interfaces_overview_export_min.json": ShapeSource(
+        "GET",
+        "/api/interfaces/overview/export",
+        None,
+        kind="rows",
+        scoped=True,
+    ),
     "wg_interfaces_info_wg0.json": ShapeSource(
         "GET",
         "/api/interfaces/overview/interfaces_info",
@@ -455,8 +472,12 @@ SHAPE_SOURCES: dict[str, ShapeSource] = {
 
 
 def _row_keys(payload: Any) -> set[str]:
-    """Union of the keys across every row of a bootgrid response."""
-    rows = payload.get("rows") if isinstance(payload, dict) else None
+    """Union of the keys across every row of a bootgrid response.
+
+    Some endpoints (`diagnostics/firewall/log`, `interfaces/overview/export`)
+    answer with a bare list rather than `{"rows": [...]}`; that list is the rows.
+    """
+    rows = payload.get("rows") if isinstance(payload, dict) else payload
     if not isinstance(rows, list):
         return set()
     return (
