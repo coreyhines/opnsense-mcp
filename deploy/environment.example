@@ -2,7 +2,7 @@
 # chmod 600. Quadlet sets OPNSENSE_MCP_INSTALL_ROOT and EnvironmentFile to this path; data dir is volume-mounted.
 #
 # With TLS (Caddy + /opt/certs/wild), MCP clients use (default hostname in caddyfile.example):
-#   https://mcp.example.com/sse
+#   https://mcp.example.com/mcp   (streamable HTTP; there is no /sse)
 
 OPNSENSE_MCP_INSTALL_ROOT=/opt/containerdata/opnsense-mcp
 

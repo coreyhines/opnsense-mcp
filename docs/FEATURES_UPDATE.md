@@ -11,15 +11,14 @@ Five pull requests landed in June 2026. This doc covers what changed, why it mat
 
 ### What changed
 
-Added a native [FastMCP](https://github.com/jlowin/fastmcp) server (`opnsense_mcp/fastmcp_server.py`) that registers all 26 OPNsense tools and supports three transports:
+Added a native [FastMCP](https://github.com/jlowin/fastmcp) server (`opnsense_mcp/fastmcp_server.py`) that serves the registry tools over these transports:
 
 | Transport | Best for | Endpoint / invocation |
 |-----------|----------|-----------------------|
 | `stdio` | Local IDE (Cursor, Claude Code, Continue) | `python main.py` |
-| `sse` | Backward-compatible centralized clients | `/sse` |
 | `streamable-http` | Modern MCP clients (spec 2025-03-26) | `/mcp` |
 
-The existing stdio server is untouched; existing SSE deployments continue to work. Streamable HTTP is the new default for centralized installs.
+The existing stdio server is untouched. Streamable HTTP is what centralized installs deploy; `main.py --transport sse` still exists, but no deployed unit runs it, so `/sse` answers 404 there.
 
 ### Usage
 
