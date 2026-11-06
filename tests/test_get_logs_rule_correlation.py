@@ -163,8 +163,12 @@ async def test_include_rules_high_confidence_match() -> None:
 
 
 @pytest.mark.asyncio
-async def test_include_rules_low_confidence_match() -> None:
-    """When log rulenr matches rule sequence but rid doesn't match uuid, confidence is 'low'."""
+async def test_rule_number_equal_to_a_sequence_is_not_a_match() -> None:
+    """pf's rulenr and MVC sequence are unrelated numbers.
+
+    This test used to assert a "low" confidence match here, which attached an
+    arbitrary rule's description to the log line's hit count.
+    """
     log_row = {
         "rid": "aabbccdd1122",
         "rulenr": "42",
@@ -178,7 +182,7 @@ async def test_include_rules_low_confidence_match() -> None:
     }
     rule = {
         "uuid": "ffffffff-no-match",  # does not match rid
-        "sequence": "42",  # matches rulenr
+        "sequence": "42",  # equals rulenr, by coincidence
         "description": "Some rule",
     }
     tool, _ = make_tool([log_row], rules=[rule])
@@ -186,13 +190,14 @@ async def test_include_rules_low_confidence_match() -> None:
 
     top_rules = result["analysis"]["top_rules"]
     assert len(top_rules) == 1
-    assert top_rules[0]["match_confidence"] == "low"
+    assert "matched_rule" not in top_rules[0]
+    assert "match_confidence" not in top_rules[0]
     assert top_rules[0]["rule_number"] == "42"
 
 
 @pytest.mark.asyncio
-async def test_include_rules_high_beats_low_when_uuid_matches() -> None:
-    """High-confidence (uuid) match takes precedence over low-confidence (sequence)."""
+async def test_include_rules_uuid_match_with_equal_sequence() -> None:
+    """A uuid match is reported whatever the sequence holds."""
     log_row = {
         "rid": "exact-match-uuid",
         "rulenr": "7",

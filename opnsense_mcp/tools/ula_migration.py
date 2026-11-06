@@ -378,15 +378,13 @@ class SetHostOverrideTool(_UlaToolBase):
     """Edit an existing Unbound host override."""
 
     name = "set_host_override"
-    description = (
-        "Edit an existing Unbound host override in place; use mkdns to create one"
-    )
+    description = "Edit an existing Unbound host override in place; use dns_override(action='create') to create one"
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
             "uuid": {
                 "type": "string",
-                "description": "Override uuid, from the dns tool",
+                "description": "Override uuid, from dns_override(action='list')",
             },
             "server": {
                 "type": "string",
@@ -491,6 +489,7 @@ class PlanDnsUlaTool(_UlaToolBase):
             },
             "public_names": {
                 "type": "array",
+                "items": {"type": "string"},
                 "description": "Fully qualified names the outside world resolves; "
                 "these keep their delegated address",
                 "optional": True,
@@ -603,6 +602,7 @@ class ApplyUlaTool(_UlaToolBase):
             },
             "domains": {
                 "type": "array",
+                "items": {"type": "string"},
                 "description": f"Subset of {list(APPLY_DOMAINS)}, in that order",
                 "optional": True,
             },
