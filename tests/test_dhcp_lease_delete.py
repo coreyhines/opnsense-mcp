@@ -183,3 +183,48 @@ class TestDHCPLeaseDeleteTool:
         assert len(data["deleted_leases"]) == 1
         assert data["total_deleted"] == 1
         assert "search_criteria" in data
+
+
+# --- criteria narrow, never widen (#156) ------------------------------------
+
+_LEASES = [
+    {"ip": "192.0.2.5", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "cam1"},
+    {"ip": "192.0.2.9", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "cam1"},
+    {"ip": "192.0.2.5", "mac": "bb:cc:dd:ee:ff:aa", "hostname": "other"},
+    {"ip": "192.0.2.7", "mac": None, "hostname": None},
+]
+
+
+def test_ip_and_mac_together_match_only_the_lease_with_both() -> None:
+    """OR-ing them also deleted the MAC's other lease and the IP's other owner."""
+    tool = DHCPLeaseDeleteTool(MagicMock())
+    matches = tool._find_lease_by_criteria(
+        _LEASES, ip="192.0.2.5", mac="AA-BB-CC-DD-EE-FF"
+    )
+    assert matches == [_LEASES[0]]
+
+
+def test_one_criterion_still_matches_every_holder() -> None:
+    tool = DHCPLeaseDeleteTool(MagicMock())
+    assert tool._find_lease_by_criteria(_LEASES, mac="aa:bb:cc:dd:ee:ff") == _LEASES[:2]
+
+
+def test_a_lease_with_null_fields_does_not_crash_the_match() -> None:
+    tool = DHCPLeaseDeleteTool(MagicMock())
+    assert tool._find_lease_by_criteria(_LEASES, ip="192.0.2.7") == [_LEASES[3]]
+
+
+@pytest.mark.asyncio
+async def test_execute_deletes_only_the_narrowed_lease() -> None:
+    client = MagicMock()
+    client.get_dhcpv4_leases = AsyncMock(return_value=_LEASES[:3])
+    client.get_dhcpv6_leases = AsyncMock(return_value=[])
+    client.delete_dhcpv4_lease = AsyncMock(return_value={"status": "ok"})
+    client.delete_dhcpv6_lease = AsyncMock(return_value={"status": "ok"})
+
+    result = await DHCPLeaseDeleteTool(client).execute(
+        {"ip": "192.0.2.5", "mac": "aa:bb:cc:dd:ee:ff"}
+    )
+
+    assert result["total_deleted"] == 1
+    client.delete_dhcpv4_lease.assert_awaited_once_with("192.0.2.5")
