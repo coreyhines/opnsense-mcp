@@ -938,27 +938,17 @@ class OPNsenseClient:
             # endpoints are absent from the 26.7 series anyway, so the path
             # could not be exercised. A plain apply is what the firewall needs.
             logger.debug("Applying firewall changes")
-            # Capture the body so ResponseError still carries the API `message`
-            # (existing tests and callers match on it). ApplyError's text is
-            # only the status token.
-            held: list[Any] = []
-            real_make = self._make_request
-
-            async def _capture(
-                method: str, endpoint: str, *args: Any, **kwargs: Any
-            ) -> Any:
-                response = await real_make(method, endpoint, *args, **kwargs)
-                held.append(response)
-                return response
-
-            self._make_request = _capture  # type: ignore[method-assign]
+            # ResponseError carries the API `message` from the body run_apply
+            # attaches (existing tests and callers match on it).
             try:
                 await run_apply(self, "/api/firewall/filter/apply")
-            except ApplyError:
-                detail = _api_error_detail(held[-1]) if held else "Unknown API error"
+            except ApplyError as exc:
+                detail = (
+                    _api_error_detail(exc.response)
+                    if exc.response is not None
+                    else "Unknown API error"
+                )
                 self._raise_apply_changes_failed(detail)
-            finally:
-                self._make_request = real_make  # type: ignore[method-assign]
         except APIError:
             raise
         except Exception as e:
