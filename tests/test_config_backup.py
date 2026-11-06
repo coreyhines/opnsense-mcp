@@ -165,7 +165,8 @@ async def test_diff_returns_the_changed_lines() -> None:
     _stub(client, {"diff": {"items": ["--- a", "+++ b", "-old", "+new"]}})
 
     result = await DiffConfigBackupsTool(client).execute(
-        {"rev_a": "config-a.xml", "rev_b": "config-b.xml"}
+        # Real-shaped ids: the validator refuses anything else (#159).
+        {"rev_a": "config-1793827407.2972.xml", "rev_b": "config-1793827417.2691.xml"}
     )
 
     assert result["status"] == "success"

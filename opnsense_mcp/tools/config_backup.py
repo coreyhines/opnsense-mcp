@@ -19,12 +19,34 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = "this"
+
+# Both values become URL path segments on an authenticated root API client,
+# so a `/` or `..` in either steered the GET to another endpoint. Revision ids
+# as 26.7 lists them: `config-1793827417.2691.xml`; the bare timestamp is
+# accepted too.
+_PROVIDER_ID = re.compile(r"^[A-Za-z0-9_]+$")
+_REVISION_ID = re.compile(r"^(config-)?\d+(\.\d+)?(\.xml)?$")
+
+
+def _path_segment_error(provider: str, *revisions: str | None) -> str | None:
+    """Why these values cannot go into the backup API path, or None."""
+    if not _PROVIDER_ID.match(provider):
+        return f"provider {provider!r} is not a provider id"
+    for revision in revisions:
+        if revision is not None and not _REVISION_ID.match(str(revision)):
+            return (
+                f"revision {revision!r} is not a revision id "
+                f"(expected e.g. config-1793827417.2691.xml)"
+            )
+    return None
+
 
 # core/snapshots needs ZFS boot environments. Probed on 26.7.2: not supported.
 SNAPSHOT_UNSUPPORTED_REASON = (
@@ -112,6 +134,8 @@ class ListConfigBackupsTool(_BackupToolBase):
             return self._no_client()
         provider = params.get("provider") or DEFAULT_PROVIDER
         limit = int(params.get("limit") or 25)
+        if error := _path_segment_error(provider):
+            return {"status": "error", "error": error}
         try:
             data = await self.client._make_request(
                 "GET", f"/api/core/backup/backups/{provider}"
@@ -186,6 +210,8 @@ class DiffConfigBackupsTool(_BackupToolBase):
             }
 
         provider = params.get("provider") or DEFAULT_PROVIDER
+        if error := _path_segment_error(provider, rev_a, rev_b):
+            return {"status": "error", "error": error}
         try:
             data = await self.client._make_request(
                 "GET", f"/api/core/backup/diff/{provider}/{rev_a}/{rev_b}"
@@ -260,7 +286,9 @@ class DownloadConfigTool(_BackupToolBase):
             }
 
         provider = params.get("provider") or DEFAULT_PROVIDER
-        revision = params.get("revision")
+        revision = params.get("revision") or None
+        if error := _path_segment_error(provider, revision):
+            return {"status": "error", "error": error}
         endpoint = f"/api/core/backup/download/{provider}"
         if revision:
             endpoint = f"{endpoint}/{revision}"
