@@ -787,7 +787,7 @@ class PacketCaptureTool2:
                     return {
                         "status": "error",
                         "error": f"Interface '{interface}' not found.",
-                        "guidance": "Available interfaces: wan, lan, wifi, guest, lab, mgmt, or specific device names like ax1, ax0_vlan81. Try 'interface_list' tool to see all available interfaces.",
+                        "guidance": "Available interfaces: wan, lan, wifi, guest, lab, mgmt, or specific device names like ax1, ax0_vlan81. Try diagnostics(action='interfaces') to see all available interfaces.",
                     }
                 client.close()
             except Exception as e:
@@ -874,7 +874,7 @@ class PacketCaptureTool2:
                     return {
                         "status": "error",
                         "error": f"Interface '{interface}' not found",
-                        "guidance": "Use 'interface_list' tool to see available interfaces, or try common names like 'wan', 'lan', 'wifi'.",
+                        "guidance": "Use diagnostics(action='interfaces') to see available interfaces, or try common names like 'wan', 'lan', 'wifi'.",
                     }
                 return {
                     "status": "success",

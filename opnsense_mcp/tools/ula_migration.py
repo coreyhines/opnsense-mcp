@@ -378,15 +378,13 @@ class SetHostOverrideTool(_UlaToolBase):
     """Edit an existing Unbound host override."""
 
     name = "set_host_override"
-    description = (
-        "Edit an existing Unbound host override in place; use mkdns to create one"
-    )
+    description = "Edit an existing Unbound host override in place; use dns_override(action='create') to create one"
     input_schema: dict[str, Any] = {
         "type": "object",
         "properties": {
             "uuid": {
                 "type": "string",
-                "description": "Override uuid, from the dns tool",
+                "description": "Override uuid, from dns_override(action='list')",
             },
             "server": {
                 "type": "string",

@@ -188,7 +188,7 @@ class ApplyDnsUlaTool:
 
     name = "apply_dns_ula"
     description = (
-        "Execute a plan_dns_ula mapping: for each record add the ULA host "
+        "Execute an ipv6(action='plan_ula') mapping: for each record add the ULA host "
         "override, read it back, then delete the GUA one. Refuses any record "
         "that no longer matches the plan. Dry run by default."
     )
@@ -198,7 +198,7 @@ class ApplyDnsUlaTool:
             "records": {
                 "type": "array",
                 "description": (
-                    "The `records` list from a plan_dns_ula result, verbatim. "
+                    "The `records` list from an ipv6(action='plan_ula') result, verbatim. "
                     "Each entry needs uuid, hostname, domain, current, "
                     "proposed and keep_gua. Targets are never recomputed here, "
                     "so what runs is what was reviewed."
@@ -291,7 +291,7 @@ class ApplyDnsUlaTool:
                 "status": "error",
                 "error": (
                     "records is required: pass the `records` list from a "
-                    "plan_dns_ula result. This tool does not compute its own "
+                    "ipv6(action='plan_ula') result. This tool does not compute its own "
                     "targets."
                 ),
             }
