@@ -17,6 +17,21 @@ logger = logging.getLogger(__name__)
 _VALID_ADDRESS_FAMILIES = {"inet", "inet6", "any"}
 
 
+def known_hosts_names(host: str, port: int) -> list[str]:
+    """Names a known_hosts entry for this host may be filed under.
+
+    On a port other than 22, OpenSSH writes and paramiko looks up
+    ``[host]:port``, so the bare hostname alone never matched and the
+    documented remedy failed whenever ``OPNSENSE_SSH_PORT`` was set.
+    """
+    if not host:
+        return []
+    names = [host]
+    if int(port) != 22:
+        names.insert(0, f"[{host}]:{int(port)}")
+    return names
+
+
 def _parse_positive_int(name: str, default: int) -> int:
     """Parse a positive integer from an environment variable."""
     raw = os.getenv(name, "").strip()
@@ -179,7 +194,9 @@ class OPNsenseSSHClient:
         # Connect to the resolved IP, but let the host-key check also consider
         # the hostname: a normal `ssh user@firewall` records only the hostname
         # (CheckHostIP defaults to no), so an IP-keyed lookup never matched it.
-        apply_paramiko_host_key_policy(client, alternates=[self.ssh_host])
+        apply_paramiko_host_key_policy(
+            client, alternates=known_hosts_names(self.ssh_host, self.ssh_port)
+        )
         client.connect(
             hostname=resolved_ip,
             username=self.ssh_user,

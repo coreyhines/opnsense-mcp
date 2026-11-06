@@ -24,6 +24,7 @@ from opnsense_mcp.tools.bgp import (
     ListBgpNeighborsTool,
     MkBgpNeighborTool,
     RmBgpNeighborTool,
+    SetBgpGlobalTool,
     ToggleBgpNeighborTool,
 )
 from opnsense_mcp.utils.api import OPNsenseClient
@@ -347,3 +348,101 @@ async def test_writes_do_not_apply_by_default() -> None:
     )
 
     assert not [c for c in calls if "reconfigure" in c["endpoint"]]
+
+
+# --- read-back after writes (#95) ------------------------------------------
+
+
+def _sequence(*answers: Any) -> Any:
+    """Successive answers for one endpoint; the last repeats."""
+    queue = list(answers)
+    return lambda: queue.pop(0) if len(queue) > 1 else queue[0]
+
+
+async def _confirmed_rm(client: OPNsenseClient, **extra: Any) -> dict[str, Any]:
+    tool = RmBgpNeighborTool(client)
+    first = await tool.execute({"uuid": NEIGHBOR_UUID, **extra})
+    return await tool.execute(
+        {"uuid": NEIGHBOR_UUID, "confirm": first["confirm_token"], **extra}
+    )
+
+
+@pytest.mark.asyncio
+async def test_rm_neighbor_is_unverified_while_it_is_still_listed() -> None:
+    """delNeighbor and reconfigure answering ok used to be the whole report."""
+    client = _client()
+    _stub(
+        client,
+        {
+            "searchNeighbor": NEIGHBOR_ROWS,
+            "delNeighbor": {"result": "deleted"},
+            "reconfigure": {"status": "ok"},
+        },
+    )
+
+    result = await _confirmed_rm(client, apply=True)
+
+    assert result["deleted"] is True
+    assert result["applied"] is True
+    assert result["verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_rm_neighbor_verifies_once_it_is_gone() -> None:
+    client = _client()
+    _stub(
+        client,
+        {
+            "searchNeighbor": {"rows": [], "total": 0},
+            "delNeighbor": {"result": "deleted"},
+            "reconfigure": {"status": "ok"},
+        },
+    )
+
+    result = await _confirmed_rm(client, apply=True)
+
+    assert result["verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_set_bgp_global_reports_a_switch_that_did_not_stick() -> None:
+    """The re-read still shows bgp disabled, so the enable is unverified."""
+    client = _client()
+    _stub(
+        client,
+        {
+            "general/get": _sequence(GENERAL_OFF, GENERAL_ON),
+            "bgp/get": BGP_OFF,
+            "reconfigure": {"status": "ok"},
+        },
+    )
+
+    result = await SetBgpGlobalTool(client).execute(
+        {"enabled": True, "as_number": "64512", "apply": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+    assert result["verified"] is False
+    assert set(result["mismatches"]) == {"bgp.enabled", "bgp.asnumber"}
+
+
+@pytest.mark.asyncio
+async def test_set_bgp_global_verifies_when_every_switch_reads_back() -> None:
+    client = _client()
+    bgp_on = {"bgp": {**BGP_OFF["bgp"], "enabled": "1", "asnumber": "64512"}}
+    _stub(
+        client,
+        {
+            "general/get": _sequence(GENERAL_OFF, GENERAL_ON),
+            "bgp/get": _sequence(BGP_OFF, bgp_on),
+            "reconfigure": {"status": "ok"},
+        },
+    )
+
+    result = await SetBgpGlobalTool(client).execute(
+        {"enabled": True, "as_number": "64512", "apply": True}
+    )
+
+    assert result["verified"] is True
+    assert "mismatches" not in result

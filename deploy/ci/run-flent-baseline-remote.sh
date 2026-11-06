@@ -19,10 +19,10 @@ mkdir -p "${ARTIFACT_DIR}"
 
 echo "=== Deploy flent sidecar script to ${REMOTE} ==="
 scp deploy/flent-sidecar.sh "${REMOTE}:${REMOTE_SCRIPT}"
-ssh -o StrictHostKeyChecking=no "${REMOTE}" "chmod +x '${REMOTE_SCRIPT}'"
+ssh -o StrictHostKeyChecking=yes "${REMOTE}" "chmod +x '${REMOTE_SCRIPT}'"
 
 echo "=== Run flent rrul baseline (label=${LABEL}) ==="
-ssh -o StrictHostKeyChecking=no "${REMOTE}" bash -s <<EOF
+ssh -o StrictHostKeyChecking=yes "${REMOTE}" bash -s <<EOF
 set -euo pipefail
 export NETPERF_HOST='${NETPERF_HOST}'
 export FLENT_LENGTH='${FLENT_LENGTH}'
@@ -33,13 +33,13 @@ EOF
 
 echo "=== Fetch latest artifacts for label ${LABEL} ==="
 LATEST_SUMMARY="$(
-  ssh -o StrictHostKeyChecking=no "${REMOTE}" \
+  ssh -o StrictHostKeyChecking=yes "${REMOTE}" \
     "ls -1t '${REMOTE_RESULTS}'/*_${LABEL}_summary.txt 2>/dev/null | head -1"
 )"
 
 if [[ -z "${LATEST_SUMMARY}" ]]; then
   LATEST_SUMMARY="$(
-    ssh -o StrictHostKeyChecking=no "${REMOTE}" \
+    ssh -o StrictHostKeyChecking=yes "${REMOTE}" \
       "ls -1t '${REMOTE_RESULTS}'/*${LABEL}*.flent 2>/dev/null | head -1"
   )"
 fi
@@ -50,15 +50,15 @@ if [[ -z "${LATEST_SUMMARY}" ]]; then
 fi
 
 BASENAME="$(basename "${LATEST_SUMMARY}")"
-scp -o StrictHostKeyChecking=no "${REMOTE}:${LATEST_SUMMARY}" "${ARTIFACT_DIR}/${BASENAME}"
+scp -o StrictHostKeyChecking=yes "${REMOTE}:${LATEST_SUMMARY}" "${ARTIFACT_DIR}/${BASENAME}"
 
 # Best-effort: copy companion .flent.gz and full log when present.
 STEM="${BASENAME%_summary.txt}"
 STEM="${STEM%.txt}"
 for suffix in .flent.gz .flent .txt _summary.txt; do
   REMOTE_FILE="${REMOTE_RESULTS}/${STEM}${suffix}"
-  if ssh -o StrictHostKeyChecking=no "${REMOTE}" "test -f '${REMOTE_FILE}'"; then
-    scp -o StrictHostKeyChecking=no "${REMOTE}:${REMOTE_FILE}" \
+  if ssh -o StrictHostKeyChecking=yes "${REMOTE}" "test -f '${REMOTE_FILE}'"; then
+    scp -o StrictHostKeyChecking=yes "${REMOTE}:${REMOTE_FILE}" \
       "${ARTIFACT_DIR}/$(basename "${REMOTE_FILE}")" || true
   fi
 done

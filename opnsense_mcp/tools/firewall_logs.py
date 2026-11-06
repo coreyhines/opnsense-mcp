@@ -108,6 +108,7 @@ class FirewallLogsTool:
             fetch_limit = _overfetch_window(limit) if filters_active else limit
 
             logs = await self.client.get_firewall_logs(limit=fetch_limit)
+            wanted_devices = await self._devices_for(interface) if interface else set()
 
             def match(log: dict[str, Any]) -> bool:
                 norm = normalize_log_dict(log)
@@ -132,7 +133,7 @@ class FirewallLogsTool:
                     and norm.get("dst_port") != filter_dst_port
                 ):
                     return False
-                return not (interface and norm.get("interface") != interface)
+                return not (interface and norm.get("interface") not in wanted_devices)
 
         except FirewallLogsFetchError:
             raise
@@ -144,6 +145,35 @@ class FirewallLogsTool:
             if filters_active and limit and limit > 0:
                 matched = matched[:limit]
             return matched
+
+    async def _devices_for(self: "FirewallLogsTool", name: str) -> set[str]:
+        """Device names a caller's interface name can mean.
+
+        filterlog rows carry the device (`vtnet0`, `vlan01`), while callers say
+        `wan`, `opt3` or a description such as `VLAN3LAB`. Comparing the two
+        unchanged made `interface="wan"` match nothing. The name is kept as-is
+        too, so passing a device still works; an unreadable overview degrades
+        to that rather than failing the read.
+        """
+        devices = {name}
+        try:
+            overview = await self.client._make_request(
+                "GET", "/api/interfaces/overview/export"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Interface overview unavailable for log filter: %s", exc)
+            return devices
+        wanted = name.strip().lower()
+        for entry in overview if isinstance(overview, list) else []:
+            if not isinstance(entry, dict) or not entry.get("device"):
+                continue
+            names = {
+                str(entry.get("identifier") or "").lower(),
+                str(entry.get("description") or "").lower(),
+            }
+            if wanted in names - {""}:
+                devices.add(str(entry["device"]))
+        return devices
 
     async def get_logs(
         self: "FirewallLogsTool", *args: object, **kwargs: object
@@ -255,15 +285,14 @@ class FirewallLogsTool:
             List of rule summary dicts sorted by hit count descending.
 
         """
+        # Correlate on the rule id only. A log line's rule_number is pf's
+        # compiled rule index and MVC `sequence` is an ordering field; the two
+        # are unrelated, and matching them attached an arbitrary rule.
         rule_by_uuid: dict[str, dict[str, Any]] = {}
-        rule_by_seq: dict[str, dict[str, Any]] = {}
         for rule in rules:
             uuid = rule.get("uuid") or ""
             if uuid:
                 rule_by_uuid[uuid] = rule
-            seq = str(rule.get("sequence") or "")
-            if seq:
-                rule_by_seq[seq] = rule
 
         buckets: dict[tuple[str, str, str], dict[str, Any]] = {}
         for log in logs:
@@ -280,18 +309,9 @@ class FirewallLogsTool:
                     "rule_number": rule_number or None,
                     "label": label or None,
                 }
-                matched_rule: dict[str, Any] | None = None
-                confidence: str | None = None
                 if rule_id and rule_id in rule_by_uuid:
-                    matched_rule = rule_by_uuid[rule_id]
-                    confidence = "high"
-                elif rule_number and rule_number in rule_by_seq:
-                    matched_rule = rule_by_seq[rule_number]
-                    confidence = "low"
-                if confidence is not None:
-                    entry["match_confidence"] = confidence
-                if matched_rule is not None:
-                    entry["matched_rule"] = matched_rule
+                    entry["matched_rule"] = rule_by_uuid[rule_id]
+                    entry["match_confidence"] = "high"
                 buckets[key] = entry
 
             buckets[key]["hit_count"] += 1
