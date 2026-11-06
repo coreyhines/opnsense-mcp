@@ -76,6 +76,17 @@ def test_a_missing_key_is_unreadable_not_a_pass(
     assert smoke.main(["http://127.0.0.1:9/mcp"]) == 2
 
 
+@pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://host/mcp", "mcp"])
+def test_a_non_http_url_is_refused_before_any_read(
+    url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """urllib opens file:// too; the smoke must not read local files."""
+    monkeypatch.setenv("MCP_SECRET_KEY", "k")
+    with pytest.raises(ValueError):
+        smoke.fetch(url, "k")
+    assert smoke.main([url]) == 2
+
+
 def _free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))

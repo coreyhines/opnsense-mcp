@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import sys
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -66,7 +67,8 @@ def _post(
     if session:
         headers["Mcp-Session-Id"] = session
     request = urllib.request.Request(url, json.dumps(body).encode(), headers)
-    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+    # Scheme restricted to http(s) by _require_http before any request.
+    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         sid = response.headers.get("Mcp-Session-Id") or session
         text = response.read().decode()
     if not text.strip():
@@ -79,8 +81,15 @@ def _post(
     return None, sid
 
 
+def _require_http(url: str) -> None:
+    """Refuse anything but http(s): urllib also opens file:// and ftp://."""
+    if urllib.parse.urlsplit(url).scheme not in {"http", "https"}:
+        raise ValueError(f"only http(s) endpoints are accepted, not {url!r}")
+
+
 def fetch(url: str, key: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """initialize, then tools/list. Returns (serverInfo, tools)."""
+    _require_http(url)
     init, sid = _post(
         url,
         key,
