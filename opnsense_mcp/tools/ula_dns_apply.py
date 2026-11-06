@@ -197,6 +197,7 @@ class ApplyDnsUlaTool:
         "properties": {
             "records": {
                 "type": "array",
+                "items": {"type": "object"},
                 "description": (
                     "The `records` list from an ipv6(action='plan_ula') result, verbatim. "
                     "Each entry needs uuid, hostname, domain, current, "

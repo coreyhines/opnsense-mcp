@@ -142,6 +142,9 @@
         },
         "records": {
           "description": "The `records` list from an ipv6(action='plan_ula') result, verbatim. Each entry needs uuid, hostname, domain, current, proposed and keep_gua. Targets are never recomputed here, so what runs is what was reviewed.",
+          "items": {
+            "type": "object"
+          },
           "type": "array"
         }
       },
@@ -203,6 +206,9 @@
       "properties": {
         "domains": {
           "description": "Subset of ['vip', 'npt', 'ra', 'unbound'], in that order",
+          "items": {
+            "type": "string"
+          },
           "optional": true,
           "type": "array"
         },
@@ -1152,6 +1158,9 @@
         },
         "content": {
           "description": "Members: addresses, networks, ports or codes",
+          "items": {
+            "type": "string"
+          },
           "type": "array"
         },
         "description": {
@@ -2087,6 +2096,9 @@
         },
         "public_names": {
           "description": "Fully qualified names the outside world resolves; these keep their delegated address",
+          "items": {
+            "type": "string"
+          },
           "optional": true,
           "type": "array"
         },
@@ -2518,6 +2530,9 @@
         },
         "content": {
           "description": "Replacement members; omit to keep the current set",
+          "items": {
+            "type": "string"
+          },
           "optional": true,
           "type": "array"
         },

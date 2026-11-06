@@ -489,6 +489,7 @@ class PlanDnsUlaTool(_UlaToolBase):
             },
             "public_names": {
                 "type": "array",
+                "items": {"type": "string"},
                 "description": "Fully qualified names the outside world resolves; "
                 "these keep their delegated address",
                 "optional": True,
@@ -601,6 +602,7 @@ class ApplyUlaTool(_UlaToolBase):
             },
             "domains": {
                 "type": "array",
+                "items": {"type": "string"},
                 "description": f"Subset of {list(APPLY_DOMAINS)}, in that order",
                 "optional": True,
             },
