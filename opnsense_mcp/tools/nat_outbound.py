@@ -90,6 +90,28 @@ class _NatToolBase:
         )
         return data.get("rows", []) if isinstance(data, dict) else []
 
+    async def _reread(self, uuid: str) -> tuple[dict[str, Any] | None, str]:
+        """The rule as the config now holds it, or None; plus any read error.
+
+        A filter reload answering ok says the request was accepted. What the
+        notes may claim is what this re-read shows, not pf state, which
+        nothing here inspects.
+        """
+        try:
+            rows = await self._rows()
+        except Exception as exc:  # noqa: BLE001
+            return None, str(exc)
+        return next((r for r in rows if r.get("uuid") == uuid), None), ""
+
+
+def _observed_note(applied: bool, verified: bool, done: str, missing: str) -> str:
+    """Word the result by what was observed, never by what pf was told."""
+    if not verified:
+        return missing
+    if applied:
+        return f"{done} Filter reloaded; pf itself was not inspected."
+    return f"{done} Staged; apply the filter to load it."
+
 
 def _selected(field: Any) -> str:
     """The selected key of an OPNsense enum object."""
@@ -413,19 +435,26 @@ class MkNatOutboundTool(_NatToolBase):
                 )
                 apply_error = str(exc)
 
-        out = {
+        uuid = result.get("uuid", "") if isinstance(result, dict) else ""
+        row, reread_error = await self._reread(uuid) if uuid else (None, "no uuid")
+        verified = row is not None
+        out: dict[str, Any] = {
             "status": "success",
             "created": True,
-            "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
+            "uuid": uuid,
             "applied": applied,
-            "note": (
-                "Rule created and loaded into the packet filter."
-                if applied
-                else "Staged. Apply the filter to load it."
+            "verified": verified,
+            "note": _observed_note(
+                applied,
+                verified,
+                "Rule created and present in config.",
+                "add_rule answered, but the rule is not in a re-read of the rules.",
             ),
         }
         if apply_error:
             out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
         return out
 
 
@@ -480,19 +509,25 @@ class ToggleNatOutboundTool(_NatToolBase):
                 )
                 apply_error = str(exc)
 
+        row, reread_error = await self._reread(uuid)
+        verified = row is not None and str(row.get("enabled")) == state
         out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "enabled": bool(params["enabled"]),
             "applied": applied,
-            "note": (
-                "Rule state loaded into the packet filter."
-                if applied
-                else "Staged. Apply the filter to load it."
+            "verified": verified,
+            "note": _observed_note(
+                applied,
+                verified,
+                "Rule state reads back as set.",
+                "toggle answered, but a re-read does not show the requested state.",
             ),
         }
         if apply_error:
             out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
         return out
 
 
@@ -576,19 +611,25 @@ class RmNatOutboundTool(_NatToolBase):
                 )
                 apply_error = str(exc)
 
+        row, reread_error = await self._reread(uuid)
+        verified = row is None and not reread_error
         out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "deleted": True,
             "applied": applied,
-            "note": (
-                "Rule deleted and loaded into the packet filter."
-                if applied
-                else "Staged. Apply the filter to load it."
+            "verified": verified,
+            "note": _observed_note(
+                applied,
+                verified,
+                "Rule gone from config.",
+                "del_rule answered, but the rule is still listed or could not be re-read.",
             ),
         }
         if apply_error:
             out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
         return out
 
 
