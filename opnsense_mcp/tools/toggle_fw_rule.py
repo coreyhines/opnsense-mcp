@@ -18,7 +18,7 @@ class ToggleFwRuleTool:
         "properties": {
             "rule_uuid": {
                 "type": "string",
-                "description": "UUID of the rule to toggle (from fw_rules output)",
+                "description": "UUID of the rule to toggle (from fw_rule(action='list'))",
             },
             "enabled": {
                 "type": "boolean",

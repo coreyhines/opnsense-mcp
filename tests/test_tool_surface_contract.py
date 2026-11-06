@@ -259,6 +259,29 @@ def test_exposed_group_schemas_avoid_type_unions() -> None:
     )
 
 
+def test_every_exposed_array_declares_its_items() -> None:
+    """An array without ``items`` is the next Cursor/Zod zero-tools footgun (#56).
+
+    alias.content and ipv6.records/domains/public_names shipped that way.
+    Walks nested schemas too, since an array of objects can hold another.
+    """
+    problems: list[str] = []
+
+    def walk(path: str, node: object) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == "array" and not isinstance(node.get("items"), dict):
+                problems.append(path)
+            for key, value in node.items():
+                walk(f"{path}.{key}", value)
+        elif isinstance(node, list):
+            for i, value in enumerate(node):
+                walk(f"{path}[{i}]", value)
+
+    for name, tool in sorted(_exposed_groups().items()):
+        walk(name, getattr(tool, "input_schema", None) or {})
+    assert not problems, "exposed arrays without items: " + ", ".join(problems)
+
+
 def test_exposed_group_defaults_match_every_tagged_member() -> None:
     """A grouped default must be true for every action named in its tag."""
     import re
