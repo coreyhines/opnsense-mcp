@@ -16,6 +16,46 @@ from opnsense_mcp.utils.ssh_client import OPNsenseSSHClient
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_CAPTURE_NAME = "mcp_capture.pcap"
+
+
+def capture_dir() -> Path:
+    """Where fetched captures land.
+
+    OPNSENSE_CAPTURE_DIR, else ``captures/`` under OPNSENSE_BACKUP_DIR (the
+    deployed unit's rw mount), else ``~/mcp-captures`` for a local stdio run.
+    """
+    explicit = os.environ.get("OPNSENSE_CAPTURE_DIR", "").strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    backups = os.environ.get("OPNSENSE_BACKUP_DIR", "").strip()
+    if backups:
+        return Path(backups).expanduser() / "captures"
+    return Path.home() / "mcp-captures"
+
+
+def resolve_capture_path(name: str | None) -> Path:
+    """A bare filename inside the capture dir, or ValueError.
+
+    Separators, ``..`` and absolute paths are refused, and the resolved
+    result must still sit inside the directory, which also catches a symlink
+    planted there pointing elsewhere.
+    """
+    name = (name or DEFAULT_CAPTURE_NAME).strip()
+    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+        raise ValueError(
+            f"local_path must be a bare filename (got {name!r}); captures are "
+            f"written to {capture_dir()}"
+        )
+    directory = capture_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    root = directory.resolve()
+    target = (root / name).resolve()
+    if target.parent != root:
+        raise ValueError(f"{name!r} resolves outside {root}; refusing to write")
+    return target
+
+
 class PacketCaptureTool2:
     """Tool for running packet captures on OPNsense via SSH with automatic error detection and correction."""
 
@@ -49,7 +89,10 @@ class PacketCaptureTool2:
                 "type": "string",
             },
             "local_path": {
-                "description": "Local path to save PCAP (optional)",
+                "description": (
+                    "File name to save the PCAP as (optional), written to the "
+                    "server's capture directory; paths are refused"
+                ),
                 "optional": True,
                 "type": "string",
             },
@@ -652,8 +695,16 @@ class PacketCaptureTool2:
             }
 
     def fetch_pcap(self, local_path: str = None) -> dict[str, Any]:
-        """Download the pcap file from the OPNsense host."""
-        local_path = local_path or str(Path.home() / "mcp_capture.pcap")
+        """Download the pcap file from the OPNsense host into the capture dir.
+
+        The caller names the file, never the directory. ``local_path`` went
+        straight to ``sftp.get``, so any bearer holder could overwrite any
+        file the server could write, including its own code in the image.
+        """
+        try:
+            local_path = str(resolve_capture_path(local_path))
+        except ValueError as exc:
+            return {"status": "error", "error": str(exc)}
         try:
             client = self._get_client()
             sftp = client.open_sftp()
