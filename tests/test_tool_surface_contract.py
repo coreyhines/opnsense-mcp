@@ -33,14 +33,12 @@ from tests.tool_surface import (
 # Classes with no name/description/input_schema. These are deliberately not
 # exposed as tools, so a registry keyed on `name` skips them:
 #   FirewallLogsTool  base class that GetLogsTool extends
-#   FirewallTool      legacy, referenced only by tools/__init__.TOOL_CLASSES
 #   InterfaceTool     legacy, its get_interface_configuration returns {}
 # Asserted as an exact set: a new tool class landing without metadata fails
 # here rather than going missing after the dispatch rewrite.
 KNOWN_MISSING_METADATA = frozenset(
     {
         "FirewallLogsTool",
-        "FirewallTool",
         "InterfaceTool",
     }
 )
