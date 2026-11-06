@@ -285,15 +285,14 @@ class FirewallLogsTool:
             List of rule summary dicts sorted by hit count descending.
 
         """
+        # Correlate on the rule id only. A log line's rule_number is pf's
+        # compiled rule index and MVC `sequence` is an ordering field; the two
+        # are unrelated, and matching them attached an arbitrary rule.
         rule_by_uuid: dict[str, dict[str, Any]] = {}
-        rule_by_seq: dict[str, dict[str, Any]] = {}
         for rule in rules:
             uuid = rule.get("uuid") or ""
             if uuid:
                 rule_by_uuid[uuid] = rule
-            seq = str(rule.get("sequence") or "")
-            if seq:
-                rule_by_seq[seq] = rule
 
         buckets: dict[tuple[str, str, str], dict[str, Any]] = {}
         for log in logs:
@@ -310,18 +309,9 @@ class FirewallLogsTool:
                     "rule_number": rule_number or None,
                     "label": label or None,
                 }
-                matched_rule: dict[str, Any] | None = None
-                confidence: str | None = None
                 if rule_id and rule_id in rule_by_uuid:
-                    matched_rule = rule_by_uuid[rule_id]
-                    confidence = "high"
-                elif rule_number and rule_number in rule_by_seq:
-                    matched_rule = rule_by_seq[rule_number]
-                    confidence = "low"
-                if confidence is not None:
-                    entry["match_confidence"] = confidence
-                if matched_rule is not None:
-                    entry["matched_rule"] = matched_rule
+                    entry["matched_rule"] = rule_by_uuid[rule_id]
+                    entry["match_confidence"] = "high"
                 buckets[key] = entry
 
             buckets[key]["hit_count"] += 1
