@@ -1,10 +1,15 @@
 name: Security
 
-# Ported from the GitLab `scanning` and `security` stages. Blocking gates run as
-# their own jobs so a failure names the scanner that failed. The informational
-# scanners share one job because cross-job artifact passing is unreliable on this
-# Forgejo instance (see the upload note in ci.yml), and collect_reports needs all
-# of their output in one workspace to build the bundle.
+# Ported from the GitLab `scanning` and `security` stages. The six gates
+# (gitleaks, ggshield, semgrep, pip-audit prod, SBOM, trivy fs) used to be six
+# jobs, each in the scanner's own image; together with the report job that was
+# seven jobs, each with its own checkout, for every push. They now run as
+# steps of one `gates` job, at the same pinned versions: gitleaks and trivy
+# from their release tarballs, checksum-verified, semgrep and ggshield from
+# PyPI in their own venvs. Every gate step runs `if: always()` after checkout,
+# so one failure does not hide the others, and any failed gate fails the job.
+# The informational scanners keep their own job: it is the one place
+# continue-on-error applies, and only to scanners that never block.
 
 on:
   push:
@@ -13,19 +18,70 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push to a PR supersedes the older run. Pushes to main, tags and
+# dispatches get a group of their own (the run id), so nothing ever cancels
+# or replaces them, including a pending run in the same group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  TRIVY_VERSION: "0.72.0"
+  TRIVY_SHA256: "bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea"
+  SEMGREP_VERSION: "1.173.0"
+  GGSHIELD_VERSION: "1.51.0"
 
 jobs:
-  gitleaks:
+  gates:
     runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
     container:
-      image: ghcr.io/gitleaks/gitleaks:v8.30.1
-      options: --entrypoint ""
+      # glibc, not alpine: semgrep ships only a manylinux wheel for x86_64.
+      image: docker.io/library/python:3.12-slim-bookworm
     steps:
-      - name: Install git
-        run: apk add --no-cache git
+      - name: Install git and curl
+        run: |
+          set -eu
+          # The only network-dependent package step, so a transient index
+          # fetch should not fail the run.
+          for attempt in 1 2 3; do
+            if apt-get update && apt-get install -y --no-install-recommends \
+                git curl ca-certificates; then
+              exit 0
+            fi
+            echo "package install attempt ${attempt} failed" >&2
+            sleep 5
+          done
+          echo "package install failed after 3 attempts" >&2
+          exit 1
+      - name: Install pinned scanners
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSLo gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz -C /usr/local/bin gitleaks
+          curl -fsSLo trivy.tgz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tgz" | sha256sum -c -
+          tar -xzf trivy.tgz -C /usr/local/bin trivy
+          # Separate venvs: neither tool's dependencies may move the other's,
+          # or pip-audit's, which runs from the system interpreter as before.
+          python3 -m venv /opt/semgrep
+          /opt/semgrep/bin/pip install --quiet "semgrep==${SEMGREP_VERSION}"
+          ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
+          python3 -m venv /opt/ggshield
+          /opt/ggshield/bin/pip install --quiet "ggshield==${GGSHIELD_VERSION}"
+          ln -s /opt/ggshield/bin/ggshield /usr/local/bin/ggshield
+          gitleaks version
+          trivy --version
+          semgrep --version
+          ggshield --version
       - name: Checkout
+        id: checkout
         # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
         # job container; /var/run -> /run makes Podman CopyToContainer fail with
         # "path escapes from parent" (moby#53258 / act#6092). See
@@ -51,48 +107,12 @@ jobs:
           git fetch --prune --no-tags origin "+refs/heads/*:refs/remotes/origin/*" "${sha}"
           git checkout --force "${sha}"
           git remote set-url origin "${base}"
-      - name: Scan for committed secrets
-        run: gitleaks detect --config .gitleaks.toml --redact --log-opts main --verbose
 
-  gitguardian:
-    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
-    container:
-      # Pinned to what `latest` resolved to when this was pinned, so the
-      # pin changed no behaviour. deploy/lib.sh rejects `latest` for the
-      # deploy image; CI should not be held to a weaker standard.
-      image: docker.io/gitguardian/ggshield:v1.51.0
-    steps:
-      - name: Install git
-        run: |
-          set -eu
-          # Pick the package manager the image actually has. The previous form,
-          # `apk add ... || (apt-get update && ...)`, ran a command that cannot
-          # exist on an Alpine image whenever apk failed for any reason, so a
-          # TLS failure surfaced as `apt-get: command not found` and exit 127
-          # with the real error buried above it. That hid a broken CA path in a
-          # runner config for days.
-          if command -v apk >/dev/null 2>&1; then
-            install_deps() { apk add --no-cache git; }
-          elif command -v apt-get >/dev/null 2>&1; then
-            install_deps() { apt-get update && apt-get install -y git; }
-          else
-            echo "no supported package manager in this image" >&2
-            exit 1
-          fi
-          # The only network-dependent step in the job, so a transient index
-          # fetch should not fail the run.
-          for attempt in 1 2 3; do
-            if install_deps; then exit 0; fi
-            echo "package install attempt ${attempt} failed" >&2
-            sleep 5
-          done
-          echo "package install failed after 3 attempts" >&2
-          exit 1
-      - name: Checkout
-        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
-        # job container; /var/run -> /run makes Podman CopyToContainer fail with
-        # "path escapes from parent" (moby#53258 / act#6092). See
-        # deploy/ci/forgejo-git-checkout.md.
+      - name: Shallow checkout for ggshield
+        id: shallow
+        # ggshield `secret scan ci` scans the commits it can see. Its job used
+        # a depth-1 clone, and scanning the full-history workspace instead
+        # would widen what it scans, so it keeps a depth-1 clone of its own.
         env:
           REPO_TOKEN: ${{ github.token }}
         run: |
@@ -107,16 +127,26 @@ jobs:
           else
             origin="${base}"
           fi
-          git init
+          git init /tmp/shallow
+          cd /tmp/shallow
           git remote add origin "${origin}"
           git fetch --depth 1 origin "${sha}"
           git checkout --force FETCH_HEAD
           git remote set-url origin "${base}"
+
+      - name: gitleaks
+        id: gitleaks
+        if: always() && steps.checkout.outcome == 'success'
+        run: gitleaks detect --config .gitleaks.toml --redact --log-opts main --verbose
+
       - name: ggshield secret scan
+        id: gitguardian
+        if: always() && steps.shallow.outcome == 'success'
         env:
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
         run: |
           set -euo pipefail
+          cd /tmp/shallow
           if [ -z "${GITGUARDIAN_API_KEY:-}" ]; then
             echo "ERROR: GITGUARDIAN_API_KEY is not set. Add it as a repository or"
             echo "organisation secret in Forgejo (Settings -> Actions -> Secrets)."
@@ -124,65 +154,12 @@ jobs:
           fi
           ggshield -c .gitguardian.yaml secret scan ci
 
-  semgrep:
-    # Replaces GitLab's Security/SAST.gitlab-ci.yml template, which has no
-    # Forgejo equivalent. Rulesets are pinned explicitly rather than using
-    # --config auto, so runs stay reproducible and offline-registry friendly.
-    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
-    container:
-      image: docker.io/semgrep/semgrep:1.173.0
-    steps:
-      - name: Install git
-        run: |
-          set -eu
-          # Pick the package manager the image actually has. The previous form,
-          # `apk add ... || (apt-get update && ...)`, ran a command that cannot
-          # exist on an Alpine image whenever apk failed for any reason, so a
-          # TLS failure surfaced as `apt-get: command not found` and exit 127
-          # with the real error buried above it. That hid a broken CA path in a
-          # runner config for days.
-          if command -v apk >/dev/null 2>&1; then
-            install_deps() { apk add --no-cache git; }
-          elif command -v apt-get >/dev/null 2>&1; then
-            install_deps() { apt-get update && apt-get install -y git; }
-          else
-            echo "no supported package manager in this image" >&2
-            exit 1
-          fi
-          # The only network-dependent step in the job, so a transient index
-          # fetch should not fail the run.
-          for attempt in 1 2 3; do
-            if install_deps; then exit 0; fi
-            echo "package install attempt ${attempt} failed" >&2
-            sleep 5
-          done
-          echo "package install failed after 3 attempts" >&2
-          exit 1
-      - name: Checkout
-        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
-        # job container; /var/run -> /run makes Podman CopyToContainer fail with
-        # "path escapes from parent" (moby#53258 / act#6092). See
-        # deploy/ci/forgejo-git-checkout.md.
-        env:
-          REPO_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          server="${GITHUB_SERVER_URL:?}"
-          repo="${GITHUB_REPOSITORY:?}"
-          sha="${GITHUB_SHA:?}"
-          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
-          base="${server%/}/${repo}.git"
-          if [ -n "${token}" ]; then
-            origin="https://x-access-token:${token}@${base#https://}"
-          else
-            origin="${base}"
-          fi
-          git init
-          git remote add origin "${origin}"
-          git fetch --depth 1 origin "${sha}"
-          git checkout --force FETCH_HEAD
-          git remote set-url origin "${base}"
       - name: Semgrep scan
+        id: semgrep
+        # Rulesets pinned explicitly rather than --config auto, so runs stay
+        # reproducible and offline-registry friendly. Runs before anything
+        # writes a venv into the workspace, so it scans the same tree it did.
+        if: always() && steps.checkout.outcome == 'success'
         run: |
           semgrep scan \
             --config p/python \
@@ -192,46 +169,36 @@ jobs:
             --json --output semgrep-report.json \
             --exclude tests
       - name: Upload semgrep-report
-        if: always()
+        if: always() && steps.checkout.outcome == 'success'
         continue-on-error: true
         uses: https://data.forgejo.org/forgejo/upload-artifact@v4
         with:
           name: semgrep-report
           path: semgrep-report.json
 
-  pip_audit_prod:
-    # Blocking supply-chain gate: production closure only (requirements.txt).
-    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
-    container:
-      image: docker.io/library/python:3.12-alpine
-    steps:
-      - name: Install git
-        run: apk add --no-cache git
-      - name: Checkout
-        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
-        # job container; /var/run -> /run makes Podman CopyToContainer fail with
-        # "path escapes from parent" (moby#53258 / act#6092). See
-        # deploy/ci/forgejo-git-checkout.md.
-        env:
-          REPO_TOKEN: ${{ github.token }}
+      - name: Trivy filesystem scan
+        id: trivy_fs
+        # Repo filesystem, HIGH/CRITICAL only. Before the venvs, for the same
+        # reason as semgrep.
+        if: always() && steps.checkout.outcome == 'success'
         run: |
           set -euo pipefail
-          server="${GITHUB_SERVER_URL:?}"
-          repo="${GITHUB_REPOSITORY:?}"
-          sha="${GITHUB_SHA:?}"
-          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
-          base="${server%/}/${repo}.git"
-          if [ -n "${token}" ]; then
-            origin="https://x-access-token:${token}@${base#https://}"
-          else
-            origin="${base}"
-          fi
-          git init
-          git remote add origin "${origin}"
-          git fetch --depth 1 origin "${sha}"
-          git checkout --force FETCH_HEAD
-          git remote set-url origin "${base}"
+          # Table first so the job log shows what failed; JSON for the artifact.
+          trivy fs --skip-version-check --severity HIGH,CRITICAL --format table .
+          trivy fs --skip-version-check --exit-code 1 --severity HIGH,CRITICAL \
+            --format json -o trivy-fs-report.json .
+      - name: Upload trivy-fs-report
+        if: always() && steps.checkout.outcome == 'success'
+        continue-on-error: true
+        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-report.json
+
       - name: Audit production dependencies
+        id: pip_audit_prod
+        # Blocking supply-chain gate: production closure only (requirements.lock).
+        if: always() && steps.checkout.outcome == 'success'
         run: |
           set -euo pipefail
           pip install --quiet --upgrade "pip>=26.0"
@@ -241,46 +208,17 @@ jobs:
           pip install --quiet --no-deps --require-hashes -r requirements.lock
           pip-audit --progress-spinner off -f json -o pip-audit-prod.json
       - name: Upload pip-audit-prod
-        if: always()
+        if: always() && steps.checkout.outcome == 'success'
         continue-on-error: true
         uses: https://data.forgejo.org/forgejo/upload-artifact@v4
         with:
           name: pip-audit-prod
           path: pip-audit-prod.json
 
-  sbom:
-    # CycloneDX SBOM for the production dependency closure.
-    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
-    container:
-      image: docker.io/library/python:3.12-alpine
-    steps:
-      - name: Install git
-        run: apk add --no-cache git
-      - name: Checkout
-        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
-        # job container; /var/run -> /run makes Podman CopyToContainer fail with
-        # "path escapes from parent" (moby#53258 / act#6092). See
-        # deploy/ci/forgejo-git-checkout.md.
-        env:
-          REPO_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          server="${GITHUB_SERVER_URL:?}"
-          repo="${GITHUB_REPOSITORY:?}"
-          sha="${GITHUB_SHA:?}"
-          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
-          base="${server%/}/${repo}.git"
-          if [ -n "${token}" ]; then
-            origin="https://x-access-token:${token}@${base#https://}"
-          else
-            origin="${base}"
-          fi
-          git init
-          git remote add origin "${origin}"
-          git fetch --depth 1 origin "${sha}"
-          git checkout --force FETCH_HEAD
-          git remote set-url origin "${base}"
       - name: Generate CycloneDX SBOM
+        id: sbom
+        # CycloneDX SBOM for the production dependency closure.
+        if: always() && steps.checkout.outcome == 'success'
         run: |
           set -euo pipefail
           pip install --quiet --upgrade "pip>=26.0"
@@ -290,59 +228,41 @@ jobs:
           pip install --quiet --no-deps --require-hashes -r requirements.lock
           pip-audit --progress-spinner off -f cyclonedx-json -o sbom.cdx.json
       - name: Upload SBOM
+        # Its own job uploaded only when the SBOM was produced; same here.
+        if: always() && steps.sbom.outcome == 'success'
         continue-on-error: true
         uses: https://data.forgejo.org/forgejo/upload-artifact@v4
         with:
           name: sbom
           path: sbom.cdx.json
 
-  trivy_fs:
-    # Repo filesystem, HIGH/CRITICAL only.
-    runs-on: ${{ vars.OPNSENSE_MCP_RUNNER }}
-    container:
-      image: docker.io/aquasec/trivy:0.72.0
-      options: --entrypoint ""
-    steps:
-      - name: Install git
-        run: apk add --no-cache git
-      - name: Checkout
-        # Inline git: actions/checkout@v6 is copied into /var/run/act inside the
-        # job container; /var/run -> /run makes Podman CopyToContainer fail with
-        # "path escapes from parent" (moby#53258 / act#6092). See
-        # deploy/ci/forgejo-git-checkout.md.
-        env:
-          REPO_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          server="${GITHUB_SERVER_URL:?}"
-          repo="${GITHUB_REPOSITORY:?}"
-          sha="${GITHUB_SHA:?}"
-          token="${REPO_TOKEN:-${GITHUB_TOKEN:-}}"
-          base="${server%/}/${repo}.git"
-          if [ -n "${token}" ]; then
-            origin="https://x-access-token:${token}@${base#https://}"
-          else
-            origin="${base}"
-          fi
-          git init
-          git remote add origin "${origin}"
-          git fetch --depth 1 origin "${sha}"
-          git checkout --force FETCH_HEAD
-          git remote set-url origin "${base}"
-      - name: Trivy filesystem scan
-        run: |
-          set -euo pipefail
-          # Table first so the job log shows what failed; JSON for the artifact.
-          trivy fs --skip-version-check --severity HIGH,CRITICAL --format table .
-          trivy fs --skip-version-check --exit-code 1 --severity HIGH,CRITICAL \
-            --format json -o trivy-fs-report.json .
-      - name: Upload trivy-fs-report
+      - name: Gate summary
+        # The job already fails when any gate step failed. This names them in
+        # one place, so a red job says which scanners to read.
         if: always()
-        continue-on-error: true
-        uses: https://data.forgejo.org/forgejo/upload-artifact@v4
-        with:
-          name: trivy-fs-report
-          path: trivy-fs-report.json
+        env:
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          SHALLOW: ${{ steps.shallow.outcome }}
+          GITLEAKS: ${{ steps.gitleaks.outcome }}
+          GITGUARDIAN: ${{ steps.gitguardian.outcome }}
+          SEMGREP: ${{ steps.semgrep.outcome }}
+          TRIVY_FS: ${{ steps.trivy_fs.outcome }}
+          PIP_AUDIT_PROD: ${{ steps.pip_audit_prod.outcome }}
+          SBOM: ${{ steps.sbom.outcome }}
+        run: |
+          set -u
+          failed=""
+          for gate in CHECKOUT SHALLOW GITLEAKS GITGUARDIAN SEMGREP TRIVY_FS PIP_AUDIT_PROD SBOM; do
+            outcome="$(printenv "${gate}")"
+            echo "${gate}: ${outcome:-not run}"
+            if [ "${outcome}" != "success" ]; then
+              failed="${failed} ${gate}"
+            fi
+          done
+          if [ -n "${failed}" ]; then
+            echo "failed or did not run:${failed}" >&2
+            exit 1
+          fi
 
   security_reports:
     # Informational scanners plus the report bundle GitLab's collect_reports
