@@ -246,6 +246,7 @@ def get_opnsense_client(config: dict[str, Any]) -> Any:
     api_key = os.getenv("OPNSENSE_API_KEY")
     api_secret = os.getenv("OPNSENSE_API_SECRET")
     ssl_verify = os.getenv("OPNSENSE_SSL_VERIFY", "false").lower() == "true"
+    ca_bundle = os.getenv("OPNSENSE_CA_BUNDLE") or None
 
     # SSH configuration
     ssh_host = os.getenv("OPNSENSE_SSH_HOST", host)  # Default to firewall host
@@ -260,6 +261,7 @@ def get_opnsense_client(config: dict[str, Any]) -> Any:
                 "api_key": api_key,
                 "api_secret": api_secret,
                 "verify_ssl": ssl_verify,
+                "ca_bundle": ca_bundle,
             }
         )
 

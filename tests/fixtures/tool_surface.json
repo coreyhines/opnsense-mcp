@@ -131,7 +131,7 @@
     }
   },
   "apply_dns_ula": {
-    "description": "Execute a plan_dns_ula mapping: for each record add the ULA host override, read it back, then delete the GUA one. Refuses any record that no longer matches the plan. Dry run by default.",
+    "description": "Execute an ipv6(action='plan_ula') mapping: for each record add the ULA host override, read it back, then delete the GUA one. Refuses any record that no longer matches the plan. Dry run by default.",
     "inputSchema": {
       "properties": {
         "dry_run": {
@@ -141,7 +141,10 @@
           "type": "boolean"
         },
         "records": {
-          "description": "The `records` list from a plan_dns_ula result, verbatim. Each entry needs uuid, hostname, domain, current, proposed and keep_gua. Targets are never recomputed here, so what runs is what was reviewed.",
+          "description": "The `records` list from an ipv6(action='plan_ula') result, verbatim. Each entry needs uuid, hostname, domain, current, proposed and keep_gua. Targets are never recomputed here, so what runs is what was reviewed.",
+          "items": {
+            "type": "object"
+          },
           "type": "array"
         }
       },
@@ -203,6 +206,9 @@
       "properties": {
         "domains": {
           "description": "Subset of ['vip', 'npt', 'ra', 'unbound'], in that order",
+          "items": {
+            "type": "string"
+          },
           "optional": true,
           "type": "array"
         },
@@ -496,11 +502,11 @@
           "type": "string"
         },
         "rev_a": {
-          "description": "Older revision id, from list_config_backups",
+          "description": "Older revision id, from config_backup(action='list')",
           "type": "string"
         },
         "rev_b": {
-          "description": "Newer revision id, from list_config_backups",
+          "description": "Newer revision id, from config_backup(action='list')",
           "type": "string"
         }
       },
@@ -793,7 +799,13 @@
   "interface_list": {
     "description": "Get available interface names for firewall rules",
     "inputSchema": {
-      "properties": {},
+      "properties": {
+        "resolve": {
+          "description": "Logical name or description to resolve to its device, e.g. WAN; the result gains resolved_device",
+          "optional": true,
+          "type": "string"
+        }
+      },
       "required": [],
       "type": "object"
     }
@@ -1146,6 +1158,9 @@
         },
         "content": {
           "description": "Members: addresses, networks, ports or codes",
+          "items": {
+            "type": "string"
+          },
           "type": "array"
         },
         "description": {
@@ -1511,7 +1526,7 @@
           "type": "string"
         },
         "planned_address": {
-          "description": "An address you intend this loopback to carry. Not written here \u2014 OPNsense has no per-interface addressing API \u2014 but echoed back as the exact step to perform. Use set_interface_address to actually write one",
+          "description": "An address you intend this loopback to carry. Not written here \u2014 OPNsense has no per-interface addressing API \u2014 but echoed back as the exact step to perform. Use interface_device(action='set_address') to actually write one",
           "optional": true,
           "type": "string"
         },
@@ -1646,7 +1661,7 @@
           "type": "boolean"
         },
         "gateway": {
-          "description": "Gateway name, from list_gateways",
+          "description": "Gateway name, from routing(action='list_gateways')",
           "type": "string"
         },
         "network": {
@@ -1934,6 +1949,12 @@
           "optional": true,
           "type": "string"
         },
+        "apply": {
+          "default": false,
+          "description": "When setting: reload the filter so pf regenerates the outbound rules (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
         "mode": {
           "description": "When setting: one of automatic, hybrid",
           "optional": true,
@@ -1975,6 +1996,11 @@
         },
         "local_path": {
           "description": "Local path to save PCAP (optional)",
+          "optional": true,
+          "type": "string"
+        },
+        "mode": {
+          "description": "text (default): readable tcpdump output; raw: pcap bytes",
           "optional": true,
           "type": "string"
         },
@@ -2070,6 +2096,9 @@
         },
         "public_names": {
           "description": "Fully qualified names the outside world resolves; these keep their delegated address",
+          "items": {
+            "type": "string"
+          },
           "optional": true,
           "type": "array"
         },
@@ -2454,7 +2483,7 @@
     "inputSchema": {
       "properties": {
         "uuid": {
-          "description": "UUID of the host override to delete (from dns tool output)",
+          "description": "UUID of the host override to delete (from dns_override(action='list'))",
           "type": "string"
         }
       },
@@ -2501,6 +2530,9 @@
         },
         "content": {
           "description": "Replacement members; omit to keep the current set",
+          "items": {
+            "type": "string"
+          },
           "optional": true,
           "type": "array"
         },
@@ -2846,7 +2878,7 @@
           "type": "boolean"
         },
         "rule_uuid": {
-          "description": "UUID of the rule to edit (from fw_rules output)",
+          "description": "UUID of the rule to edit (from fw_rule(action='list'))",
           "type": "string"
         },
         "sequence": {
@@ -2944,7 +2976,7 @@
     }
   },
   "set_host_override": {
-    "description": "Edit an existing Unbound host override in place; use mkdns to create one",
+    "description": "Edit an existing Unbound host override in place; use dns_override(action='create') to create one",
     "inputSchema": {
       "properties": {
         "apply": {
@@ -2967,7 +2999,7 @@
           "type": "string"
         },
         "uuid": {
-          "description": "Override uuid, from the dns tool",
+          "description": "Override uuid, from dns_override(action='list')",
           "type": "string"
         }
       },
@@ -3307,7 +3339,7 @@
     "inputSchema": {
       "properties": {
         "baseline_id": {
-          "description": "Optional baseline id from a prior shaper_statistics call for pkts/bytes delta comparison",
+          "description": "Optional baseline id from a prior shaper(action='statistics') call for pkts/bytes delta comparison",
           "type": "string"
         }
       },
@@ -3430,7 +3462,7 @@
           "type": "boolean"
         },
         "rule_uuid": {
-          "description": "UUID of the rule to toggle (from fw_rules output)",
+          "description": "UUID of the rule to toggle (from fw_rule(action='list'))",
           "type": "string"
         }
       },

@@ -37,7 +37,7 @@ class SetFwRuleTool:
         "properties": {
             "rule_uuid": {
                 "type": "string",
-                "description": "UUID of the rule to edit (from fw_rules output)",
+                "description": "UUID of the rule to edit (from fw_rule(action='list'))",
             },
             "description": {
                 "type": "string",
