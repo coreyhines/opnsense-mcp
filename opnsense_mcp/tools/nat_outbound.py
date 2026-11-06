@@ -101,6 +101,29 @@ def _selected(field: Any) -> str:
     return ""
 
 
+def _translation_differences(
+    row: dict[str, Any], requested: dict[str, str]
+) -> dict[str, dict[str, str]]:
+    """Fields where an existing rule would translate differently than asked.
+
+    search_rule sends an empty destination for "any"; treat the two as one.
+    """
+
+    def norm(field: str, value: Any) -> str:
+        text = str(value if value is not None else "").strip()
+        if field == "destination_net" and text.lower() in {"", "any"}:
+            return "any"
+        if field == "staticnatport":
+            return "1" if text in {"1", "True", "true"} else "0"
+        return text
+
+    return {
+        field: {"existing": str(row.get(field, "")), "requested": wanted}
+        for field, wanted in requested.items()
+        if norm(field, row.get(field)) != norm(field, wanted)
+    }
+
+
 class NatOutboundModeTool(_NatToolBase):
     """Read or change how outbound NAT rules are generated."""
 
@@ -329,12 +352,33 @@ class MkNatOutboundTool(_NatToolBase):
                 ),
             }
 
+        requested = {
+            "destination_net": params.get("destination_net", "any"),
+            "target": params.get("target", ""),
+            "staticnatport": "1" if params.get("static_port") else "0",
+        }
+
         try:
             for row in await self._rows():
                 if (
                     row.get("interface") == interface
                     and row.get("source_net") == source_net
                 ):
+                    differs = _translation_differences(row, requested)
+                    if differs:
+                        # Reporting success here left the caller's target
+                        # unwritten with nothing saying so.
+                        return {
+                            "status": "error",
+                            "created": False,
+                            "uuid": row.get("uuid", ""),
+                            "differs": differs,
+                            "error": (
+                                "A rule for this interface and source already "
+                                "exists with different translation settings: "
+                                + ", ".join(sorted(differs))
+                            ),
+                        }
                     return {
                         "status": "success",
                         "created": False,
@@ -345,9 +389,7 @@ class MkNatOutboundTool(_NatToolBase):
             payload = {
                 "interface": interface,
                 "source_net": source_net,
-                "destination_net": params.get("destination_net", "any"),
-                "target": params.get("target", ""),
-                "staticnatport": "1" if params.get("static_port") else "0",
+                **requested,
                 "description": params.get("description", ""),
                 # Honored, not hardcoded: a rule asked for disabled used to be
                 # created live and translate traffic on the next apply.
