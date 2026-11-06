@@ -1934,6 +1934,12 @@
           "optional": true,
           "type": "string"
         },
+        "apply": {
+          "default": false,
+          "description": "When setting: reload the filter so pf regenerates the outbound rules (default false)",
+          "optional": true,
+          "type": "boolean"
+        },
         "mode": {
           "description": "When setting: one of automatic, hybrid",
           "optional": true,

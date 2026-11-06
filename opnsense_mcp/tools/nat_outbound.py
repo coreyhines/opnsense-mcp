@@ -119,6 +119,15 @@ class NatOutboundModeTool(_NatToolBase):
                 "description": f"When setting: one of {', '.join(SAFE_MODES)}",
                 "optional": True,
             },
+            "apply": {
+                "type": "boolean",
+                "description": (
+                    "When setting: reload the filter so pf regenerates the "
+                    "outbound rules (default false)"
+                ),
+                "optional": True,
+                "default": False,
+            },
         },
         "required": [],
     }
@@ -185,7 +194,51 @@ class NatOutboundModeTool(_NatToolBase):
             logger.exception("Failed to handle outbound NAT mode")
             return {"status": "error", "error": str(exc)}
 
-        return {"status": "success", "mode": wanted, "previous": mode}
+        # Outbound rules are regenerated on a filter reload, so until one runs
+        # pf keeps translating under the previous mode.
+        applied, apply_error = False, ""
+        if params.get("apply", False):
+            try:
+                await run_apply(self.client, SNAT["apply"])
+                applied = True
+            except ApplyError as exc:
+                logger.warning("NAT mode saved but filter reload failed: %s", exc)
+                apply_error = str(exc)
+
+        # Report what the firewall now stores, not what was asked for.
+        reread_error = ""
+        try:
+            after = await self.client._make_request("GET", SNAT["get"])
+            now = _selected(
+                after.get("filter", {}).get("general", {}).get("snat_mode")
+                if isinstance(after, dict)
+                else None
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("NAT mode re-read failed: %s", exc)
+            now, reread_error = "", str(exc)
+
+        out: dict[str, Any] = {
+            "status": "success",
+            "mode": now,
+            "requested": wanted,
+            "previous": mode,
+            "verified": now == wanted,
+            "applied": applied,
+            "note": (
+                f"The firewall reports {now or 'no mode'!r} after the set, "
+                f"not {wanted!r}."
+                if now != wanted
+                else "Mode saved and the filter reloaded."
+                if applied
+                else "Mode saved. Apply the filter for pf to use it."
+            ),
+        }
+        if apply_error:
+            out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
+        return out
 
 
 class ListNatOutboundTool(_NatToolBase):
