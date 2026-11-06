@@ -24,12 +24,12 @@ Single planning/implementation reference for the **network service** path. **IDE
 
 | Piece | Role |
 |--------|------|
-| `mcp-proxy` | **SSE → stdio**; listens **HTTP** on **8765** inside the app container; spawns `python3 main.py`. |
+| App server | `python3 main.py --transport streamable-http` listens on **8765** inside the app container and serves MCP at **`/mcp`**. No `mcp-proxy`, no `/sse`. |
 | App container | Built from **`deploy/Containerfile`** (local build). |
 | **Caddy** | **TLS termination**; mounts host PEMs (e.g. **`/opt/certs/wild`**); reverse-proxies to **`http://127.0.0.1:8765`**. |
-| Clients | **`https://opnsense-mcp.frobozz.example/sse`** (after TLS; DNS A/AAAA to pod IP — see **`deploy/TLS.md`**). |
+| Clients | **`https://opnsense-mcp.frobozz.example/mcp`** with `Authorization: Bearer <MCP_SECRET_KEY>` (after TLS; DNS A/AAAA to pod IP — see **`deploy/TLS.md`**). |
 
-**Why Caddy:** `mcp-proxy` has **no** server-side TLS flags; HTTPS is always **in front**.
+**Why Caddy:** the app server listens on plain HTTP; HTTPS is always **in front**.
 
 ---
 

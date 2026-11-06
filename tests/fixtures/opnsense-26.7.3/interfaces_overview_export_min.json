@@ -1,0 +1,28 @@
+{
+  "_note": "identifier/device/description from a 26.7.8 overview read; other keys dropped",
+  "rows": [
+    {
+      "identifier": "opt13",
+      "device": "vlan01",
+      "description": "VLAN10Podman",
+      "enabled": true
+    },
+    {
+      "identifier": "wan",
+      "device": "ax1",
+      "description": "WAN",
+      "enabled": true
+    },
+    {
+      "identifier": "opt3",
+      "device": "ax0_vlan3",
+      "description": "VLAN3LAB",
+      "enabled": true
+    },
+    {
+      "identifier": "",
+      "device": "igb0",
+      "description": "Unassigned Interface"
+    }
+  ]
+}

@@ -9,7 +9,6 @@ import logging
 import os
 import re
 import socket
-import ssl
 import threading
 import urllib.parse
 from collections.abc import Awaitable, Callable
@@ -397,6 +396,21 @@ def _http_error_detail(error: requests.exceptions.HTTPError) -> str:
     return f"{prefix}: {str(body)[:400]}"
 
 
+def _tls_verify(config: dict[str, Any]) -> bool | str:
+    """What the firewall sessions pass to ``requests`` as ``verify``.
+
+    A CA bundle path wins and implies verification; otherwise ``verify_ssl``,
+    which defaults off because OPNsense ships a self-signed certificate. This
+    used to be hard-coded off, and the client also replaced
+    ``ssl.create_default_context`` with a ``CERT_NONE`` context, which
+    disabled verification for every library in the process.
+    """
+    ca_bundle = config.get("ca_bundle")
+    if ca_bundle:
+        return str(ca_bundle)
+    return bool(config.get("verify_ssl", False))
+
+
 class OPNsenseClient:
     """OPNsense API client for firewall management and diagnostics."""
 
@@ -416,7 +430,7 @@ class OPNsenseClient:
         self.config["api_secret"] = self.config.get("api_secret") or os.getenv(
             "OPNSENSE_API_SECRET",
         )
-        self.setup_ssl()
+        tls_verify = _tls_verify(self.config)
         self.base_url = f"https://{self.config['firewall_host']}"
         self.api_base_url = f"{self.base_url}/api"
 
@@ -426,14 +440,14 @@ class OPNsenseClient:
         # Persistent session — reuses TCP/TLS connections across calls
         self.session = requests.Session()
         self.session.headers.update(self.headers)
-        self.session.verify = False
+        self.session.verify = tls_verify
         self._session_lock = threading.Lock()
 
         # Writes, applies and downloads run on their own session and lock, so a
         # 120s apply does not serialise every read sharing this client.
         self.long_session = requests.Session()
         self.long_session.headers.update(self.headers)
-        self.long_session.verify = False
+        self.long_session.verify = tls_verify
         self._long_session_lock = threading.Lock()
 
         # DHCP provider is detected lazily on first DHCP operation.
@@ -483,14 +497,6 @@ class OPNsenseClient:
         """Create basic auth header from api key and secret."""
         auth_str = f"{self.config['api_key']}:{self.config['api_secret']}"
         return base64.b64encode(auth_str.encode()).decode()
-
-    def setup_ssl(self: "OPNsenseClient") -> None:
-        """Configure SSL context for API calls."""
-        # We deliberately use unverified context since OPNsense often uses
-        # self-signed certs
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)
-        ctx.verify_mode = ssl.CERT_NONE
-        ssl.create_default_context = lambda: ctx
 
     def _raise_unexpected_response_format(self: "OPNsenseClient") -> None:
         """Raise error for unexpected response format."""
