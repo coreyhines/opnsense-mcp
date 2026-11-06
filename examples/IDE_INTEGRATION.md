@@ -92,7 +92,8 @@ Typical variables:
 - `OPNSENSE_FIREWALL_HOST`: Hostname or IP of your OPNsense firewall
 - `OPNSENSE_API_KEY`: API key for authentication
 - `OPNSENSE_API_SECRET`: API secret for authentication
-- `OPNSENSE_SSL_VERIFY`: `true` or `false` (self-signed certs often use `false`)
+- `OPNSENSE_SSL_VERIFY`: `true` or `false` (default `false`, since OPNsense ships a self-signed cert)
+- `OPNSENSE_CA_BUNDLE`: path to a CA bundle to verify the firewall against; setting it turns verification on
 - `DEBUG`, `LOG_LEVEL`: optional development toggles
 
 ## Development Tools
