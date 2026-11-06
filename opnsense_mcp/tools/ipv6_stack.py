@@ -987,7 +987,7 @@ class MkLoopbackTool(_V6ToolBase):
                     "An address you intend this loopback to carry. Not written "
                     "here — OPNsense has no per-interface addressing API — but "
                     "echoed back as the exact step to perform. Use "
-                    "set_interface_address to actually write one"
+                    "interface_device(action='set_address') to actually write one"
                 ),
                 "optional": True,
             },

@@ -224,11 +224,35 @@ def _check_scheduler_drift(
 ) -> list[AuditFinding]:
     if statistics is None:
         return []
+    # A response with no items list is "could not tell", not "nothing is
+    # running": reading it as empty would flag every pipe as absent.
+    if not isinstance(statistics, dict) or not isinstance(
+        statistics.get("items"), list
+    ):
+        return [
+            _finding(
+                "info",
+                "STATISTICS_UNAVAILABLE",
+                detail=f"response carried no items list ({type(statistics).__name__})",
+            )
+        ]
     runtime_by_uuid = _runtime_pipes_by_uuid(statistics)
     findings: list[AuditFinding] = []
     for pipe in pipes:
         uuid = pipe.get("uuid", "")
-        if not uuid or uuid not in runtime_by_uuid:
+        if not uuid:
+            continue
+        if uuid not in runtime_by_uuid:
+            # Skipping these let enabled config with no dummynet pipe behind
+            # it audit as healthy while nothing was shaped.
+            if pipe.get("enabled", False):
+                findings.append(
+                    _finding(
+                        "error",
+                        "PIPE_NOT_IN_RUNTIME",
+                        detail=pipe.get("description") or uuid,
+                    )
+                )
             continue
         config_sched = pipe.get("scheduler", "")
         runtime_pipe = runtime_by_uuid[uuid]
