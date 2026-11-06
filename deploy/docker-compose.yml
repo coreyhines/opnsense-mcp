@@ -1,29 +1,41 @@
 # Docker Compose (Linux amd64). TLS: Caddy terminates HTTPS; MCP is HTTP on loopback.
 # MCP endpoint: http://localhost:8765/mcp (Streamable HTTP, MCP spec 2025-03-26)
-# Used by deploy/install.sh --runtime docker. Copy or run from a checkout of this repo.
+# Used by deploy/install.sh --runtime docker, which builds then starts it and
+# exports the variables below. Mirrors the podman quadlet install.sh writes:
+# the install root is read-only, so SSH keys and backups get their own mounts,
+# and both directories are created by install.sh before this runs (a missing
+# bind source mounts empty rather than failing).
 
 services:
   opnsense-mcp:
     build:
-      context: .
+      # Relative to this file, which lives in deploy/.
+      context: ..
       dockerfile: deploy/Containerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        GIT_REF: ${GIT_REF:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
     image: opnsense-mcp:local
     ports:
       - "127.0.0.1:8765:8765"
     environment:
-      OPNSENSE_MCP_INSTALL_ROOT: /opt/containerdata/opnsense-mcp
+      OPNSENSE_MCP_INSTALL_ROOT: ${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}
+      OPNSENSE_BACKUP_DIR: ${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}/backups
     env_file:
-      - /opt/containerdata/opnsense-mcp/environment
+      - ${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}/environment
     volumes:
-      - /opt/containerdata/opnsense-mcp:/opt/containerdata/opnsense-mcp:ro
+      - ${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}:${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}:ro
+      - ${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}/ssh:/root/.ssh:ro
+      - ${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}/backups:${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}/backups:rw
     restart: unless-stopped
 
   caddy:
-    image: docker.io/library/caddy:2-alpine
+    image: ${OPNSENSE_MCP_CADDY_IMAGE:-docker.io/library/caddy:2.9.1-alpine}
     network_mode: host
     volumes:
-      - /opt/certs/wild:/opt/certs/wild:ro
-      - /opt/containerdata/opnsense-mcp/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${OPNSENSE_MCP_TLS_CERTS:-/opt/certs/wild}:/opt/certs/wild:ro
+      - ${OPNSENSE_MCP_INSTALL_ROOT:-/opt/containerdata/opnsense-mcp}/Caddyfile:/etc/caddy/Caddyfile:ro
     restart: unless-stopped
     depends_on:
       - opnsense-mcp

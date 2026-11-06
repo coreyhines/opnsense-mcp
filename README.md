@@ -10,7 +10,7 @@ MCP server for OPNsense firewall operations (ARP, DHCP, logs, rules, interfaces,
 Use one of two deployment modes:
 
 - `STDIO` (local): best for Cursor/Claude Code/Continue running the server process directly.
-- `SSE` (centralized): best for shared, long-lived service over HTTPS.
+- Streamable HTTP (centralized): best for a shared, long-lived service over HTTPS, at `/mcp`.
 
 ## Demo
 
@@ -46,7 +46,7 @@ Edit `~/.env`:
 OPNSENSE_API_KEY=your_api_key
 OPNSENSE_API_SECRET=your_api_secret
 OPNSENSE_FIREWALL_HOST=your.firewall.host
-# HTTP/SSE only; stdio ignores it. Generate with: openssl rand -hex 32
+# HTTP transports only; stdio ignores it. Generate with: openssl rand -hex 32
 MCP_SECRET_KEY=
 ```
 
@@ -70,7 +70,7 @@ Configure your MCP client to launch `mcp_start.sh`:
 
 See full guide: [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md).
 
-#### Mode B: `SSE` (centralized service)
+#### Mode B: streamable HTTP (centralized service)
 
 Run the Linux installer (Podman + quadlet + Caddy TLS):
 
@@ -81,8 +81,11 @@ sudo bash deploy/install.sh
 Clients connect to:
 
 ```text
-https://<your-hostname>/sse
+https://<your-hostname>/mcp
 ```
+
+The deployed container serves streamable HTTP only. There is no `/sse`
+endpoint and no `/health` route; both answer 404.
 
 Every request must send `Authorization: Bearer <MCP_SECRET_KEY>`. The server
 refuses to start on an HTTP transport when the key is blank or a placeholder.
@@ -108,7 +111,7 @@ Full reference: [`docs/REFERENCE/FUNCTION_REFERENCE.md`](docs/REFERENCE/FUNCTION
 
 Five PRs landed recently. See [`docs/FEATURES_UPDATE.md`](docs/FEATURES_UPDATE.md) for full details and usage examples.
 
-- **Streamable HTTP transport** — native FastMCP server supports `stdio`, `sse`, and `streamable-http` (MCP spec 2025-03-26). Deployed via `deploy/install.sh`.
+- **Streamable HTTP transport** — native FastMCP server supports `stdio` and `streamable-http` (MCP spec 2025-03-26). `deploy/install.sh` deploys streamable HTTP at `/mcp`.
 - **DHCP client_id (DUID) support** — `mk_dhcp_host` and `move_dhcp_host` accept an optional DUID for stateful DHCPv6 matching.
 - **Semver image tags** — main builds are tagged as a prerelease of the next patch after the `pyproject.toml` version (`1.0.1-dev.a1b2c3d` after 1.0.0) or release tags (`1.0.0`).
 - **Container registry** — pinned tags only; `:latest` is rejected. Set `OPNSENSE_MCP_IMAGE_REPO`, or build locally with `--build-local`.
@@ -144,7 +147,7 @@ numbers are trusted.
 
 - Start here: [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)
 - Claude Code specifics: [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md)
-- Centralized SSE spec: [`docs/CENTRALIZED_DEPLOY_SPEC.md`](docs/CENTRALIZED_DEPLOY_SPEC.md)
+- Centralized deploy spec: [`docs/CENTRALIZED_DEPLOY_SPEC.md`](docs/CENTRALIZED_DEPLOY_SPEC.md)
 - Contributor guide: [`docs/DEVELOPMENT/CONTRIBUTING.md`](docs/DEVELOPMENT/CONTRIBUTING.md)
 - Brand assets: [`docs/assets/`](docs/assets/README.md)
 

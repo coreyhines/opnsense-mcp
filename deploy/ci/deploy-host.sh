@@ -4,7 +4,7 @@ set -euo pipefail
 
 IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-}"
 IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-${CI_COMMIT_SHORT_SHA:-}}"
-QUADLET_DIR="/etc/containers/systemd/opnsense-mcp"
+QUADLET_DIR="${OPNSENSE_MCP_QUADLET_DIR:-/etc/containers/systemd/opnsense-mcp}"
 QUADLET_APP="${QUADLET_DIR}/opnsense-mcp-app.container"
 # A host installed before the per-service directory layout still has the file
 # flat in the parent. Patch whichever one is actually there, and say which.
@@ -34,9 +34,13 @@ if [[ ! -f "${QUADLET_APP}" ]]; then
   exit 1
 fi
 
-sed -i "s|^Image=.*|Image=${IMAGE_REPO}:${IMAGE_TAG}|" "${QUADLET_APP}"
-sed -i "s|^Image=.*/opnsense-mcp:.*|Image=${IMAGE_REPO}:${IMAGE_TAG}|" "${QUADLET_APP}"
-sed -i "s|localhost/opnsense-mcp:.*|${IMAGE_REPO}:${IMAGE_TAG}|" "${QUADLET_APP}"
+# -i.bak, not bare -i: the latter is GNU-only, and the tests run this script.
+sed -i.bak \
+  -e "s|^Image=.*|Image=${IMAGE_REPO}:${IMAGE_TAG}|" \
+  -e "s|^Image=.*/opnsense-mcp:.*|Image=${IMAGE_REPO}:${IMAGE_TAG}|" \
+  -e "s|localhost/opnsense-mcp:.*|${IMAGE_REPO}:${IMAGE_TAG}|" \
+  "${QUADLET_APP}"
+rm -f "${QUADLET_APP}.bak"
 
 if [[ -f "${INSTALL_ROOT}/environment" ]]; then
   grep -v '^OPNSENSE_MCP_IMAGE_TAG=' "${INSTALL_ROOT}/environment" >"${INSTALL_ROOT}/environment.tmp" || true
@@ -45,9 +49,41 @@ if [[ -f "${INSTALL_ROOT}/environment" ]]; then
   chmod 600 "${INSTALL_ROOT}/environment"
 fi
 
-podman pull "${IMAGE_REPO}:${IMAGE_TAG}"
-podman rm -f opnsense-mcp-app opnsense-mcp-caddy 2>/dev/null || true
-systemctl daemon-reload
-systemctl restart opnsense-mcp-app.service opnsense-mcp-caddy.service || systemctl restart opnsense-mcp-app.service
+# Container names come from the quadlets, which install.sh lets vary
+# (OPNSENSE_MCP_CONTAINER_NAME); hard-coding them made `podman rm` a no-op.
+container_name() {
+  local file=$1 fallback=$2 name
+  name="$(sed -n 's/^ContainerName=//p' "${file}" | head -n 1)"
+  printf '%s' "${name:-${fallback}}"
+}
 
-podman ps --filter name=opnsense-mcp-app --format '{{.Image}}'
+WANT="${IMAGE_REPO}:${IMAGE_TAG}"
+APP_CONTAINER="$(container_name "${QUADLET_APP}" opnsense-mcp-app)"
+UNITS=(opnsense-mcp-app.service)
+CONTAINERS=("${APP_CONTAINER}")
+CADDY_QUADLET="$(dirname "${QUADLET_APP}")/opnsense-mcp-caddy.container"
+if [[ -f "${CADDY_QUADLET}" ]]; then
+  UNITS+=(opnsense-mcp-caddy.service)
+  CONTAINERS+=("$(container_name "${CADDY_QUADLET}" opnsense-mcp-caddy)")
+fi
+
+podman pull "${WANT}"
+podman rm -f "${CONTAINERS[@]}" 2>/dev/null || true
+systemctl daemon-reload
+# No `|| restart app` fallback: it hid a failed Caddy restart and exited 0.
+systemctl restart "${UNITS[@]}"
+
+# Verify the rollout rather than printing whatever is running: the old
+# final `podman ps` exited 0 for the new tag, the old tag, or nothing.
+for unit in "${UNITS[@]}"; do
+  if ! systemctl is-active --quiet "${unit}"; then
+    echo "error: ${unit} is not active after the restart" >&2
+    exit 1
+  fi
+done
+running="$(podman inspect --format '{{.ImageName}}' "${APP_CONTAINER}" 2>/dev/null || true)"
+if [[ "${running}" != "${WANT}" ]]; then
+  echo "error: ${APP_CONTAINER} runs '${running:-nothing}', not ${WANT}" >&2
+  exit 1
+fi
+echo "deployed ${running} (${UNITS[*]} active)"

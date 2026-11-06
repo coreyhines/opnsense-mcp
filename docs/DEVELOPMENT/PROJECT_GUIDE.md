@@ -9,9 +9,9 @@ Developer-focused orientation for current architecture and runtime paths.
 The project supports two operational modes using the same MCP tool implementation:
 
 - `STDIO`: local MCP process (`mcp_start.sh` or `python main.py`) for IDE clients.
-- `SSE`: centralized network service via `mcp-proxy` (`SSE -> stdio`) behind TLS.
+- Streamable HTTP: centralized network service at `/mcp` (`main.py --transport streamable-http`) behind Caddy TLS.
 
-`STDIO` is the default development path. `SSE` is the deployment path.
+`STDIO` is the default development path. Streamable HTTP is the deployment path.
 
 ## Core Architecture
 
