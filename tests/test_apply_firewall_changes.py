@@ -125,3 +125,61 @@ def test_toggle_fails_on_a_response_that_is_not_a_mapping() -> None:
 
     with pytest.raises(ResponseError, match="Toggle failed"):
         asyncio.run(client.toggle_firewall_rule("uuid-1", enabled=True))
+
+
+def _gated(client: OPNsenseClient, apply_body: Any) -> asyncio.Event:
+    """Make apply wait on an event so other calls can run inside its window."""
+    gate = asyncio.Event()
+
+    async def fake(method: str, endpoint: str, **kwargs: Any) -> Any:
+        if "filter/apply" in endpoint:
+            await gate.wait()
+            if isinstance(apply_body, Exception):
+                raise apply_body
+            return apply_body
+        return {"status": "failed", "message": f"other call {endpoint}"}
+
+    client._make_request = fake  # type: ignore[method-assign]
+    return gate
+
+
+def test_overlapping_applies_leave_make_request_untouched() -> None:
+    """Two concurrent applies once left the capture wrapper installed for good."""
+    client = _client()
+    gate = _gated(client, {"status": "ok"})
+    original = client._make_request
+
+    async def go() -> None:
+        first = asyncio.create_task(client.apply_firewall_changes())
+        second = asyncio.create_task(client.apply_firewall_changes())
+        await asyncio.sleep(0)
+        gate.set()
+        await asyncio.gather(first, second)
+
+    asyncio.run(go())
+    assert client._make_request is original
+
+
+def test_failure_detail_comes_from_the_apply_not_a_concurrent_call() -> None:
+    """A failed apply must not borrow the body of a request that ran mid-apply.
+
+    The apply fails in transport, so it has no body of its own. The capture
+    wrapper then reported the concurrent call's message as the apply's.
+    """
+    client = _client()
+    gate = _gated(client, ResponseError("connection reset"))
+
+    async def go() -> BaseException | None:
+        task = asyncio.create_task(client.apply_firewall_changes())
+        await asyncio.sleep(0)
+        await client._make_request("GET", "/api/core/firmware/status")
+        gate.set()
+        try:
+            await task
+        except ResponseError as exc:
+            return exc
+        return None
+
+    exc = asyncio.run(go())
+    assert isinstance(exc, ResponseError)
+    assert "other call" not in str(exc)
