@@ -538,22 +538,54 @@ class MkGifTool(_GifToolBase):
             return {"status": "error", "error": str(exc)}
 
         applied, apply_error = await self._apply(params, GIF["reconfigure"], "GIF")
+        uuid = result.get("uuid", "") if isinstance(result, dict) else ""
+
+        # Re-read rather than inferring the device from a reconfigure that
+        # answered ok. add_item may also return a uuid without `gifif`, so the
+        # device name comes from the stored row.
+        stored: dict[str, Any] | None = None
+        reread_error = ""
+        try:
+            stored = next(
+                (
+                    row
+                    for row in await self._rows(GIF["search"], what="GIF devices")
+                    if uuid and row.get("uuid") == uuid
+                ),
+                None,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("GIF created but the re-read failed: %s", exc)
+            reread_error = str(exc)
+
+        device = (stored or {}).get("gifif") or (
+            result.get("gifif", "") if isinstance(result, dict) else ""
+        )
+        verified = stored is not None
+        if not verified:
+            note = (
+                "add_item answered, but the device is not in a re-read of "
+                "gif_settings, so it may not exist."
+            )
+        elif applied:
+            note = f"Created and reconfigured; {device or 'the device'} re-reads."
+        else:
+            note = "Staged. Assign and address the interface separately."
 
         out: dict[str, Any] = {
             "status": "success",
             "created": True,
-            "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
+            "uuid": uuid,
             "applied": applied,
-            "note": (
-                "Created and reconfigured, so the device exists on the system."
-                if applied
-                else "Staged. Assign and address the interface separately."
-            ),
+            "verified": verified,
+            "note": note,
         }
-        if isinstance(result, dict) and result.get("gifif"):
-            out["device"] = result["gifif"]
+        if device:
+            out["device"] = device
         if apply_error:
             out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
         return out
 
 

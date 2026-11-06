@@ -389,4 +389,20 @@ def test_only_the_slice_fixture_is_scoped() -> None:
     """Recorded so scoping stays the exception it was argued for."""
     scoped = {name for name, source in SHAPE_SOURCES.items() if source.scoped}
 
-    assert scoped == {"wg_interfaces_info_wg0.json"}
+    # The two log-filter fixtures (#71) are slices too: log rows vary their key
+    # set by protocol and family, and the overview capture keeps three keys.
+    assert scoped == {
+        "wg_interfaces_info_wg0.json",
+        "firewall_log_rows.json",
+        "interfaces_overview_export_min.json",
+    }
+
+
+def test_a_bare_list_payload_is_read_as_rows() -> None:
+    """firewall/log and overview/export answer with a list, not {"rows": ...}.
+
+    Without this, a live list read as no keys and every fixture key looked
+    like drift.
+    """
+    assert _row_keys([{"a": 1}, {"b": 2}]) == {"a", "b"}
+    assert _row_keys({"rows": [{"a": 1}]}) == {"a"}
