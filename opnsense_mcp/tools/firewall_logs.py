@@ -108,6 +108,7 @@ class FirewallLogsTool:
             fetch_limit = _overfetch_window(limit) if filters_active else limit
 
             logs = await self.client.get_firewall_logs(limit=fetch_limit)
+            wanted_devices = await self._devices_for(interface) if interface else set()
 
             def match(log: dict[str, Any]) -> bool:
                 norm = normalize_log_dict(log)
@@ -132,7 +133,7 @@ class FirewallLogsTool:
                     and norm.get("dst_port") != filter_dst_port
                 ):
                     return False
-                return not (interface and norm.get("interface") != interface)
+                return not (interface and norm.get("interface") not in wanted_devices)
 
         except FirewallLogsFetchError:
             raise
@@ -144,6 +145,35 @@ class FirewallLogsTool:
             if filters_active and limit and limit > 0:
                 matched = matched[:limit]
             return matched
+
+    async def _devices_for(self: "FirewallLogsTool", name: str) -> set[str]:
+        """Device names a caller's interface name can mean.
+
+        filterlog rows carry the device (`vtnet0`, `vlan01`), while callers say
+        `wan`, `opt3` or a description such as `VLAN3LAB`. Comparing the two
+        unchanged made `interface="wan"` match nothing. The name is kept as-is
+        too, so passing a device still works; an unreadable overview degrades
+        to that rather than failing the read.
+        """
+        devices = {name}
+        try:
+            overview = await self.client._make_request(
+                "GET", "/api/interfaces/overview/export"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Interface overview unavailable for log filter: %s", exc)
+            return devices
+        wanted = name.strip().lower()
+        for entry in overview if isinstance(overview, list) else []:
+            if not isinstance(entry, dict) or not entry.get("device"):
+                continue
+            names = {
+                str(entry.get("identifier") or "").lower(),
+                str(entry.get("description") or "").lower(),
+            }
+            if wanted in names - {""}:
+                devices.add(str(entry["device"]))
+        return devices
 
     async def get_logs(
         self: "FirewallLogsTool", *args: object, **kwargs: object

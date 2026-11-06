@@ -17,14 +17,7 @@ from tests._schema_ast import execute_ast, leaf_tools, param_keys_read
 # Narrow allowlist for reads that pre-date this check and live outside B3's
 # owned files. Each entry is (tool.name, param_key) with a reason. Do not grow
 # this to paper over a new tool that forgot its schema — fix the schema.
-_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
-    {
-        # Optional logical-name resolve; schema is empty. Not B3.
-        ("interface_list", "resolve"),
-        # Capture mode (text/raw); schema never declared it. Not B3.
-        ("packet_capture", "mode"),
-    }
-)
+_ALLOWLIST: frozenset[tuple[str, str]] = frozenset()
 
 
 def test_every_params_key_execute_reads_is_in_input_schema() -> None:
