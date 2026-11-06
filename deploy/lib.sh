@@ -50,10 +50,25 @@ load_environment_file() {
     [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
     key="${BASH_REMATCH[1]}"
     raw_value="${BASH_REMATCH[2]}"
+    # A value the caller set explicitly wins over the file. Overwriting it
+    # discarded `sudo OPNSENSE_MCP_IMAGE_REPO=... bash deploy/install.sh`.
+    [[ -n "${!key:-}" ]] && continue
     value="$(parse_env_value "${raw_value}")"
     printf -v "${key}" '%s' "${value}"
     export "${key?}"
   done <"${file}"
+}
+
+# Write a first environment file from the example, rooted at install_root.
+# The image keys are left out: the example's placeholders
+# (localhost/opnsense-mcp, 1.0.0) otherwise read back as settings, which
+# skipped the auto tag and discarded a registry the operator named. The
+# installer writes both keys once it has resolved them.
+seed_environment_file() {
+  local example=$1 dest=$2 install_root=$3
+  sed -e "s|/opt/containerdata/opnsense-mcp|${install_root}|g" \
+    -e '/^OPNSENSE_MCP_IMAGE_REPO=/d' -e '/^OPNSENSE_MCP_IMAGE_TAG=/d' \
+    "${example}" >"${dest}"
 }
 
 update_env_key() {

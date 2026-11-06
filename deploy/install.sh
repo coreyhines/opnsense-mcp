@@ -336,8 +336,7 @@ pull_image() {
 
 ENV_HOST_PATH="${INSTALL_ROOT}/environment"
 if [[ ! -f "${ENV_HOST_PATH}" ]]; then
-  sed "s|/opt/containerdata/opnsense-mcp|${INSTALL_ROOT}|g" \
-    "${SRC_DIR}/deploy/environment.example" >"${ENV_HOST_PATH}"
+  seed_environment_file "${SRC_DIR}/deploy/environment.example" "${ENV_HOST_PATH}" "${INSTALL_ROOT}"
   chmod 600 "${ENV_HOST_PATH}"
   # The server refuses to start an HTTP listener without a bearer secret.
   mcp_secret="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
