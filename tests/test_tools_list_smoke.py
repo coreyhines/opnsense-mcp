@@ -1,14 +1,13 @@
 """The post-deploy tools/list smoke catches what left Cursor with zero tools.
 
 Issues #53 and #55: a stale image advertised a type union and Cursor loaded
-nothing, while every repo test passed. `deploy/ci/tools_list_smoke.py` reads
+nothing, while every repo test passed. `opnsense_mcp/deploy_smoke.py` reads
 the running server. These pin its checks, and one run against a real local
 server proves it can speak MCP at all.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import secrets
 import socket
@@ -19,11 +18,9 @@ from pathlib import Path
 
 import pytest
 
+from opnsense_mcp import deploy_smoke as smoke
+
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / "deploy" / "ci" / "tools_list_smoke.py"
-_spec = importlib.util.spec_from_file_location("tools_list_smoke", SCRIPT)
-smoke = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(smoke)
 
 
 def _tool(props: dict) -> dict:
@@ -152,3 +149,29 @@ def test_a_wrong_bearer_is_unreadable(
     url, _ = live_server
     monkeypatch.setenv("MCP_SECRET_KEY", "wrong")
     assert smoke.main([url]) == 2
+
+
+def test_the_module_runs_with_python_dash_m_and_imports_nothing_from_the_package() -> (
+    None
+):
+    """The deploy job runs it in the container; keep it free of package imports."""
+    import ast
+
+    tree = ast.parse((REPO / "opnsense_mcp" / "deploy_smoke.py").read_text())
+    imported = {
+        (n.module or "").split(".")[0]
+        if isinstance(n, ast.ImportFrom)
+        else a.name.split(".")[0]
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.Import, ast.ImportFrom))
+        for a in (n.names if isinstance(n, ast.Import) else [None])
+    }
+    assert "opnsense_mcp" not in imported
+    result = subprocess.run(
+        [sys.executable, "-m", "opnsense_mcp.deploy_smoke", "--help"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0

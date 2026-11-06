@@ -7,11 +7,17 @@ because tests check the code, not the deployment. This checks the deployment:
 it speaks MCP to the live endpoint and fails on the schema shapes that make
 Cursor/Zod drop every tool.
 
-    MCP_SECRET_KEY=... python3 deploy/ci/tools_list_smoke.py https://host/mcp \\
-        [--min-tools 15] [--expect-version 1.3.2]
+    python3 -m opnsense_mcp.deploy_smoke [URL] [--min-tools 15] [--expect-version 1.3.2]
 
-The bearer comes from the environment, never argv, so it does not show in
-the process list. Standard library only, so it runs on any deploy host.
+It ships in the image, so a deploy job can run it inside the container it
+just started, against that container's own listener and bearer:
+
+    podman exec opnsense-mcp-app python3 -m opnsense_mcp.deploy_smoke \\
+        --min-tools 15 --expect-version 1.3.2
+
+URL defaults to http://127.0.0.1:8765/mcp. The bearer comes from
+MCP_SECRET_KEY in the environment, never argv, so it does not show in the
+process list and never leaves the container. Standard library only.
 Exit 0 when clean, 1 on findings, 2 when the endpoint could not be read.
 """
 
@@ -26,7 +32,7 @@ import urllib.request
 from typing import Any
 
 # Mirrors opnsense_mcp.utils.grouped_tool.FORBIDDEN_WIRE_KEYS; a test keeps
-# the two equal, since this script must not import the package.
+# the two equal. Not imported, so this module stays stdlib-only.
 FORBIDDEN_PROPERTY_NAMES = frozenset({"constructor", "__proto__", "prototype"})
 
 
@@ -68,7 +74,7 @@ def _post(
         headers["Mcp-Session-Id"] = session
     request = urllib.request.Request(url, json.dumps(body).encode(), headers)
     # Scheme restricted to http(s) by _require_http before any request.
-    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         sid = response.headers.get("Mcp-Session-Id") or session
         text = response.read().decode()
     if not text.strip():
@@ -115,7 +121,7 @@ def fetch(url: str, key: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
 def main(argv: list[str] | None = None) -> int:
     """Run the smoke against one endpoint."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("url")
+    parser.add_argument("url", nargs="?", default="http://127.0.0.1:8765/mcp")
     parser.add_argument("--min-tools", type=int, default=1)
     parser.add_argument(
         "--expect-version",

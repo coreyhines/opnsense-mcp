@@ -64,7 +64,11 @@ old image after the schema fixes had built.
 3. Check the running server, not the build:
 
    ```bash
-   MCP_SECRET_KEY=... python3 deploy/ci/tools_list_smoke.py \
+   # on the host, inside the container it just started:
+   podman exec opnsense-mcp-app python3 -m opnsense_mcp.deploy_smoke \
+     --min-tools 15 --expect-version X.Y.Z
+   # or from anywhere with the key:
+   MCP_SECRET_KEY=... python3 -m opnsense_mcp.deploy_smoke \
      https://<your-hostname>/mcp --min-tools 15 --expect-version X.Y.Z
    ```
 
