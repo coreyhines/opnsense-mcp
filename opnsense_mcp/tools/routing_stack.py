@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+from opnsense_mcp.tools.ipv6_stack import _refuse_if_truncated, _TruncatedListingError
 from opnsense_mcp.utils.apply import ApplyError, run_apply
 from opnsense_mcp.utils.mvc_merge import flatten_mvc_node
 from opnsense_mcp.utils.shaper_write_helpers import (
@@ -67,6 +68,7 @@ ROUTE = {
 }
 
 INTERFACE_OVERVIEW = "/api/interfaces/overview/export"
+ASSIGNMENT_SEARCH = "/api/interfaces/assignment/search_item"
 
 # search_gateway mixes live monitoring into the configuration row.
 _GATEWAY_CONFIG_FIELDS = (
@@ -336,12 +338,32 @@ class RmVlanTool(_RoutingToolBase):
                 return {"status": "error", "error": f"VLAN {uuid} not found"}
 
             device = (row.get("vlanif") or "").split(" ")[0]
+            # The assignment model is authoritative: overview can miss a row
+            # or name the device differently, and a false negative deletes an
+            # assigned device, leaving a locked orphan interface. Overview
+            # stays as a second check.
+            assignments = await self.client._make_request(
+                "POST",
+                ASSIGNMENT_SEARCH,
+                json={"current": 1, "rowCount": 5000},
+            )
+            _refuse_if_truncated(assignments, "interface assignments")
+            assigned = [
+                r.get("uuid", "")
+                for r in (
+                    assignments.get("rows", []) if isinstance(assignments, dict) else []
+                )
+                if device and isinstance(r, dict) and r.get("if") == device
+            ]
             overview = await self.client._make_request("GET", INTERFACE_OVERVIEW)
             entries = overview if isinstance(overview, list) else []
-            assigned = [
+            assigned += [
                 entry.get("identifier", "")
                 for entry in entries
-                if isinstance(entry, dict) and entry.get("device") == device
+                if device
+                and isinstance(entry, dict)
+                and entry.get("device") == device
+                and entry.get("identifier", "") not in assigned
             ]
             if assigned:
                 return {
@@ -351,11 +373,14 @@ class RmVlanTool(_RoutingToolBase):
                         f"Unassign it first; deleting the device would take the "
                         f"interface with it."
                     ),
+                    "assigned_to": assigned,
                 }
 
             await self.client._make_request(
                 "POST", f"{VLAN['delete']}/{uuid}", call_class="write", json={}
             )
+        except _TruncatedListingError as exc:
+            return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to delete VLAN")
             return {"status": "error", "error": str(exc)}
