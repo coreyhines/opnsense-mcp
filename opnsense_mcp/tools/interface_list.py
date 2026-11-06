@@ -13,7 +13,20 @@ class InterfaceListTool:
 
     name = "interface_list"
     description = "Get available interface names for firewall rules"
-    input_schema = {"properties": {}, "required": [], "type": "object"}
+    input_schema = {
+        "properties": {
+            "resolve": {
+                "description": (
+                    "Logical name or description to resolve to its device, "
+                    "e.g. WAN; the result gains resolved_device"
+                ),
+                "optional": True,
+                "type": "string",
+            },
+        },
+        "required": [],
+        "type": "object",
+    }
 
     def __init__(self, client: OPNsenseClient | None) -> None:
         """

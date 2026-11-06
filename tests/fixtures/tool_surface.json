@@ -793,7 +793,13 @@
   "interface_list": {
     "description": "Get available interface names for firewall rules",
     "inputSchema": {
-      "properties": {},
+      "properties": {
+        "resolve": {
+          "description": "Logical name or description to resolve to its device, e.g. WAN; the result gains resolved_device",
+          "optional": true,
+          "type": "string"
+        }
+      },
       "required": [],
       "type": "object"
     }
@@ -1981,6 +1987,11 @@
         },
         "local_path": {
           "description": "Local path to save PCAP (optional)",
+          "optional": true,
+          "type": "string"
+        },
+        "mode": {
+          "description": "text (default): readable tcpdump output; raw: pcap bytes",
           "optional": true,
           "type": "string"
         },

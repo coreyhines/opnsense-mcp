@@ -53,6 +53,13 @@ class PacketCaptureTool2:
                 "optional": True,
                 "type": "string",
             },
+            "mode": {
+                "description": (
+                    "text (default): readable tcpdump output; raw: pcap bytes"
+                ),
+                "optional": True,
+                "type": "string",
+            },
             "preview_bytes": {
                 "description": "Number of bytes to preview (default: 1000)",
                 "optional": True,
