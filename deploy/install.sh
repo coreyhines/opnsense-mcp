@@ -453,10 +453,18 @@ else
     echo "docker not found in PATH" >&2
     exit 1
   fi
-  (cd "${SRC_DIR}" && docker compose -p opnsense-mcp -f deploy/docker-compose.yml up -d --build \
-    --build-arg "GIT_COMMIT=$(git -C "${SRC_DIR}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)" \
-    --build-arg "GIT_REF=${GIT_REF}" \
-    --build-arg "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+  # `compose up` has no --build-arg, so the old one-liner errored before
+  # starting anything. Build args and paths reach the compose file as
+  # variables it interpolates.
+  GIT_COMMIT="$(git -C "${SRC_DIR}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
+  BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  export GIT_COMMIT GIT_REF BUILD_TIME
+  export OPNSENSE_MCP_INSTALL_ROOT="${INSTALL_ROOT}"
+  export OPNSENSE_MCP_TLS_CERTS="${OPNSENSE_MCP_TLS_CERTS:-/opt/certs/wild}"
+  export OPNSENSE_MCP_CADDY_IMAGE="${CADDY_IMAGE}"
+  compose=(docker compose -p opnsense-mcp -f "${SRC_DIR}/deploy/docker-compose.yml")
+  "${compose[@]}" build
+  "${compose[@]}" up -d
 fi
 
 echo "Install finished (${RUNTIME})." >&2
