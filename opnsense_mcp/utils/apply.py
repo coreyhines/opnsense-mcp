@@ -42,7 +42,18 @@ STATUS_KEYS = ("status", "result", "response")
 
 
 class ApplyError(Exception):
-    """The write succeeded; applying it did not."""
+    """The write succeeded; applying it did not.
+
+    ``response`` is the body reconfigure answered with, or ``None`` when the
+    request itself failed. Callers read the detail from here: the client is
+    shared by concurrent calls, so wrapping its ``_make_request`` to capture
+    the body picked up other requests' responses and could stay installed.
+    """
+
+    def __init__(self, message: str, response: Any = None) -> None:
+        """Keep the reconfigure body alongside the message."""
+        super().__init__(message)
+        self.response = response
 
 
 async def run_apply(client: Any, endpoint: str) -> dict[str, Any]:
@@ -75,9 +86,13 @@ async def run_apply(client: Any, endpoint: str) -> dict[str, Any]:
     # picking the success out of {"status": "ok", "result": "failed"} is exactly
     # the reading this module exists to prevent.
     if any(value in APPLY_FAILED for value in reported.values()):
-        raise ApplyError(f"{endpoint} reported {response!r} rather than success")
+        raise ApplyError(
+            f"{endpoint} reported {response!r} rather than success", response
+        )
     if not any(value in APPLY_OK for value in reported.values()):
         # Includes the payload that carries no status at all: silence is not
         # consent, because the write has already happened by this point.
-        raise ApplyError(f"{endpoint} reported {response!r} rather than success")
+        raise ApplyError(
+            f"{endpoint} reported {response!r} rather than success", response
+        )
     return response if isinstance(response, dict) else {}
