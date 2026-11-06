@@ -137,3 +137,63 @@ def test_the_connect_path_passes_the_hostname_as_an_alternate() -> None:
     assert HOSTNAME in policy.alternates
     # Still connects to the resolved IP, so the IPv6 timeout fix survives.
     assert fake_client.connect.call_args.kwargs["hostname"] == RESOLVED_IP
+
+
+PORT = 2222
+
+
+def test_a_non_default_port_entry_is_accepted(host_key: paramiko.PKey) -> None:
+    """`ssh -p 2222 fw.example` records `[fw.example]:2222`; paramiko asks for
+    `[192.0.2.1]:2222`. The bare-hostname alternate never matched that."""
+    from opnsense_mcp.utils.paramiko_ssh import HostnameOrAddressPolicy
+    from opnsense_mcp.utils.ssh_client import known_hosts_names
+
+    client = _client_with_known_hosts({f"[{HOSTNAME}]:{PORT}": host_key})
+    policy = HostnameOrAddressPolicy(known_hosts_names(HOSTNAME, PORT))
+
+    policy.missing_host_key(client, f"[{RESOLVED_IP}]:{PORT}", host_key)
+
+
+def test_a_non_default_port_entry_with_the_wrong_key_is_rejected(
+    host_key: paramiko.PKey,
+) -> None:
+    """The port-qualified alternate must still compare the key."""
+    from opnsense_mcp.utils.paramiko_ssh import HostnameOrAddressPolicy
+    from opnsense_mcp.utils.ssh_client import known_hosts_names
+
+    other = paramiko.RSAKey.generate(2048)
+    client = _client_with_known_hosts({f"[{HOSTNAME}]:{PORT}": other})
+    policy = HostnameOrAddressPolicy(known_hosts_names(HOSTNAME, PORT))
+
+    with pytest.raises(paramiko.SSHException):
+        policy.missing_host_key(client, f"[{RESOLVED_IP}]:{PORT}", host_key)
+
+
+def test_port_22_adds_no_bracketed_name() -> None:
+    """OpenSSH files port-22 hosts under the bare name only."""
+    from opnsense_mcp.utils.ssh_client import known_hosts_names
+
+    assert known_hosts_names(HOSTNAME, 22) == [HOSTNAME]
+
+
+def test_the_client_passes_the_port_qualified_name() -> None:
+    """Pin the call site: the helper is useless if connect() ignores it."""
+    from unittest.mock import MagicMock, patch
+
+    from opnsense_mcp.utils.ssh_client import OPNsenseSSHClient
+
+    ssh = OPNsenseSSHClient.__new__(OPNsenseSSHClient)
+    ssh.ssh_host, ssh.ssh_port, ssh.address_family = HOSTNAME, PORT, "any"
+    ssh.ssh_user, ssh.ssh_key, ssh.connect_timeout = "root", None, 1
+    with (
+        patch(
+            "opnsense_mcp.utils.ssh_client._resolve_host_ip", return_value=RESOLVED_IP
+        ),
+        patch("opnsense_mcp.utils.ssh_client.paramiko.SSHClient", MagicMock()),
+        patch(
+            "opnsense_mcp.utils.ssh_client.apply_paramiko_host_key_policy"
+        ) as apply_policy,
+    ):
+        ssh.get_ssh_client()
+
+    assert f"[{HOSTNAME}]:{PORT}" in apply_policy.call_args.kwargs["alternates"]

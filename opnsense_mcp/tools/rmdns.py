@@ -18,7 +18,7 @@ class RmdnsTool:
         "properties": {
             "uuid": {
                 "type": "string",
-                "description": "UUID of the host override to delete (from dns tool output)",
+                "description": "UUID of the host override to delete (from dns_override(action='list'))",
             },
         },
         "required": ["uuid"],

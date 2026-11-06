@@ -217,3 +217,88 @@ def test_is_interactive_shell_says_yes_on_a_real_terminal() -> None:
     os.close(fd)
 
     assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+
+
+# --- first install keeps the operator's image settings (#103) --------------
+
+EXAMPLE_ENV = REPO_ROOT / "deploy" / "environment.example"
+
+
+def _first_run_image(tmp_path: Path, caller_env: str) -> dict[str, str]:
+    """Seed a fresh environment file, then resolve image settings the way
+    install.sh does: load the file, then take the image keys from it."""
+    env_file = tmp_path / "environment"
+    script = (
+        f"{caller_env}\n"
+        'IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-localhost/opnsense-mcp}"\n'
+        'IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-}"\n'
+        f'seed_environment_file "{EXAMPLE_ENV}" "{env_file}" "{tmp_path}"\n'
+        f'load_environment_file "{env_file}"\n'
+        'if [[ -z "${IMAGE_TAG}" ]]; then\n'
+        f'  load_environment_file "{env_file}"\n'
+        '  IMAGE_TAG="${OPNSENSE_MCP_IMAGE_TAG:-}"\n'
+        '  IMAGE_REPO="${OPNSENSE_MCP_IMAGE_REPO:-${IMAGE_REPO}}"\n'
+        "fi\n"
+        'printf "%s|%s" "${IMAGE_REPO}" "${IMAGE_TAG}"'
+    )
+    result = _run_lib_snippet(script)
+    assert result.returncode == 0, result.stderr
+    repo, tag = result.stdout.split("|")
+    return {"repo": repo, "tag": tag}
+
+
+def test_first_install_keeps_a_named_registry_and_leaves_the_tag_to_auto(
+    tmp_path: Path,
+) -> None:
+    """The issue's reproduction: the example's placeholders used to win, giving
+    localhost/opnsense-mcp:1.0.0 for an operator who named a registry."""
+    got = _first_run_image(
+        tmp_path, "export OPNSENSE_MCP_IMAGE_REPO=registry.example/opnsense-mcp"
+    )
+
+    assert got == {"repo": "registry.example/opnsense-mcp", "tag": ""}
+
+
+def test_seeded_environment_carries_no_image_placeholders(tmp_path: Path) -> None:
+    env_file = tmp_path / "environment"
+    result = _run_lib_snippet(
+        f'seed_environment_file "{EXAMPLE_ENV}" "{env_file}" "/srv/omcp"'
+    )
+    assert result.returncode == 0, result.stderr
+    keys = {
+        line.split("=", 1)[0]
+        for line in env_file.read_text().splitlines()
+        if "=" in line and not line.lstrip().startswith("#")
+    }
+
+    assert "OPNSENSE_MCP_IMAGE_REPO" not in keys
+    assert "OPNSENSE_MCP_IMAGE_TAG" not in keys
+    assert "OPNSENSE_FIREWALL_HOST" in keys
+    assert "/opt/containerdata/opnsense-mcp" not in env_file.read_text()
+
+
+def test_load_environment_file_lets_an_explicit_value_win(tmp_path: Path) -> None:
+    env_file = tmp_path / "environment"
+    env_file.write_text("OPNSENSE_MCP_IMAGE_TAG=1.0.0\nOPNSENSE_MCP_IP=10.0.0.5\n")
+    result = _run_lib_snippet(
+        "export OPNSENSE_MCP_IMAGE_TAG=1.3.1\n"
+        f'load_environment_file "{env_file}"\n'
+        'printf "%s|%s" "${OPNSENSE_MCP_IMAGE_TAG}" "${OPNSENSE_MCP_IP}"'
+    )
+
+    assert result.stdout == "1.3.1|10.0.0.5"
+
+
+def test_load_environment_file_fills_an_empty_value_from_the_file(
+    tmp_path: Path,
+) -> None:
+    """Set but empty is not an explicit choice; the file's value applies."""
+    env_file = tmp_path / "environment"
+    env_file.write_text("OPNSENSE_MCP_IMAGE_TAG=1.3.0\n")
+    result = _run_lib_snippet(
+        "export OPNSENSE_MCP_IMAGE_TAG=\n"
+        f'load_environment_file "{env_file}"\n'
+        'printf "%s" "${OPNSENSE_MCP_IMAGE_TAG}"'
+    )
+
+    assert result.stdout == "1.3.0"
