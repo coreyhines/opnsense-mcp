@@ -67,6 +67,8 @@ AUDIT_CODES: dict[str, str] = {
     "PIPES_MISSING": "Download or upload pipe missing or disabled",
     "SCHEDULER_NOT_FQCODEL": "WAN pipe scheduler is not FQ-CoDel",
     "SCHEDULER_DRIFT": "Config scheduler does not match runtime statistics scheduler",
+    "PIPE_NOT_IN_RUNTIME": "Enabled pipe is configured but absent from runtime statistics",
+    "STATISTICS_UNAVAILABLE": "Runtime statistics unreadable; config-vs-kernel checks skipped",
     "IPV6_MISSING": "Missing paired IPv6 shaper rules for WAN in/out",
     "BW_ISP_RATE": "Pipe bandwidth exceeds 85–95% of reference ISP rate",
     "BW_EXCEEDS_LINE_RATE": "Pipe bandwidth exceeds WAN interface physical line rate",
