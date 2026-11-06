@@ -137,6 +137,98 @@ async def test_mode_allows_hybrid() -> None:
     assert [c for c in calls if "source_nat/set" in c["endpoint"]]
 
 
+def _mode(selected: str) -> dict[str, Any]:
+    return {
+        "filter": {
+            "general": {
+                "snat_mode": {
+                    key: {"value": key, "selected": int(key == selected)}
+                    for key in ("automatic", "hybrid", "advanced", "disabled")
+                }
+            }
+        }
+    }
+
+
+def _reads(*modes: str) -> Any:
+    """Successive source_nat/get answers: before the set, then the re-read."""
+    answers = iter(_mode(m) for m in modes)
+    return lambda: next(answers)
+
+
+@pytest.mark.asyncio
+async def test_mode_set_reports_the_re_read_not_the_request() -> None:
+    """The set used to echo the wanted mode back without reading it."""
+    client = _client()
+    _stub(client, {"source_nat/get": _reads("automatic", "automatic")})
+
+    result = await NatOutboundModeTool(client).execute(
+        {"action_mode": "set", "mode": "hybrid"}
+    )
+
+    assert result["status"] == "success"
+    assert result["verified"] is False
+    assert result["mode"] == "automatic"
+    assert result["requested"] == "hybrid"
+
+
+@pytest.mark.asyncio
+async def test_mode_set_without_apply_stages_only() -> None:
+    client = _client()
+    calls = _stub(client, {"source_nat/get": _reads("automatic", "hybrid")})
+
+    result = await NatOutboundModeTool(client).execute(
+        {"action_mode": "set", "mode": "hybrid"}
+    )
+
+    assert result["verified"] is True
+    assert result["mode"] == "hybrid"
+    assert result["previous"] == "automatic"
+    assert result["applied"] is False
+    assert not [c for c in calls if "filter/apply" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_mode_set_with_apply_reloads_the_filter() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "source_nat/get": _reads("automatic", "hybrid"),
+            "filter/apply": {"status": "ok"},
+        },
+    )
+
+    result = await NatOutboundModeTool(client).execute(
+        {"action_mode": "set", "mode": "hybrid", "apply": True}
+    )
+
+    assert result["applied"] is True
+    assert result["verified"] is True
+    assert [c for c in calls if "filter/apply" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_mode_set_reports_a_failed_reload_as_not_applied() -> None:
+    """The set succeeded, so status stays success; the reload is what failed."""
+    client = _client()
+    _stub(
+        client,
+        {
+            "source_nat/get": _reads("automatic", "hybrid"),
+            "filter/apply": {"status": "failed"},
+        },
+    )
+
+    result = await NatOutboundModeTool(client).execute(
+        {"action_mode": "set", "mode": "hybrid", "apply": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    assert "apply_error" in result
+
+
 # --- rules -----------------------------------------------------------------
 
 
