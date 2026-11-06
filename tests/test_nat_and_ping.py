@@ -137,6 +137,98 @@ async def test_mode_allows_hybrid() -> None:
     assert [c for c in calls if "source_nat/set" in c["endpoint"]]
 
 
+def _mode(selected: str) -> dict[str, Any]:
+    return {
+        "filter": {
+            "general": {
+                "snat_mode": {
+                    key: {"value": key, "selected": int(key == selected)}
+                    for key in ("automatic", "hybrid", "advanced", "disabled")
+                }
+            }
+        }
+    }
+
+
+def _reads(*modes: str) -> Any:
+    """Successive source_nat/get answers: before the set, then the re-read."""
+    answers = iter(_mode(m) for m in modes)
+    return lambda: next(answers)
+
+
+@pytest.mark.asyncio
+async def test_mode_set_reports_the_re_read_not_the_request() -> None:
+    """The set used to echo the wanted mode back without reading it."""
+    client = _client()
+    _stub(client, {"source_nat/get": _reads("automatic", "automatic")})
+
+    result = await NatOutboundModeTool(client).execute(
+        {"action_mode": "set", "mode": "hybrid"}
+    )
+
+    assert result["status"] == "success"
+    assert result["verified"] is False
+    assert result["mode"] == "automatic"
+    assert result["requested"] == "hybrid"
+
+
+@pytest.mark.asyncio
+async def test_mode_set_without_apply_stages_only() -> None:
+    client = _client()
+    calls = _stub(client, {"source_nat/get": _reads("automatic", "hybrid")})
+
+    result = await NatOutboundModeTool(client).execute(
+        {"action_mode": "set", "mode": "hybrid"}
+    )
+
+    assert result["verified"] is True
+    assert result["mode"] == "hybrid"
+    assert result["previous"] == "automatic"
+    assert result["applied"] is False
+    assert not [c for c in calls if "filter/apply" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_mode_set_with_apply_reloads_the_filter() -> None:
+    client = _client()
+    calls = _stub(
+        client,
+        {
+            "source_nat/get": _reads("automatic", "hybrid"),
+            "filter/apply": {"status": "ok"},
+        },
+    )
+
+    result = await NatOutboundModeTool(client).execute(
+        {"action_mode": "set", "mode": "hybrid", "apply": True}
+    )
+
+    assert result["applied"] is True
+    assert result["verified"] is True
+    assert [c for c in calls if "filter/apply" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_mode_set_reports_a_failed_reload_as_not_applied() -> None:
+    """The set succeeded, so status stays success; the reload is what failed."""
+    client = _client()
+    _stub(
+        client,
+        {
+            "source_nat/get": _reads("automatic", "hybrid"),
+            "filter/apply": {"status": "failed"},
+        },
+    )
+
+    result = await NatOutboundModeTool(client).execute(
+        {"action_mode": "set", "mode": "hybrid", "apply": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is False
+    assert "apply_error" in result
+
+
 # --- rules -----------------------------------------------------------------
 
 
@@ -181,6 +273,81 @@ async def test_create_is_idempotent_on_interface_and_source() -> None:
     )
 
     assert result["created"] is False
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+# Key shape and value formats from a live source_nat/search_rule row: an
+# empty destination means any, an empty target means the interface address.
+LIVE_SHAPED_ROWS = {
+    "rows": [
+        {
+            "uuid": NAT_UUID,
+            "interface": "wan",
+            "source_net": "FABRIC_INTERNAL",
+            "source_not": "",
+            "destination_net": "",
+            "destination_not": "",
+            "target": "",
+            "target_port": "",
+            "staticnatport": "0",
+            "enabled": "1",
+            "log": "",
+            "description": "fabric out",
+        }
+    ],
+    "total": 1,
+}
+
+
+@pytest.mark.asyncio
+async def test_create_refuses_an_existing_rule_with_a_different_target() -> None:
+    """The dedup used to report success and leave the asked-for target unwritten."""
+    client = _client()
+    calls = _stub(client, {"search_rule": LIVE_SHAPED_ROWS})
+
+    result = await MkNatOutboundTool(client).execute(
+        {"interface": "wan", "source_net": "FABRIC_INTERNAL", "target": "203.0.113.5"}
+    )
+
+    assert result["status"] == "error"
+    assert result["created"] is False
+    assert result["uuid"] == NAT_UUID
+    assert set(result["differs"]) == {"target"}
+    assert result["differs"]["target"]["requested"] == "203.0.113.5"
+    assert not [c for c in calls if "add_rule" in c["endpoint"]]
+
+
+@pytest.mark.asyncio
+async def test_create_refuses_a_different_static_port_or_destination() -> None:
+    client = _client()
+    _stub(client, {"search_rule": LIVE_SHAPED_ROWS})
+
+    result = await MkNatOutboundTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "FABRIC_INTERNAL",
+            "static_port": True,
+            "destination_net": "198.51.100.0/24",
+        }
+    )
+
+    assert result["status"] == "error"
+    assert set(result["differs"]) == {"staticnatport", "destination_net"}
+
+
+@pytest.mark.asyncio
+async def test_create_treats_an_empty_destination_as_any() -> None:
+    """search_rule sends '' where the rule was written with 'any'."""
+    client = _client()
+    calls = _stub(client, {"search_rule": LIVE_SHAPED_ROWS})
+
+    result = await MkNatOutboundTool(client).execute(
+        {"interface": "wan", "source_net": "FABRIC_INTERNAL", "destination_net": "any"}
+    )
+
+    assert result["status"] == "success"
+    assert result["created"] is False
+    assert "differs" not in result
     assert not [c for c in calls if "add_rule" in c["endpoint"]]
 
 

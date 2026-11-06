@@ -485,3 +485,59 @@ async def test_assign_refuses_truncated_assignment_listing() -> None:
     result = await tool.execute({"device": "gif0"})
     assert result["status"] == "error"
     assert "truncated" in result["error"]
+
+
+_NEW_GIF = {
+    "parent": "wan",
+    "remote": "203.0.113.10",
+    "tunnel_local": "2001:db8:1::2",
+    "tunnel_remote": "2001:db8:1::1",
+    "tunnel_remote_net": 64,
+    "apply": True,
+}
+
+
+def _create_client(after: dict) -> AsyncMock:
+    """Empty search before the add, then `after`; add answers with a uuid only."""
+    searches = 0
+
+    async def fake(method: str, endpoint: str, **_: object) -> object:
+        nonlocal searches
+        if endpoint.endswith("search_item"):
+            searches += 1
+            return {"rows": []} if searches == 1 else after
+        if endpoint.endswith("add_item"):
+            return {"result": "saved", "uuid": GIF_UUID}
+        if endpoint.endswith("reconfigure"):
+            return {"status": "ok"}
+        return {}
+
+    client = AsyncMock()
+    client._make_request = AsyncMock(side_effect=fake)
+    return client
+
+
+@pytest.mark.asyncio
+async def test_mk_gif_does_not_claim_a_device_the_re_read_lacks() -> None:
+    """Reconfigure answering ok used to be reported as the device existing."""
+    tool = MkGifTool(_create_client({"rows": []}))
+
+    result = await tool.execute(dict(_NEW_GIF))
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+    assert result["verified"] is False
+    assert "device" not in result
+
+
+@pytest.mark.asyncio
+async def test_mk_gif_takes_the_device_name_from_the_re_read() -> None:
+    """add_item returned no gifif; the stored row supplies it."""
+    tool = MkGifTool(_create_client({"rows": [GIF_ROW]}))
+
+    result = await tool.execute(dict(_NEW_GIF))
+
+    assert result["verified"] is True
+    assert result["applied"] is True
+    assert result["device"] == "gif0"
+    assert result["uuid"] == GIF_UUID
