@@ -598,9 +598,25 @@ class RmBgpNeighborTool(_BgpToolBase):
                 ),
             }
         applied, apply_error = await self._apply_if_asked(params)
-        out = {"status": "success", "uuid": uuid, "deleted": True, "applied": applied}
+        out: dict[str, Any] = {
+            "status": "success",
+            "uuid": uuid,
+            "deleted": True,
+            "applied": applied,
+        }
         if apply_error:
             out["apply_error"] = apply_error
+        # Confirm the neighbour is gone from the model rather than trusting
+        # delNeighbor and reconfigure answering ok.
+        try:
+            remaining = {str(r.get("uuid", "")) for r in await self._neighbors()}
+        except Exception as exc:  # noqa: BLE001
+            out["verified"] = False
+            out["verify_error"] = str(exc)
+        else:
+            out["verified"] = uuid not in remaining
+            if not out["verified"]:
+                out["verify_error"] = "the neighbour is still listed after the delete"
         return out
 
 
@@ -825,4 +841,44 @@ class SetBgpGlobalTool(_BgpToolBase):
         }
         if apply_error:
             out["apply_error"] = apply_error
+        out.update(await self._verify_globals(general_changes, bgp_changes))
+        return out
+
+    async def _verify_globals(
+        self, general_changes: dict[str, Any], bgp_changes: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Re-read both nodes and report any written switch that did not stick.
+
+        A reconfigure answering ok says the request was accepted, not that FRR,
+        the daemon list and the BGP section hold what was written.
+        """
+        try:
+            general_doc = await self.client._make_request("GET", QUAGGA["general"])
+            bgp_doc = await self.client._make_request("GET", QUAGGA["bgp"])
+        except Exception as exc:  # noqa: BLE001
+            return {"verified": False, "verify_error": str(exc)}
+        general = (
+            general_doc.get("general", {}) if isinstance(general_doc, dict) else {}
+        )
+        bgp = bgp_doc.get("bgp", {}) if isinstance(bgp_doc, dict) else {}
+
+        def now(node: dict[str, Any], key: str) -> str:
+            if key == "daemons":
+                return ",".join(sorted(_selected(node.get(key))))
+            if key == "enabled":
+                return "1" if _on(node.get(key)) else "0"
+            return str(node.get(key, ""))
+
+        mismatches = {
+            f"{section}.{key}": {"written": str(wanted), "read_back": now(node, key)}
+            for section, node, changes in (
+                ("general", general, general_changes),
+                ("bgp", bgp, bgp_changes),
+            )
+            for key, wanted in changes.items()
+            if now(node, key) != str(wanted)
+        }
+        out: dict[str, Any] = {"verified": not mismatches}
+        if mismatches:
+            out["mismatches"] = mismatches
         return out
