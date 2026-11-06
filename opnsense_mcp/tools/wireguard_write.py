@@ -50,11 +50,13 @@ from typing import Any
 from opnsense_mcp.tools.wireguard import (
     WG_CLIENT,
     WG_SERVER,
+    WG_SERVICE,
     _WgToolBase,
     get_path,
     record_or_none,
     redact_keys,
     rows_or_refuse,
+    runtime_by_peer,
     selected_option_keys,
     split_list,
 )
@@ -782,6 +784,24 @@ class DeleteWgPeerTool(_WgWriteBase):
                 "message": token["message"],
             }
 
+        # Kernel rows carry no uuid, so the post-apply check joins on (device,
+        # peer name). Both have to be read before the record is gone.
+        kernel_keys: set[tuple[str, str]] | None = None
+        kernel_key_error = ""
+        try:
+            record = await self._get_record(WG_CLIENT["get"], "client", uuid)
+            members = selected_option_keys(record.get("servers"))
+            servers = rows_or_refuse(
+                await self._search(WG_SERVER["search"]), "wireguard instances"
+            )
+            device_of = {
+                str(s.get("uuid", "")): str(s.get("interface", "")) for s in servers
+            }
+            name = str(record.get("name", ""))
+            kernel_keys = {(device_of[u], name) for u in members if device_of.get(u)}
+        except Exception as exc:  # noqa: BLE001
+            kernel_key_error = redact_keys(exc)
+
         try:
             await self.client._make_request(
                 "POST",
@@ -826,7 +846,36 @@ class DeleteWgPeerTool(_WgWriteBase):
         else:
             result["verified"] = False
             result["verify_error"] = "the peer is still readable after the delete"
+        if result["verified"]:
+            result.update(await self._kernel_peer_gone(kernel_keys, kernel_key_error))
         return result
+
+    async def _kernel_peer_gone(
+        self, keys: set[tuple[str, str]] | None, key_error: str
+    ) -> dict[str, Any]:
+        """Config absence is not kernel absence: check `service/show` too."""
+        if keys is None:
+            return {
+                "verified": False,
+                "verify_error": (
+                    "could not read the peer's name and devices before the "
+                    f"delete, so the kernel was not checked: {key_error}"
+                ),
+            }
+        try:
+            show = rows_or_refuse(await self._search(WG_SERVICE["show"]), "wg runtime")
+        except Exception as exc:  # noqa: BLE001
+            return {"verified": False, "verify_error": redact_keys(exc)}
+        still = sorted(device for device, _ in keys & set(runtime_by_peer(show)))
+        if still:
+            return {
+                "verified": False,
+                "verify_error": (
+                    f"the config record is gone, but the kernel still holds the "
+                    f"peer on {', '.join(still)}"
+                ),
+            }
+        return {}
 
 
 class ToggleWgTool(_WgWriteBase):

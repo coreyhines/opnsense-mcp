@@ -40,8 +40,15 @@ def test_uninstall_targets_the_same_directory_install_writes() -> None:
 
 
 def test_deploy_host_patches_the_same_directory_install_writes() -> None:
-    """The image-tag rollout must edit the file systemd is actually reading."""
-    assert assign(DEPLOY_HOST_SH, "QUADLET_DIR") == assign(INSTALL_SH, "QUADLET_DIR")
+    """The image-tag rollout must edit the file systemd is actually reading.
+
+    deploy-host.sh takes an override (its tests point it at a temp dir), so
+    compare its default.
+    """
+    deploy = assign(DEPLOY_HOST_SH, "QUADLET_DIR")
+    match = re.fullmatch(r"\$\{OPNSENSE_MCP_QUADLET_DIR:-(.+)\}", deploy)
+    assert match, deploy
+    assert match.group(1) == assign(INSTALL_SH, "QUADLET_DIR")
 
 
 def test_scripts_treat_the_parent_as_the_legacy_location() -> None:

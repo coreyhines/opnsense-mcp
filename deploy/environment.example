@@ -17,6 +17,7 @@ OPNSENSE_FIREWALL_HOST=firewall.example.com
 OPNSENSE_API_KEY=
 OPNSENSE_API_SECRET=
 # OPNSENSE_SSL_VERIFY=false
+# OPNSENSE_CA_BUNDLE=/path/in/container/ca.pem  # verify against this CA; implies SSL_VERIFY
 # OPNSENSE_SSH_HOST=
 # OPNSENSE_SSH_USER=root
 # OPNSENSE_SSH_KEY=/path/in/container          # PRIVATE key path (not .pub)

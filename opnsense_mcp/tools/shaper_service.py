@@ -41,7 +41,7 @@ class ShaperStatisticsTool:
             "baseline_id": {
                 "type": "string",
                 "description": (
-                    "Optional baseline id from a prior shaper_statistics call "
+                    "Optional baseline id from a prior shaper(action='statistics') call "
                     "for pkts/bytes delta comparison"
                 ),
             },

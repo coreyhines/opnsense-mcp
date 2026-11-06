@@ -50,3 +50,28 @@ https://mcp.example.com/mcp
 - Configure secrets in `environment` (see `environment.example`).
 - Configure certs and hostname in [`TLS.md`](TLS.md).
 - Set `OPNSENSE_MCP_IMAGE_TAG` to a tag that exists in your registry.
+
+## Releasing to a pinned host, and checking the deploy
+
+The production host's quadlets live in a separate deploy repo, not here, so a new build
+reaches it only when someone bumps the pin. Issue #53 was a host left on an
+old image after the schema fixes had built.
+
+1. Tag `vX.Y.Z` here. CI builds and pushes `<registry>/opnsense-mcp:X.Y.Z`.
+2. Open a PR in the deploy repo changing `Image=` in
+   the host's `opnsense-mcp-app.container` to that tag. The owner
+   merges it, and that repo's CI deploys.
+3. Check the running server, not the build:
+
+   ```bash
+   # on the host, inside the container it just started:
+   podman exec opnsense-mcp-app python3 -m opnsense_mcp.deploy_smoke \
+     --min-tools 15 --expect-version X.Y.Z
+   # or from anywhere with the key:
+   MCP_SECRET_KEY=... python3 -m opnsense_mcp.deploy_smoke \
+     https://<your-hostname>/mcp --min-tools 15 --expect-version X.Y.Z
+   ```
+
+   It fails on a stale image (`serverInfo.version` differs) and on any schema
+   shape that makes Cursor load zero tools: type unions, arrays without
+   `items`, or a property named `constructor`, `__proto__` or `prototype`.
