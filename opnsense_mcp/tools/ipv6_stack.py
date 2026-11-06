@@ -380,19 +380,40 @@ class MkNptRuleTool(_V6ToolBase):
                 logger.warning("NPT rule created but filter reload failed: %s", exc)
                 apply_error = str(exc)
 
-        out = {
+        # Re-read rather than claim pf state from a reload that answered ok:
+        # an NPT rule can load and translate nothing (see CLAUDE.md, trackif),
+        # so the note says only what was observed.
+        uuid = result.get("uuid", "") if isinstance(result, dict) else ""
+        reread_error = ""
+        try:
+            stored = next(
+                (r for r in await self._rows(NPT["search"]) if r.get("uuid") == uuid),
+                None,
+            )
+        except Exception as exc:  # noqa: BLE001
+            stored, reread_error = None, str(exc)
+        verified = bool(uuid) and stored is not None
+        if not verified:
+            note = "add_rule answered, but the rule is not in a re-read of the rules."
+        elif applied:
+            note = (
+                "Rule created and present in config. Filter reloaded; pf itself "
+                "was not inspected (ipv6(action='list_npt') reports `translating` per rule)."
+            )
+        else:
+            note = "Rule created and present in config. Staged; run the apply step."
+        out: dict[str, Any] = {
             "status": "success",
             "created": True,
-            "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
+            "uuid": uuid,
             "applied": applied,
-            "note": (
-                "Rule created and loaded into the packet filter."
-                if applied
-                else "Staged. Run the apply step to load it."
-            ),
+            "verified": verified,
+            "note": note,
         }
         if apply_error:
             out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
         return out
 
 
@@ -987,7 +1008,7 @@ class MkLoopbackTool(_V6ToolBase):
                     "An address you intend this loopback to carry. Not written "
                     "here — OPNsense has no per-interface addressing API — but "
                     "echoed back as the exact step to perform. Use "
-                    "set_interface_address to actually write one"
+                    "interface_device(action='set_address') to actually write one"
                 ),
                 "optional": True,
             },

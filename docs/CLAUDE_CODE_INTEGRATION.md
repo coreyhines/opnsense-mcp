@@ -30,22 +30,24 @@ Fast path for using this MCP server from Claude Code.
 show system status
 ```
 
-## Optional: Centralized SSE Backend
+## Optional: Centralized HTTP Backend
 
 If you deploy centralized mode (`deploy/install.sh`), use:
 
 ```text
-https://<your-hostname>/sse
+https://<your-hostname>/mcp
 ```
 
-Use SSE only if your Claude Code MCP configuration supports remote SSE servers in your environment. Keep `STDIO` as fallback.
+This is streamable HTTP, with `Authorization: Bearer <MCP_SECRET_KEY>`:
+`claude mcp add --transport http opnsense https://<your-hostname>/mcp --header "Authorization: Bearer <key>"`.
+There is no `/sse` endpoint. Keep `STDIO` as fallback.
 
 ## Troubleshooting
 
 - `mcp_start.sh` not executable:
   `chmod +x /absolute/path/to/opnsense-mcp/mcp_start.sh`
 - Credentials missing: verify `~/.env`
-- SSE fails: verify cert trust, DNS, and Caddy config (`../deploy/TLS.md`)
+- HTTP connection fails: verify cert trust, DNS, the bearer key, and Caddy config (`../deploy/TLS.md`)
 
 ## Related Docs
 

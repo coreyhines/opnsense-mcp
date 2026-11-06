@@ -903,3 +903,30 @@ async def test_reconcile_npt_reports_unverified_when_one_rewrite_fails() -> None
     assert result["rewritten"] == 1
     assert [r["rewritten"] for r in result["results"]] == [True, False]
     assert result["verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_npt_create_is_unverified_when_the_rule_does_not_re_read() -> None:
+    """#153: the note claimed pf loaded the rule from a reload answering ok."""
+    client = _client()
+    _stub(
+        client,
+        {
+            "search_rule": {"rows": [], "total": 0},
+            "add_rule": {"result": "saved", "uuid": "npt-new"},
+            "filter/apply": {"status": "ok"},
+        },
+    )
+
+    result = await MkNptRuleTool(client).execute(
+        {
+            "interface": "wan",
+            "source_net": "fd0b:b022:1e5:2::/64",
+            "destination_net": "2001:db8:1e5:b502::/64",
+            "apply": True,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["applied"] is True
+    assert result["verified"] is False

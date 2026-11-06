@@ -195,9 +195,9 @@ def test_the_ssh_role_checks_the_directory_not_the_key_file() -> None:
     assert verdicts[SSH_KEY_DIR].reason is Reason.MISSING
 
 
-def test_collect_observations_records_unset_variables_plainly() -> None:
-    """An unset variable is None, not a guessed default."""
-    observations = collect_observations({"OPNSENSE_SSH_KEY": ""})
+def test_collect_observations_records_unset_variables_plainly(tmp_path: Path) -> None:
+    """Unset, with no default key in ~/.ssh either, is None."""
+    observations = collect_observations({"OPNSENSE_SSH_KEY": ""}, home=tmp_path)
     assert observations[SSH_KEY_DIR].configured_path is None
 
 
@@ -209,9 +209,9 @@ def test_a_leading_tilde_in_the_ssh_key_path_is_expanded(
     assert observations[SSH_KEY_DIR].configured_path == str(tmp_path / ".ssh")
 
 
-def test_the_report_covers_every_role_with_structured_fields() -> None:
+def test_the_report_covers_every_role_with_structured_fields(tmp_path: Path) -> None:
     """Every entry carries the fields callers assert on; no prose contract."""
-    report = runtime_paths_report({})
+    report = runtime_paths_report({}, home=tmp_path)
 
     assert set(report) == {BACKUP_DIR, SSH_KEY_DIR}
     for entry in report.values():
@@ -343,3 +343,90 @@ async def test_runtime_paths_join_the_existing_mcp_server_block() -> None:
         result["mcp_server"]
     )
     assert set(result["mcp_server"]["runtime_paths"]) == {BACKUP_DIR, SSH_KEY_DIR}
+
+
+# --- the key file and known_hosts, not just the directory (#104) -----------
+
+
+def _ssh_home(tmp_path: Path, *, key: bool, known_hosts: str | None) -> Path:
+    """A home whose ~/.ssh holds what the arguments say, and nothing else."""
+    ssh = tmp_path / ".ssh"
+    ssh.mkdir()
+    if key:
+        (ssh / "id_ed25519").write_text("not a real key\n")
+    if known_hosts is not None:
+        (ssh / "known_hosts").write_text(known_hosts)
+    return tmp_path
+
+
+_FW_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+
+
+def _verdict(env: dict[str, str], home: Path) -> Reason:
+    return judge_runtime_paths(collect_observations(env, home))[SSH_KEY_DIR].reason
+
+
+def test_an_empty_key_directory_is_not_ok(tmp_path: Path) -> None:
+    """Issue #20 shape: the mount exists and is empty. It used to report ok."""
+    home = _ssh_home(tmp_path, key=False, known_hosts=None)
+    env = {"OPNSENSE_SSH_KEY": str(home / ".ssh" / "id_ed25519")}
+
+    assert _verdict(env, home) is Reason.KEY_MISSING
+
+
+def test_a_key_without_known_hosts_is_not_ok(tmp_path: Path) -> None:
+    home = _ssh_home(tmp_path, key=True, known_hosts=None)
+    env = {"OPNSENSE_SSH_KEY": str(home / ".ssh" / "id_ed25519")}
+
+    assert _verdict(env, home) is Reason.KNOWN_HOSTS_MISSING
+
+
+def test_known_hosts_that_lacks_the_firewall_is_not_ok(tmp_path: Path) -> None:
+    home = _ssh_home(
+        tmp_path, key=True, known_hosts=f"other.example ssh-ed25519 {_FW_KEY}\n"
+    )
+    env = {
+        "OPNSENSE_SSH_KEY": str(home / ".ssh" / "id_ed25519"),
+        "OPNSENSE_FIREWALL_HOST": "fw.example",
+    }
+
+    assert _verdict(env, home) is Reason.HOST_NOT_KNOWN
+
+
+def test_a_non_default_port_needs_the_bracketed_entry(tmp_path: Path) -> None:
+    """Off port 22, OpenSSH records [host]:port; either form is accepted."""
+    home = _ssh_home(
+        tmp_path, key=True, known_hosts=f"[fw.example]:2222 ssh-ed25519 {_FW_KEY}\n"
+    )
+    env = {
+        "OPNSENSE_SSH_KEY": str(home / ".ssh" / "id_ed25519"),
+        "OPNSENSE_FIREWALL_HOST": "fw.example",
+        "OPNSENSE_SSH_PORT": "2222",
+    }
+
+    assert _verdict(env, home) is Reason.OK
+
+
+def test_a_complete_ssh_setup_is_ok(tmp_path: Path) -> None:
+    home = _ssh_home(
+        tmp_path, key=True, known_hosts=f"fw.example ssh-ed25519 {_FW_KEY}\n"
+    )
+    env = {
+        "OPNSENSE_SSH_KEY": str(home / ".ssh" / "id_ed25519"),
+        "OPNSENSE_FIREWALL_HOST": "fw.example",
+    }
+
+    assert _verdict(env, home) is Reason.OK
+
+
+def test_an_unset_key_variable_falls_back_to_the_default_key(tmp_path: Path) -> None:
+    """paramiko finds ~/.ssh/id_ed25519 on its own; not-configured was wrong."""
+    home = _ssh_home(
+        tmp_path, key=True, known_hosts=f"fw.example ssh-ed25519 {_FW_KEY}\n"
+    )
+    env = {"OPNSENSE_FIREWALL_HOST": "fw.example"}
+
+    observations = collect_observations(env, home)
+
+    assert observations[SSH_KEY_DIR].configured_path == str(home / ".ssh")
+    assert _verdict(env, home) is Reason.OK

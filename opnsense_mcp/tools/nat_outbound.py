@@ -90,6 +90,28 @@ class _NatToolBase:
         )
         return data.get("rows", []) if isinstance(data, dict) else []
 
+    async def _reread(self, uuid: str) -> tuple[dict[str, Any] | None, str]:
+        """The rule as the config now holds it, or None; plus any read error.
+
+        A filter reload answering ok says the request was accepted. What the
+        notes may claim is what this re-read shows, not pf state, which
+        nothing here inspects.
+        """
+        try:
+            rows = await self._rows()
+        except Exception as exc:  # noqa: BLE001
+            return None, str(exc)
+        return next((r for r in rows if r.get("uuid") == uuid), None), ""
+
+
+def _observed_note(applied: bool, verified: bool, done: str, missing: str) -> str:
+    """Word the result by what was observed, never by what pf was told."""
+    if not verified:
+        return missing
+    if applied:
+        return f"{done} Filter reloaded; pf itself was not inspected."
+    return f"{done} Staged; apply the filter to load it."
+
 
 def _selected(field: Any) -> str:
     """The selected key of an OPNsense enum object."""
@@ -99,6 +121,29 @@ def _selected(field: Any) -> str:
         if isinstance(meta, dict) and str(meta.get("selected")) in {"1", "True"}:
             return key
     return ""
+
+
+def _translation_differences(
+    row: dict[str, Any], requested: dict[str, str]
+) -> dict[str, dict[str, str]]:
+    """Fields where an existing rule would translate differently than asked.
+
+    search_rule sends an empty destination for "any"; treat the two as one.
+    """
+
+    def norm(field: str, value: Any) -> str:
+        text = str(value if value is not None else "").strip()
+        if field == "destination_net" and text.lower() in {"", "any"}:
+            return "any"
+        if field == "staticnatport":
+            return "1" if text in {"1", "True", "true"} else "0"
+        return text
+
+    return {
+        field: {"existing": str(row.get(field, "")), "requested": wanted}
+        for field, wanted in requested.items()
+        if norm(field, row.get(field)) != norm(field, wanted)
+    }
 
 
 class NatOutboundModeTool(_NatToolBase):
@@ -329,12 +374,33 @@ class MkNatOutboundTool(_NatToolBase):
                 ),
             }
 
+        requested = {
+            "destination_net": params.get("destination_net", "any"),
+            "target": params.get("target", ""),
+            "staticnatport": "1" if params.get("static_port") else "0",
+        }
+
         try:
             for row in await self._rows():
                 if (
                     row.get("interface") == interface
                     and row.get("source_net") == source_net
                 ):
+                    differs = _translation_differences(row, requested)
+                    if differs:
+                        # Reporting success here left the caller's target
+                        # unwritten with nothing saying so.
+                        return {
+                            "status": "error",
+                            "created": False,
+                            "uuid": row.get("uuid", ""),
+                            "differs": differs,
+                            "error": (
+                                "A rule for this interface and source already "
+                                "exists with different translation settings: "
+                                + ", ".join(sorted(differs))
+                            ),
+                        }
                     return {
                         "status": "success",
                         "created": False,
@@ -345,9 +411,7 @@ class MkNatOutboundTool(_NatToolBase):
             payload = {
                 "interface": interface,
                 "source_net": source_net,
-                "destination_net": params.get("destination_net", "any"),
-                "target": params.get("target", ""),
-                "staticnatport": "1" if params.get("static_port") else "0",
+                **requested,
                 "description": params.get("description", ""),
                 # Honored, not hardcoded: a rule asked for disabled used to be
                 # created live and translate traffic on the next apply.
@@ -371,19 +435,26 @@ class MkNatOutboundTool(_NatToolBase):
                 )
                 apply_error = str(exc)
 
-        out = {
+        uuid = result.get("uuid", "") if isinstance(result, dict) else ""
+        row, reread_error = await self._reread(uuid) if uuid else (None, "no uuid")
+        verified = row is not None
+        out: dict[str, Any] = {
             "status": "success",
             "created": True,
-            "uuid": result.get("uuid", "") if isinstance(result, dict) else "",
+            "uuid": uuid,
             "applied": applied,
-            "note": (
-                "Rule created and loaded into the packet filter."
-                if applied
-                else "Staged. Apply the filter to load it."
+            "verified": verified,
+            "note": _observed_note(
+                applied,
+                verified,
+                "Rule created and present in config.",
+                "add_rule answered, but the rule is not in a re-read of the rules.",
             ),
         }
         if apply_error:
             out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
         return out
 
 
@@ -438,19 +509,25 @@ class ToggleNatOutboundTool(_NatToolBase):
                 )
                 apply_error = str(exc)
 
+        row, reread_error = await self._reread(uuid)
+        verified = row is not None and str(row.get("enabled")) == state
         out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "enabled": bool(params["enabled"]),
             "applied": applied,
-            "note": (
-                "Rule state loaded into the packet filter."
-                if applied
-                else "Staged. Apply the filter to load it."
+            "verified": verified,
+            "note": _observed_note(
+                applied,
+                verified,
+                "Rule state reads back as set.",
+                "toggle answered, but a re-read does not show the requested state.",
             ),
         }
         if apply_error:
             out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
         return out
 
 
@@ -534,19 +611,25 @@ class RmNatOutboundTool(_NatToolBase):
                 )
                 apply_error = str(exc)
 
+        row, reread_error = await self._reread(uuid)
+        verified = row is None and not reread_error
         out: dict[str, Any] = {
             "status": "success",
             "uuid": uuid,
             "deleted": True,
             "applied": applied,
-            "note": (
-                "Rule deleted and loaded into the packet filter."
-                if applied
-                else "Staged. Apply the filter to load it."
+            "verified": verified,
+            "note": _observed_note(
+                applied,
+                verified,
+                "Rule gone from config.",
+                "del_rule answered, but the rule is still listed or could not be re-read.",
             ),
         }
         if apply_error:
             out["apply_error"] = apply_error
+        if reread_error:
+            out["reread_error"] = reread_error
         return out
 
 

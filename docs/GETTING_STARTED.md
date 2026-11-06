@@ -7,7 +7,7 @@ This guide is optimized for first run.
 ## Choose Your Mode
 
 - `STDIO`: local process started by your MCP client (Cursor, Claude Code, Continue).
-- `SSE`: centralized network service over HTTPS for shared access.
+- Streamable HTTP: centralized network service over HTTPS at `/mcp`, for shared access.
 
 If you are unsure, start with `STDIO`.
 
@@ -33,7 +33,7 @@ Set credentials in `~/.env`:
 OPNSENSE_API_KEY=your_api_key
 OPNSENSE_API_SECRET=your_api_secret
 OPNSENSE_FIREWALL_HOST=your.firewall.host
-# HTTP/SSE only; stdio ignores it. Generate with: openssl rand -hex 32
+# HTTP transports only; stdio ignores it. Generate with: openssl rand -hex 32
 MCP_SECRET_KEY=
 ```
 
@@ -91,7 +91,7 @@ File: `~/.continue/mcp.json`
 
 Restart your client after changes.
 
-## Mode 2: SSE (Centralized)
+## Mode 2: Streamable HTTP (Centralized)
 
 For long-lived shared service on Linux (Podman + quadlet + Caddy):
 
@@ -102,8 +102,10 @@ sudo bash deploy/install.sh
 Client endpoint:
 
 ```text
-https://<your-hostname>/sse
+https://<your-hostname>/mcp
 ```
+
+There is no `/sse` endpoint and no `/health` route on the deployed container.
 
 Every request must send `Authorization: Bearer <MCP_SECRET_KEY>`. The server
 refuses to start on an HTTP transport when the key is blank or a placeholder.
@@ -117,14 +119,14 @@ Read before production:
 ## Fast Validation
 
 - `STDIO`: start your client and run a simple prompt: `show system status`
-- `SSE`: verify `/sse` is reachable from the MCP client and run the same prompt
+- Streamable HTTP: verify `/mcp` is reachable from the MCP client and run the same prompt
 
 ## Troubleshooting
 
 - Missing Python deps: `uv pip install -r requirements.txt`
 - Credentials not loading: verify `~/.env` values and file permissions (`chmod 600 ~/.env`)
 - Script permissions: `chmod +x mcp_start.sh`
-- SSE TLS issues: check cert paths and hostname in `deploy/TLS.md`
+- HTTPS issues: check cert paths and hostname in `deploy/TLS.md`
 
 ## Next Docs
 
