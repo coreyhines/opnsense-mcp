@@ -681,7 +681,7 @@ class MkRouteTool(_RoutingToolBase):
             },
             "gateway": {
                 "type": "string",
-                "description": "Gateway name, from list_gateways",
+                "description": "Gateway name, from routing(action='list_gateways')",
             },
             "description": {"type": "string", "optional": True},
             "enabled": {
