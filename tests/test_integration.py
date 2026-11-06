@@ -60,7 +60,6 @@ async def run_tool_tests(client, tool_name: str = None) -> bool:
         "system": ("SystemTool", "opnsense_mcp.tools.system"),
         "arp": ("ARPTool", "opnsense_mcp.tools.arp"),
         "interface": ("InterfaceTool", "opnsense_mcp.tools.interface"),
-        "firewall": ("FirewallTool", "opnsense_mcp.tools.firewall"),
         "dns": ("DNSTool", "opnsense_mcp.tools.dns"),
     }
 
@@ -108,8 +107,6 @@ async def test_specific_tool(
             return await test_arp_tool(tool)
         if tool_name == "interface":
             return await test_interface_tool(tool)
-        if tool_name == "firewall":
-            return await test_firewall_tool(tool)
         if tool_name == "dns":
             return await test_dns_tool(tool)
 
@@ -177,23 +174,6 @@ async def test_interface_tool(tool) -> bool:
             if_name = first_interface
             status = details.get("interface", {}).get("status", "unknown")
             logger.info(f"Interface {if_name} status: {status}")
-    return True
-
-
-async def test_firewall_tool(tool) -> bool:
-    """Test the firewall tool."""
-    logger.info("Testing firewall rules...")
-    rules = await tool.execute({"action": "rules"})
-    if not rules:
-        logger.error("Failed to get firewall rules")
-        return False
-
-    logger.info(f"Found {len(rules)} firewall rules")
-
-    logger.info("Testing firewall status...")
-    status = await tool.execute({"action": "status"})
-    if status:
-        logger.info(f"Firewall status: {status}")
     return True
 
 
@@ -307,7 +287,6 @@ async def main() -> None:
             "system",
             "arp",
             "interface",
-            "firewall",
             "dns",
         ],
         help="Test only a specific tool",

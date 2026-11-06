@@ -45,7 +45,6 @@ class TestAllMCPTools:
             ("LLDPTool", "opnsense_mcp.tools.lldp"),
             ("InterfaceTool", "opnsense_mcp.tools.interface"),
             ("InterfaceListTool", "opnsense_mcp.tools.interface_list"),
-            ("FirewallTool", "opnsense_mcp.tools.firewall"),
             ("FwRulesTool", "opnsense_mcp.tools.fw_rules"),
             ("FirewallLogsTool", "opnsense_mcp.tools.firewall_logs"),
             ("MkfwRuleTool", "opnsense_mcp.tools.mkfw_rule"),
