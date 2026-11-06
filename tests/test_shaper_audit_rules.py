@@ -69,6 +69,61 @@ def test_run_audit_true_scheduler_drift_without_fqcodel_layout():
     assert len(drift) == 2
 
 
+def _codes(audit: AuditResult, code: str) -> list:
+    return [f for f in audit.findings if f.code == code]
+
+
+def test_fixture_statistics_hold_every_enabled_pipe() -> None:
+    """Baseline: the captured config and statistics agree, so nothing is absent."""
+    pipes, queues, rules, statistics = load_fixture_models()
+    audit = run_audit(pipes=pipes, queues=queues, rules=rules, statistics=statistics)
+    assert _codes(audit, "PIPE_NOT_IN_RUNTIME") == []
+    assert _codes(audit, "STATISTICS_UNAVAILABLE") == []
+
+
+def test_enabled_pipe_absent_from_runtime_is_an_error() -> None:
+    """The drift check skipped these, so unshaped traffic audited as healthy."""
+    pipes, queues, rules, statistics = load_fixture_models()
+    stats = deepcopy(statistics)
+    dropped = next(i for i in stats["items"] if i.get("type") == "pipe")
+    stats["items"].remove(dropped)
+
+    audit = run_audit(pipes=pipes, queues=queues, rules=rules, statistics=stats)
+
+    absent = _codes(audit, "PIPE_NOT_IN_RUNTIME")
+    assert len(absent) == 1
+    assert absent[0].severity == "error"
+
+
+def test_disabled_pipe_absent_from_runtime_is_not_flagged() -> None:
+    pipes, queues, rules, statistics = load_fixture_models()
+    stats = deepcopy(statistics)
+    dropped = next(i for i in stats["items"] if i.get("type") == "pipe")
+    stats["items"].remove(dropped)
+    pipes = [
+        {**p, "enabled": False} if p.get("uuid") == dropped["uuid"] else p
+        for p in pipes
+    ]
+
+    audit = run_audit(pipes=pipes, queues=queues, rules=rules, statistics=stats)
+
+    assert _codes(audit, "PIPE_NOT_IN_RUNTIME") == []
+
+
+def test_statistics_without_items_is_unavailable_not_absent() -> None:
+    """No items list means the kernel state is unknown, not that it is empty."""
+    pipes, queues, rules, _ = load_fixture_models()
+
+    audit = run_audit(
+        pipes=pipes, queues=queues, rules=rules, statistics={"status": "failed"}
+    )
+
+    assert _codes(audit, "PIPE_NOT_IN_RUNTIME") == []
+    unavailable = _codes(audit, "STATISTICS_UNAVAILABLE")
+    assert len(unavailable) == 1
+    assert unavailable[0].severity == "info"
+
+
 def test_run_audit_fixture_ipv6_missing():
     pipes, queues, rules, _ = load_fixture_models()
     audit = run_audit(pipes=pipes, queues=queues, rules=rules)

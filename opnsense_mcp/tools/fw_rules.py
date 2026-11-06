@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from opnsense_mcp.tools.fw_groups import GROUP
 from opnsense_mcp.utils.api import OPNsenseClient
 from opnsense_mcp.utils.mock_api import MockOPNsenseClient
 
@@ -202,21 +203,27 @@ class FwRulesTool:
             return self._interface_groups_cache
 
         try:
-            # Try to get interface groups via API
+            # The group controller has search_item, not searchRule, and keys a
+            # row by `ifname` with `members` as a comma string. The old call
+            # 404'd and was swallowed, so group resolution never ran.
             response = await self.client._make_request(
-                "GET", "/api/firewall/group/searchRule"
+                "POST", GROUP["search"], json={"current": 1, "rowCount": 500}
             )
 
             groups = []
-            if response.get("total", 0) > 0:
-                for group in response.get("rows", []):
-                    groups.append(
-                        {
-                            "name": group.get("name", ""),
-                            "members": group.get("members", []),
-                            "description": group.get("description", ""),
-                        }
-                    )
+            rows = response.get("rows", []) if isinstance(response, dict) else []
+            for group in rows:
+                groups.append(
+                    {
+                        "name": str(group.get("ifname", "")),
+                        "members": [
+                            m.strip()
+                            for m in str(group.get("members", "")).split(",")
+                            if m.strip()
+                        ],
+                        "description": group.get("descr", ""),
+                    }
+                )
 
             self._interface_groups_cache = groups
 
@@ -290,8 +297,11 @@ class FwRulesTool:
             self._get_interface_aliases(),
         )
 
+        # Exact, not substring: on the live firewall "trustedNets" is a
+        # substring of "unTrustedNets". A group's own rules belong to it too.
         for group in groups:
-            if iface_query.lower() in group["name"].lower():
+            if group["name"] and iface_query.lower() == group["name"].lower():
+                resolved.append(group["name"])
                 resolved.extend(group["members"])
 
         for alias in aliases:

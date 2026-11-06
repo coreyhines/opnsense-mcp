@@ -658,8 +658,95 @@ async def test_a_delete_verifies_true_once_the_record_is_gone() -> None:
     token = (await DeleteWgPeerTool(client).execute({"uuid": CLIENT_UUID}))[
         "confirm_token"
     ]
-    # What the firewall answers for a uuid that no longer exists.
-    client.on("/api/wireguard/client/getClient", [])
+    _gone_after_delete(client)
+
+    result = await DeleteWgPeerTool(client).execute(
+        {"uuid": CLIENT_UUID, "confirm": token, "apply": True}
+    )
+
+    assert result["verified"] is True
+
+
+CAPTURED_SERVER_ROWS = json.loads((FIXTURES / "wg_searchserver_rows.json").read_text())
+CAPTURED_SHOW = json.loads((FIXTURES / "wg_service_show_rows.json").read_text())
+# The capture still holds this peer on its device. Without that row it is the
+# runtime a completed delete leaves behind.
+SHOW_WITHOUT_PEER = {
+    **CAPTURED_SHOW,
+    "rows": [
+        r for r in CAPTURED_SHOW["rows"] if r.get("name") != CLIENT["client"]["name"]
+    ],
+}
+SHOW_WITHOUT_PEER["total"] = SHOW_WITHOUT_PEER["rowCount"] = len(
+    SHOW_WITHOUT_PEER["rows"]
+)
+
+
+def _gone_after_delete(client: FakeClient) -> None:
+    """getClient serves the record until delClient is posted, then [].
+
+    [] is what the firewall answers for a uuid that no longer exists. The
+    tool reads the record before deleting it, to know which kernel peer to
+    look for afterwards.
+    """
+    client.on("/api/wireguard/server/searchServer", CAPTURED_SERVER_ROWS)
+    client.on("/api/wireguard/service/show", SHOW_WITHOUT_PEER)
+    real = client._make_request
+
+    async def make(method: str, endpoint: str, **kwargs: Any) -> Any:
+        response = await real(method, endpoint, **kwargs)
+        if endpoint.startswith(WG_CLIENT_WRITE["del"]):
+            client.on("/api/wireguard/client/getClient", [])
+        return response
+
+    client._make_request = make  # type: ignore[method-assign]
+
+
+@pytest.mark.asyncio
+async def test_a_delete_is_unverified_while_the_kernel_still_holds_the_peer() -> None:
+    """The config record going away is not the kernel peer going away."""
+    client = _base_client()
+    token = (await DeleteWgPeerTool(client).execute({"uuid": CLIENT_UUID}))[
+        "confirm_token"
+    ]
+    _gone_after_delete(client)
+    # The capture as taken: the kernel still lists this peer on its device.
+    assert (
+        sum(r.get("name") == CLIENT["client"]["name"] for r in CAPTURED_SHOW["rows"])
+        == 1
+    )
+    client.on("/api/wireguard/service/show", CAPTURED_SHOW)
+
+    result = await DeleteWgPeerTool(client).execute(
+        {"uuid": CLIENT_UUID, "confirm": token, "apply": True}
+    )
+
+    assert result["deleted"] is True
+    assert result["applied"] is True
+    assert result["verified"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_same_named_peer_on_another_device_does_not_fail_the_delete() -> None:
+    """Kernel rows join on (device, name); a namesake elsewhere is not this peer."""
+    client = _base_client()
+    token = (await DeleteWgPeerTool(client).execute({"uuid": CLIENT_UUID}))[
+        "confirm_token"
+    ]
+    _gone_after_delete(client)
+    name = CLIENT["client"]["name"]
+    other = next(
+        r["interface"]
+        for r in CAPTURED_SERVER_ROWS["rows"]
+        if r["uuid"] in NON_MEMBER_UUIDS
+    )
+    show = dict(SHOW_WITHOUT_PEER)
+    show["rows"] = [
+        *SHOW_WITHOUT_PEER["rows"],
+        {"type": "peer", "if": other, "name": name},
+    ]
+    show["total"] = show["rowCount"] = len(show["rows"])
+    client.on("/api/wireguard/service/show", show)
 
     result = await DeleteWgPeerTool(client).execute(
         {"uuid": CLIENT_UUID, "confirm": token, "apply": True}
