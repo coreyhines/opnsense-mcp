@@ -65,11 +65,41 @@ def selected_keys(field: dict[str, Any]) -> str:
     )
 
 
+def _scalar(value: Any) -> str:
+    """Render one scalar the way a ``set*`` POST expects it."""
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    return str(value)
+
+
+def scalar_or_list(key: str, value: Any) -> str:
+    """Render a field value, comma-joining a list as a multi-select is written.
+
+    PHP's ``json_encode`` sends an empty array as ``[]``, so an enum whose
+    model has no options at all (no firewall categories defined) arrives as a
+    list instead of an option map. ``str([])`` posted ``"[]"``, which setRule
+    rejects with "Related category not found". A list of anything but scalars
+    has no write form; posting its Python repr would corrupt the field, so it
+    is refused before the write.
+
+    Raises:
+        ValueError: *value* is a list containing a dict or list.
+    """
+    if not isinstance(value, list):
+        return _scalar(value)
+    if any(isinstance(item, (dict, list)) for item in value):
+        raise ValueError(
+            f"field {key!r} holds a list of non-scalars; no set* form exists"
+        )
+    return ",".join(_scalar(item) for item in value)
+
+
 def flatten_mvc_node(node: dict[str, Any]) -> dict[str, str]:
     """Collapse a ``get*`` node into the flat form a ``set*`` POST expects.
 
     Drops ``%``-prefixed display fields and embedded child collections,
-    collapses enum objects to their selected key(s), and stringifies scalars.
+    collapses enum objects to their selected key(s), comma-joins lists, and
+    stringifies scalars.
     """
     flat: dict[str, str] = {}
     for key, value in node.items():
@@ -83,10 +113,8 @@ def flatten_mvc_node(node: dict[str, Any]) -> dict[str, str]:
             flat[key] = selected_keys(value)
         elif value is None:
             flat[key] = ""
-        elif isinstance(value, bool):
-            flat[key] = "1" if value else "0"
         else:
-            flat[key] = str(value)
+            flat[key] = scalar_or_list(key, value)
     return flat
 
 
@@ -96,8 +124,5 @@ def merge_for_set(node: dict[str, Any], overrides: dict[str, Any]) -> dict[str, 
     for key, value in overrides.items():
         if value is None:
             continue
-        if isinstance(value, bool):
-            flat[key] = "1" if value else "0"
-        else:
-            flat[key] = str(value)
+        flat[key] = scalar_or_list(key, value)
     return flat
