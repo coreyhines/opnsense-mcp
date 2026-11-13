@@ -1,0 +1,277 @@
+{
+  "rule": {
+    "action": {
+      "block": {
+        "selected": 0,
+        "value": "block"
+      },
+      "pass": {
+        "selected": 1,
+        "value": "pass"
+      }
+    },
+    "adaptiveend": "",
+    "adaptivestart": "",
+    "allowopts": "0",
+    "audit": {
+      "created": {
+        "%time": "2026-11-06 15:32:03",
+        "description": "/api/api.php made changes",
+        "time": "1794000723.73",
+        "username": "grue@2001:db8::39"
+      },
+      "updated": {
+        "%time": "2026-11-06 15:32:03",
+        "description": "/api/api.php made changes",
+        "time": "1794000723.73",
+        "username": "grue@2001:db8::39"
+      },
+      "userdata": {
+        "note": ""
+      }
+    },
+    "categories": {
+      "00000000-0000-4000-8000-000000000001": {
+        "selected": 0,
+        "value": "Frobozz category"
+      }
+    },
+    "description": "allow ICMP to grue backends",
+    "destination_net": "grue_backends",
+    "destination_not": "0",
+    "destination_port": "",
+    "direction": {
+      "any": {
+        "selected": 0,
+        "value": "any"
+      },
+      "in": {
+        "selected": 1,
+        "value": "in"
+      }
+    },
+    "disablereplyto": "0",
+    "divert-to": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "divert-to_option": {
+        "selected": 0,
+        "value": "divert-to_option"
+      }
+    },
+    "enabled": "1",
+    "gateway": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "gateway_option": {
+        "selected": 0,
+        "value": "gateway_option"
+      }
+    },
+    "icmp6type": {
+      "1": {
+        "selected": 0,
+        "value": "1"
+      }
+    },
+    "icmptype": {
+      "icmptype_option": {
+        "selected": 0,
+        "value": "icmptype_option"
+      }
+    },
+    "interface": {
+      "interface_option": {
+        "selected": 0,
+        "value": "interface_option"
+      },
+      "opt2": {
+        "selected": 1,
+        "value": "opt2"
+      },
+      "opt5": {
+        "selected": 1,
+        "value": "opt5"
+      },
+      "opt9": {
+        "selected": 1,
+        "value": "opt9"
+      }
+    },
+    "interfacenot": "0",
+    "ipprotocol": {
+      "inet": {
+        "selected": 0,
+        "value": "inet"
+      },
+      "inet46": {
+        "selected": 1,
+        "value": "inet46"
+      }
+    },
+    "log": "0",
+    "max": "",
+    "max-pkt-rate-number": "",
+    "max-pkt-rate-seconds": "",
+    "max-src-conn": "",
+    "max-src-conn-rate": "",
+    "max-src-conn-rates": "",
+    "max-src-nodes": "",
+    "max-src-states": "",
+    "nopfsync": "0",
+    "nosync": "0",
+    "overload": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "overload_option": {
+        "selected": 0,
+        "value": "overload_option"
+      }
+    },
+    "prio": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "0": {
+        "selected": 0,
+        "value": "0"
+      }
+    },
+    "prio_group": "200000",
+    "protocol": {
+      "ICMP": {
+        "selected": 1,
+        "value": "ICMP"
+      },
+      "protocol_option": {
+        "selected": 0,
+        "value": "protocol_option"
+      }
+    },
+    "quick": "1",
+    "received-on": {
+      "received-on_option": {
+        "selected": 0,
+        "value": "received-on_option"
+      }
+    },
+    "received-on-not": "0",
+    "replyto": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "replyto_option": {
+        "selected": 0,
+        "value": "replyto_option"
+      }
+    },
+    "sched": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      }
+    },
+    "sequence": "1",
+    "set-prio": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "0": {
+        "selected": 0,
+        "value": "0"
+      }
+    },
+    "set-prio-low": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "0": {
+        "selected": 0,
+        "value": "0"
+      }
+    },
+    "shaper1": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "shaper1_option": {
+        "selected": 0,
+        "value": "shaper1_option"
+      }
+    },
+    "shaper2": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "shaper2_option": {
+        "selected": 0,
+        "value": "shaper2_option"
+      }
+    },
+    "sort_order": "200000.0000001",
+    "source_net": "any",
+    "source_not": "0",
+    "source_port": "",
+    "state-policy": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "state-policy_option": {
+        "selected": 0,
+        "value": "state-policy_option"
+      }
+    },
+    "statetimeout": "",
+    "statetype": {
+      "keep": {
+        "selected": 1,
+        "value": "keep"
+      },
+      "statetype_option": {
+        "selected": 0,
+        "value": "statetype_option"
+      }
+    },
+    "tag": "",
+    "tagged": "",
+    "tcpflags1": {
+      "ack": {
+        "selected": 0,
+        "value": "ack"
+      }
+    },
+    "tcpflags2": {
+      "ack": {
+        "selected": 0,
+        "value": "ack"
+      }
+    },
+    "tcpflags_any": "0",
+    "tos": {
+      "": {
+        "selected": 1,
+        "value": "none"
+      },
+      "0x0": {
+        "selected": 0,
+        "value": "0x0"
+      }
+    },
+    "udp-first": "",
+    "udp-multiple": "",
+    "udp-single": ""
+  }
+}
