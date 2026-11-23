@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "opnsense-mcp": {
+      "command": "/bin/bash",
+      "args": [
+        "/Users/corey/code/opnsense-mcp/mcp_start.sh"
+      ],
+      "cwd": "/Users/corey/code/opnsense-mcp",
+      "envFile": "${userHome}/.env",
+      "env": {
+        "OPNSENSE_MCP_CURSOR_RELOAD": "2026-09-12T21"
+      }
+    },
+    "pihole": {
+      "command": "/bin/bash",
+      "args": [
+        "-lc",
+        "cd \"$HOME/code/pihole-mcp-server\" && uv run mcp run main.py:mcp -t stdio"
+      ],
+      "cwd": "${userHome}/code/pihole-mcp-server"
+    }
+  }
+}

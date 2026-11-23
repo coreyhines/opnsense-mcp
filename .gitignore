@@ -1,5 +1,7 @@
 vars/
-.cursor/
+# Allow shared project MCP; keep other .cursor/* local
+.cursor/*
+!.cursor/mcp.json
 .opnsense-env
 .env
 .env.*

@@ -1,0 +1,55 @@
+# Shared starter .cursorignore for ~/code projects.
+# Copy to a repo as `.cursorignore` and trim/add as needed.
+# Goal: keep agent indexing/search off bulky, generated, or secret-adjacent trees.
+
+# VCS / env
+.git/
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+**/.venv/
+**/venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/htmlcov/
+**/.coverage
+**/dist/
+**/build/
+**/*.egg-info/
+
+# Node / frontend
+**/node_modules/
+**/.next/
+**/coverage/
+
+# Containers / local runtime junk
+**/.podman/
+**/containerdata/
+
+# Agent / browser / research dumps (often huge, rarely source of truth)
+**/.playwright-mcp/
+**/docs/research/
+**/docs/HANDOFF-*.md
+**/tmp_*/
+**/tmp/
+
+# Locks / binaries / media
+**/uv.lock
+**/package-lock.json
+**/*.min.js
+**/*.map
+**/*.wasm
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.mp4
+**/*.mov
+**/*.pdf
+
+# OS
+.DS_Store
